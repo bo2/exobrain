@@ -1,0 +1,8 @@
+{
+  "scopes": [
+    { "type": "group",  "collection": "groups" },
+    { "type": "team",   "collection": "teams" },
+    { "type": "person", "collection": "people" },
+    { "type": "host",   "collection": "hosts" }
+  ]
+}

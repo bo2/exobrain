@@ -1,0 +1,78 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://exobrain.local/schemas/skills.json",
+  "title": "Skills registry",
+  "description": "Explicit list of skills to link into the agent's space. Skills are physical directories at any scope (a directory with an AGENTS.md) or fetched from third-party repos (external) but stay inert until added to a skills.json. Resolution merges the connected scope chain shallow-to-deep keyed by (name, scope, owner); the deepest scope wins.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "$schema": {
+      "type": "string",
+      "format": "uri-reference",
+      "description": "Path or URL to this schema, used by editors for autocomplete and validation."
+    },
+    "skills": {
+      "type": "array",
+      "description": "Skill entries to link or fetch into the agent's space.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name", "scope", "owner", "tier"],
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Skill directory name (e.g. 'review-pr', 'home-inventory').",
+            "pattern": "^[a-z0-9][a-z0-9-]*$"
+          },
+          "scope": {
+            "type": "string",
+            "pattern": "^(global|external|[a-z0-9][a-z0-9_./-]*)$",
+            "description": "Where the skill physically lives. 'global' = <repo>/skills/. 'external' = fetched into <TARGET_DIR>/skills/<name>.<owner>/. Otherwise the repo-relative path of the owning scope directory (the dir with an AGENTS.md), e.g. 'people/oleg' = people/oleg/skills/, 'groups/acme/teams/ads' = that dir's skills/."
+          },
+          "owner": {
+            "type": "string",
+            "description": "Scope leaf id — the basename of the scope path (person handle, host name, group/team name, or external author). Empty string for global."
+          },
+          "tier": {
+            "enum": ["always", "optional", "off"],
+            "description": "always: full description loaded into agent context, invokable via the Skill tool. optional: listed in optional-skills.md, agent reads SKILL.md on demand (in-tree skills point at the source path; external skills are fetched into <TARGET_DIR>/skills-optional/<name>.<owner>/ where the agent does NOT auto-load them). off: shadow an entry inherited from a lower-priority scope."
+          },
+          "source": {
+            "type": "object",
+            "description": "Required for external scope. Where to fetch the skill from. Only the team scope (the team's skills.json) should declare source — person/host scopes inherit it and can only change tier.",
+            "additionalProperties": false,
+            "required": ["repo", "path", "ref"],
+            "properties": {
+              "repo": { "type": "string", "format": "uri", "description": "GitHub HTTPS URL of the source repository." },
+              "path": { "type": "string", "description": "Path within the repo to the skill directory." },
+              "ref":  { "type": "string", "description": "Pinned git ref — commit SHA, tag, or branch." }
+            }
+          },
+          "skipAgents": {
+            "type": "array",
+            "description": "External entries: agents in this list don't fetch this skill (e.g. ['openclaw'] when the agent ships its own copy). Inverse of `agent` — use this when an entry is universal except for a few agents that already have it. Mutually exclusive with `agent`.",
+            "items": { "type": "string" },
+            "uniqueItems": true
+          },
+          "agent": {
+            "type": "string",
+            "description": "If set, the skill is loaded ONLY when connect-agent.sh runs for this agent (e.g. 'claude'). Use for skills that genuinely depend on one agent's runtime — Claude-specific orchestration providers, Codex tool-call shapes, OpenClaw primitives. Universal skills omit this field. Mutually exclusive with `skipAgents`."
+          },
+          "notes": { "type": "string", "description": "Free-form notes for humans reviewing the entry." },
+          "reviewed_by": { "type": "string", "description": "Username of the person who vetted the source repo." },
+          "reviewed_at": { "type": "string", "format": "date", "description": "Date of the source review (YYYY-MM-DD)." }
+        },
+        "allOf": [
+          {
+            "if":   { "properties": { "scope": { "const": "external" } }, "required": ["scope"] },
+            "then": { "required": ["source"] },
+            "else": { "not": { "required": ["source"] } }
+          },
+          {
+            "not": { "required": ["agent", "skipAgents"] }
+          }
+        ]
+      }
+    }
+  }
+}

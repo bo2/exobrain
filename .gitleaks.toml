@@ -1,0 +1,11 @@
+title = "Gitleaks configuration for exobrain"
+
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Raw research notes, snapshots, and time-bound workspace content"
+paths = [
+  '''^domains/.*/_raw/.*''',
+  '''^workspaces/.*''',
+]

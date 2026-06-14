@@ -1,0 +1,30 @@
+.DS_Store
+.idea/
+node_modules/
+__pycache__/
+
+# Agent markers and generated config — created locally by connect-agent.sh, never committed
+.openclaw
+.claude/*
+!.claude/settings.json
+.codex
+.agents/
+
+# Per-machine instance config and secrets
+.exobrain.json
+.env
+
+# Personal scope dirs — person/group scopes are instance-specific, like .exobrain.json.
+# A private personal exobrain that syncs across machines can un-ignore these.
+people/
+groups/
+
+# Generated / throwaway output and worktrees
+tmp/
+/src/
+.worktrees/
+.agent-worktrees/
+
+# Agent orchestration / AFK runtime dirs
+.agent-runs/
+.agent-control/
