@@ -94,8 +94,8 @@ TIMEOUT=()
 if t="$(command -v timeout 2>/dev/null)"; then TIMEOUT=("$t" 240)
 elif t="$(command -v gtimeout 2>/dev/null)"; then TIMEOUT=("$t" 240); fi
 
-# Strip inherited proxy vars from the engine subprocess. A push to an internal git
-# host may run with a SOCKS/HTTP proxy in the environment; the engine talks to its
+# Strip inherited proxy vars from the engine subprocess. Some networks route git
+# through a SOCKS/HTTP proxy in the environment; the engine talks to its
 # own model API directly and must not route through that proxy, or every proxied
 # push would silently skip the review. `env -u` of an unset var is a no-op, so
 # this is safe whether or not a proxy is set.

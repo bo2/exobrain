@@ -10,9 +10,9 @@ files: [scripts/authoring-review.sh]
 ## Problem
 
 A pre-push hook that calls an LLM (e.g. the authoring review) can silently degrade to
-"no engine" when the push runs through a network proxy. Pushing to an internal Git host
-often needs a SOCKS/HTTP proxy in the environment; the hook inherits it and routes the
-LLM call through that internal proxy, which can't reach the model API. The review then
+"no engine" when the push runs through a network proxy. Some networks route git through
+a SOCKS/HTTP proxy set in the environment; the hook inherits it and routes the
+LLM call through that proxy, which can't reach the model API. The review then
 skips on every such push — a silent failure that looks like "no engine installed."
 
 ## Pattern
