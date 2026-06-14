@@ -62,3 +62,7 @@ Full model: [`domains/exobrain/`](domains/exobrain/).
 ## How updates work — no forking
 
 Your instance is **independent** — no upstream remote, no merge. When this repo ships a change, you ask your agent to run `exobrain-update`: it reads the feed since you last updated, **copies** the files you haven't diverged and **re-synthesizes** the rest into your setup, then records the card IDs in your adoption ledger. See [`domains/exobrain/propagation.md`](domains/exobrain/propagation.md).
+
+## License
+
+[MIT](LICENSE.md) — use it, fork it, build your own. The exobrain *you* generate from it is yours.
