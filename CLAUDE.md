@@ -13,6 +13,10 @@ When `AGENTS.md` or a skill refers to "the agent's primitive for X", the Claude 
 - **Search** — `Grep`, `Glob`. Prefer these over `Bash find`.
 - **Task tracking** — `TaskCreate` / `TaskUpdate` for multi-step work.
 
+## Git history hygiene
+
+Keep this repo's history agent-neutral — omit Claude Code's default attribution. No `🤖 Generated with Claude Code` footer in PR bodies, and no `Co-Authored-By: Claude …` trailer in commit messages.
+
 ## Auto-loading
 
 Claude Code auto-loads two CLAUDE.md files:
