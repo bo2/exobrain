@@ -4,6 +4,7 @@
     { "name": "exobrain-create",      "scope": "global", "owner": "", "tier": "always" },
     { "name": "exobrain-update",      "scope": "global", "owner": "", "tier": "optional" },
     { "name": "exobrain-reader-lens", "scope": "global", "owner": "", "tier": "optional" },
-    { "name": "exobrain-persist",     "scope": "global", "owner": "", "tier": "optional" }
+    { "name": "exobrain-persist",     "scope": "global", "owner": "", "tier": "optional" },
+    { "name": "exobrain-domains",     "scope": "global", "owner": "", "tier": "optional" }
   ]
 }
