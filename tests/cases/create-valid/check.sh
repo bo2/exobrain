@@ -29,8 +29,10 @@ done
 [[ -f "$INST/people/test-user/AGENTS.md" ]] || fail "missing person scope AGENTS.md"
 [[ -f "$INST/people/test-user/hosts/test-host/AGENTS.md" ]] || fail "missing host scope AGENTS.md"
 
-# connect-agent.sh ran (claude surface generated).
-[[ -f "$INST/.claude/CLAUDE.md" ]] || fail "connect-agent.sh did not generate .claude/CLAUDE.md"
+# connect-agent.sh ran (a per-agent surface was generated). The builder is
+# usually claude (.claude/CLAUDE.md); a codex builder leaves a .codex marker.
+[[ -f "$INST/.claude/CLAUDE.md" || -e "$INST/.codex" || -f "$INST/CODEX.md" ]] \
+    || fail "connect-agent.sh did not generate an agent surface (.claude/CLAUDE.md or .codex)"
 
 # At least two durable domains beyond the meta-domain.
 dcount="$(find "$INST/domains" -mindepth 1 -maxdepth 1 -type d ! -name exobrain 2>/dev/null | wc -l | tr -d ' ')"

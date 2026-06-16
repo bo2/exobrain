@@ -25,6 +25,17 @@ make_timeout() {
 log() { printf '%s\n' "$*" >&2; }
 err() { printf 'ERROR: %s\n' "$*" >&2; }
 
+# agent_available <claude|codex> — true only if the agent's CLI is installed AND
+# actually runnable. codex can be present on PATH but broken (its native binary
+# dependency missing), in which case --version exits non-zero; we skip it.
+agent_available() {
+    case "$1" in
+        claude) command -v claude >/dev/null 2>&1 && claude --version >/dev/null 2>&1 ;;
+        codex)  command -v codex  >/dev/null 2>&1 && codex  --version >/dev/null 2>&1 ;;
+        *) return 1 ;;
+    esac
+}
+
 # threshold_met <passes> <total> <threshold> — exit 0 if the pass count clears
 # the bar. threshold is "all" (every run must pass) or a fraction like 0.8.
 threshold_met() {
