@@ -1,17 +1,22 @@
 #!/usr/bin/env bash
 # instance.sh — build a sample exobrain instance and clone it per run. Sourced.
 #
-# build_template <run_root>   -> $run_root/template  (one exobrain-create session)
+# build_template <run_root> [builder_agent]  -> $run_root/template
 # make_run_copy <template> <dest>
 #
-# The template is produced by running the REAL exobrain-create skill via
-# `claude -p` against a local clone of the seed under test, so the bootstrap flow
-# is itself exercised. The template is then validated, committed (to establish a
-# `main` base branch), hook-neutralized, and asserted free of any github origin.
+# The template is produced by running the REAL exobrain-create skill via the
+# builder agent (default claude) against a local clone of the seed under test, so
+# the bootstrap flow is itself exercised. The instance content is agent-neutral;
+# one template is built and every agent-under-test runs against copies of it. The
+# template is then validated, committed (to establish a `main` base branch),
+# hook-neutralized, and asserted free of any github origin.
 
-# render_build_prompt — the task handed to claude -p to scaffold the instance.
+# render_build_prompt <builder_agent> — the task handed to the agent to scaffold
+# the instance. The heredoc stays literal (so $SRC/$DST and backticks survive);
+# the agent name is substituted into the __AGENT__ placeholder.
 render_build_prompt() {
-    cat <<'EOF'
+    local agent="$1"
+    cat <<'EOF' | sed "s/__AGENT__/$agent/g"
 You are scaffolding a new exobrain instance in the CURRENT working directory.
 
 The seed (source framework to copy from) is ALREADY present at
@@ -29,12 +34,12 @@ This is a NON-INTERACTIVE run. Do not ask questions; use these interview answers
 - Machine name: test-host
 - Vocabulary: keep the default durable-content directory name "domains/"
 - Starting domains: finance, home
-- Agent to connect: claude
+- Agent to connect: __AGENT__
 
 Run the procedure to completion, including: copying the framework, the
 meta-domain, and the three shipped skills; creating the scope directories and the
 adopted-feed.md ledger; writing .exobrain.json; then `git init`,
-`scripts/validate-exobrain.sh` (must pass), and `scripts/connect-agent.sh claude`.
+`scripts/validate-exobrain.sh` (must pass), and `scripts/connect-agent.sh __AGENT__`.
 
 Do NOT create any git commits — leave committing to the harness. Do NOT push
 anything anywhere. When finished, briefly confirm the instance is scaffolded and
@@ -43,7 +48,7 @@ EOF
 }
 
 build_template() {
-    local run_root="$1"
+    local run_root="$1" builder="${2:-claude}"
     local template="$run_root/template"
     local seed_cache="$template/src/exobrain-seed"
 
@@ -53,12 +58,12 @@ build_template() {
         || { err "[build] local seed clone failed"; return 1; }
 
     local prompt_file="$run_root/.build-prompt.txt"
-    render_build_prompt >"$prompt_file"
+    render_build_prompt "$builder" >"$prompt_file"
 
-    log "[build] running exobrain-create via claude -p (one agent session; may take minutes)…"
-    invoke_agent "$template" "$prompt_file" build "${BUILD_TIMEOUT:-900}" "${BUILD_MODEL:-}" \
+    log "[build] running exobrain-create via $builder (one agent session; may take minutes)…"
+    invoke_agent "$builder" "$template" "$prompt_file" build "${BUILD_TIMEOUT:-900}" "${BUILD_MODEL:-}" \
         text "$run_root/build.stdout.txt"
-    log "[build] exobrain-create session finished (claude rc=$?)"
+    log "[build] exobrain-create session finished ($builder rc=$?)"
 
     finalize_template "$template"
 }
