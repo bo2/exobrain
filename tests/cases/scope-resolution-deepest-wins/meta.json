@@ -1,0 +1,9 @@
+{
+  "name": "scope-resolution-deepest-wins",
+  "description": "A person-scope tool override wins over the global doc (deepest scope wins).",
+  "runs": 3,
+  "permission_profile": "read-only",
+  "pass_threshold": "all",
+  "timeout_seconds": 240,
+  "tags": ["scope", "routing"]
+}
