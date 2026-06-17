@@ -18,6 +18,10 @@ Skills live at five scopes. Each has its own `skills.json`; resolution merges th
 | **host** | `people/<id>/hosts/<h>/skills.json` | `people/<id>/hosts/<h>/skills/<name>/` | specific to one machine |
 | **external** | declared inline in any scope's `skills.json` | fetched into the agent's `skills/<name>.<owner>/` | third-party skill from a public repo |
 
+## Seed-local skills (`seed/`)
+
+The canonical seed keeps skills that operate on **the seed itself** — the `create-instance` generator and the behavioral test harness — under `seed/`, outside the registry. They are **never copied into a rendered instance** (an instance has nothing to generate or test), so they carry no `skills.json` entry and `skills-validate` excludes `seed/` from its declaration and orphan scans. They are not surfaced through the Skill tool; invoke one by reading its `SKILL.md` directly (the bootstrap prompt points a fresh agent at `seed/skills/create-instance/SKILL.md`). A rendered instance has no `seed/` at all.
+
 ## Registry shape
 
 Schema: [`/skills.schema.json`](../../skills.schema.json). Each entry is an explicit `(name, scope, owner, tier)` tuple — no implicit inference:

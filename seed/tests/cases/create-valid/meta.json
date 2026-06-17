@@ -1,6 +1,6 @@
 {
   "name": "create-valid",
-  "description": "The exobrain-create-built instance is well-formed (no extra agent run).",
+  "description": "The create-instance-built instance is well-formed (no extra agent run).",
   "runs": 1,
   "permission_profile": "static",
   "pass_threshold": "all",

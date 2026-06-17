@@ -1,24 +1,25 @@
-# tests — exobrain behavioral harness
+# seed/tests — behavioral harness
 
-Runs concrete agent tasks against a freshly-bootstrapped instance via a
-non-interactive agent CLI (`claude` and/or `codex`), each task N times, and
+This harness is **seed-local** (it lives under `seed/`, never copied into rendered
+instances). It runs concrete agent tasks against a freshly-bootstrapped instance
+via a non-interactive agent CLI (`claude` and/or `codex`), each task N times, and
 reports a k/N pass rate per agent+case. It answers: *dropped into a fresh
 instance of this seed, does an agent actually behave the way the specs say?*
 
 ## Run it
 
 ```bash
-tests/run.sh --smoke               # build one instance, run the trivial case (cheap self-test)
-tests/run.sh                       # all cases, all available agents, each at its configured N
-tests/run.sh --agents claude       # one agent only
-tests/run.sh --cases worktree-first,no-secret-in-tracked-file --runs 3
-tests/run.sh --build-only          # just build + validate the template instance
-tests/run.sh --list                # list cases
+seed/tests/run.sh --smoke               # build one instance, run the trivial case (cheap self-test)
+seed/tests/run.sh                       # all cases, all available agents, each at its configured N
+seed/tests/run.sh --agents claude       # one agent only
+seed/tests/run.sh --cases worktree-first,no-secret-in-tracked-file --runs 3
+seed/tests/run.sh --build-only          # just build + validate the template instance
+seed/tests/run.sh --list                # list cases
 ```
 
 Flags: `--agents <a1,a2>` (default `claude,codex`), `--cases <c1,c2>`,
 `--runs <N>` (override per-case N), `--smoke`, `--keep` (retain instance copies
-for debugging), `--fresh-per-run` (rebuild via exobrain-create every run instead
+for debugging), `--fresh-per-run` (rebuild via create-instance every run instead
 of copying — slow), `--build-only`, `--list`.
 
 Requires `jq` and at least one requested agent CLI on PATH and runnable, logged
@@ -49,8 +50,8 @@ consistent — judge cases need `claude` available.
 
 1. **Build a template** (`lib/instance.sh`): clone the local seed under test into
    `tmp/test-runs/<ts>/template/src/exobrain-seed`, then run the real
-   `exobrain-create` skill via `claude -p` to scaffold an instance there — so the
-   bootstrap flow is itself tested. The template is then validated, committed (to
+   `create-instance` skill via the builder agent to scaffold an instance there — so
+   the bootstrap flow is itself tested. The template is then validated, committed (to
    establish a `main` base branch), hook-neutralized, and asserted to have **no
    github origin**. Behavior cases run against cheap `cp -r` copies.
 2. **Run each case** (`run.sh`): for each agent, copy the template, run optional

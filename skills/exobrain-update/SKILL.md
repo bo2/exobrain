@@ -98,7 +98,7 @@ provenance — it's how the next update knows where you left off.
 - **The ledger is the provenance.** No upstream git remote, no merge — just the
   card IDs you've absorbed. Independent instances, tracked changes.
 - **Copying is consistent here.** Framework files arrived as copies from
-  `exobrain-create`; refreshing them by copy is the same operation. Re-synthesis is
+  `create-instance`; refreshing them by copy is the same operation. Re-synthesis is
   for where your instance genuinely diverged in names or structure.
 - This is the single "bring me up to date" entry point — it covers both plain
   framework refreshes and pattern borrows.
