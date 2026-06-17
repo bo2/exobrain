@@ -2,10 +2,11 @@
 # common.sh — shared helpers for the exobrain behavioral test harness.
 # Sourced by run.sh and the other lib/*.sh files; not run directly.
 
-# Resolve the seed repo under test = two levels up from tests/lib/.
+# Resolve paths: this harness lives at <repo>/seed/tests/lib/.
 TESTS_LIB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-TESTS_DIR="$(dirname "$TESTS_LIB_DIR")"
-REPO_DIR="$(dirname "$TESTS_DIR")"
+TESTS_DIR="$(dirname "$TESTS_LIB_DIR")"   # <repo>/seed/tests
+SEED_DIR="$(dirname "$TESTS_DIR")"        # <repo>/seed
+REPO_DIR="$(dirname "$SEED_DIR")"         # <repo> — the seed under test
 ALLOW_SETTINGS="$TESTS_DIR/settings/allow.json"
 
 # Strip inherited proxy vars from the engine subprocess — the model API is

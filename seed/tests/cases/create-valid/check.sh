@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# create-valid — asserts exobrain-create produced a well-formed instance.
+# create-valid — asserts create-instance produced a well-formed instance.
 set -uo pipefail
 source "$HARNESS_LIB/check-helpers.sh"
 INST="$1"
@@ -19,11 +19,12 @@ for f in domains/exobrain/entities.md domains/exobrain/scopes.md \
 done
 [[ -d "$INST/domains/exobrain/feed" ]] || fail "missing domains/exobrain/feed/"
 
-# The three shipped skills are present; the one-shot generator is left behind.
+# The three shipped skills are present.
 for s in exobrain-persist exobrain-update exobrain-reader-lens; do
     [[ -f "$INST/skills/$s/SKILL.md" ]] || fail "missing shipped skill: $s"
 done
-[[ ! -e "$INST/skills/exobrain-create" ]] || fail "exobrain-create generator should not ship into the instance"
+# The seed-local area (generator + tests) must never be copied into an instance.
+[[ ! -e "$INST/seed" ]] || fail "seed/ (generator + tests) should not ship into the instance"
 
 # Person + host scope flags.
 [[ -f "$INST/people/test-user/AGENTS.md" ]] || fail "missing person scope AGENTS.md"

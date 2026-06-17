@@ -1,18 +1,18 @@
 #!/usr/bin/env bash
 # run.sh — exobrain behavioral test harness.
 #
-# Builds a sample instance from the local seed by running exobrain-create via the
+# Builds a sample instance from the local seed by running create-instance via the
 # builder agent, then runs concrete tasks against fresh copies of it (each N
 # times) for every selected agent, checks pass/fail per run, and reports a k/N
 # pass rate per agent+case.
 #
-#   tests/run.sh                          # all cases, all available agents
-#   tests/run.sh --agents claude          # claude only
-#   tests/run.sh --agents claude,codex    # both (default)
-#   tests/run.sh --smoke                  # the trivial 'smoke' case, N=1
-#   tests/run.sh --cases a,b --runs 3     # selected cases, override N
-#   tests/run.sh --build-only             # build + validate the template, stop
-#   tests/run.sh --list                   # list cases
+#   seed/tests/run.sh                          # all cases, all available agents
+#   seed/tests/run.sh --agents claude          # claude only
+#   seed/tests/run.sh --agents claude,codex    # both (default)
+#   seed/tests/run.sh --smoke                  # the trivial 'smoke' case, N=1
+#   seed/tests/run.sh --cases a,b --runs 3     # selected cases, override N
+#   seed/tests/run.sh --build-only             # build + validate the template, stop
+#   seed/tests/run.sh --list                   # list cases
 #
 # Flags: --agents <a1,a2>  --cases <c1,c2>  --runs <N>  --smoke  --keep
 #        --fresh-per-run  --build-only  --list  -h|--help
