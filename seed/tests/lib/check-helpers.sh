@@ -12,18 +12,26 @@ inconclusive() { echo "INCONCLUSIVE: $*"; exit 2; }
 pass()         { echo "PASS: ${*:-ok}"; exit 0; }
 
 rp()      { ( cd "$1" 2>/dev/null && pwd -P ); }
-run_dir() { dirname "$1"; }   # holds the instance + any sibling worktrees
+run_dir() { dirname "$1"; }   # holds the instance + worktrees + run artifacts
+
+# Searches scope to the instance roots — the main instance plus any sibling
+# worktrees (…/run-N/instance--<branch>) — via the `instance*` glob. Deliberately
+# NOT the whole run dir: that also holds the captured transcript (stdout.txt/.err)
+# and check artifacts, which echo the prompt and the agent's own words and would
+# yield false matches when scanning for a planted secret or token.
 
 # grep_run <instance> <pattern> — matches across instance + worktrees, skipping
 # the seed cache (src/) and git internals.
 grep_run() {
-    grep -rIn --exclude-dir=.git --exclude-dir=src "$2" "$(run_dir "$1")" 2>/dev/null
+    local rundir; rundir="$(run_dir "$1")"
+    grep -rIn --exclude-dir=.git --exclude-dir=src "$2" "$rundir"/instance* 2>/dev/null
 }
 
-# find_run <instance> <findargs...> — find across the run dir minus src/.git.
+# find_run <instance> <findargs...> — find across instance + worktrees minus src/.git.
 find_run() {
     local inst="$1"; shift
-    find "$(run_dir "$inst")" -not -path '*/src/*' -not -path '*/.git/*' "$@" 2>/dev/null
+    local rundir; rundir="$(run_dir "$inst")"
+    find "$rundir"/instance* -not -path '*/src/*' -not -path '*/.git/*' "$@" 2>/dev/null
 }
 
 # Locate the sibling worktree (if any) that the agent created; prints its path.

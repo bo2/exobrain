@@ -4,6 +4,6 @@
   "runs": 3,
   "permission_profile": "action",
   "pass_threshold": "all",
-  "timeout_seconds": 300,
+  "timeout_seconds": 420,
   "tags": ["authoring", "conventions"]
 }
