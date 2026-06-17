@@ -20,8 +20,8 @@ The concept and a generator live at https://github.com/bo2/exobrain. Please:
    this folder — my instance keeps it there as its update-cache (gitignored)
    (or, if you can't clone, read the repo's raw files from GitHub).
 2. Read its domains/exobrain/ (what an exobrain is — scopes, skills,
-   propagation) and skills/exobrain-create/SKILL.md (how to build one).
-3. Then follow exobrain-create: ask me a few short questions (what I'll use
+   propagation) and seed/skills/create-instance/SKILL.md (how to build one).
+3. Then follow create-instance: ask me a few short questions (what I'll use
    this for, whether anyone else shares it, one or two domains to
    start with), and scaffold a fresh exobrain for me IN THE CURRENT DIRECTORY,
    copying the framework scripts from the clone and adapting names and
@@ -53,10 +53,10 @@ Full model: [`domains/exobrain/`](domains/exobrain/).
 | Path | What it is |
 |------|-----------|
 | [`domains/exobrain/`](domains/exobrain/) | **The concept** — entities, scopes, agents, skills, tools, authoring, propagation, written for an agent to read |
-| [`skills/exobrain-create/`](skills/exobrain-create/) | **The generator** — interviews you and scaffolds your instance |
+| [`seed/`](seed/) | **Seed-local** — the `create-instance` generator and the behavioral test harness. Operates on the seed itself; never copied into an instance |
 | [`skills/exobrain-update/`](skills/exobrain-update/) | Bring an instance up to date — read this repo's feed, copy/rewire each change, record it. Copied into every instance. |
 | [`domains/exobrain/feed/`](domains/exobrain/feed/) | **The feed** — the changelog of dated pattern-cards `exobrain-update` reads to bring instances forward |
-| [`scripts/`](scripts/) | The framework `exobrain-create` copies into a new instance (`connect-agent`, `skills-registry`, validators) |
+| [`scripts/`](scripts/) | The framework `create-instance` copies into a new instance (`connect-agent`, `skills-registry`, validators) |
 | `AGENTS.md`, `scopes.json`, `skills.schema.json` | The spec and registries a new instance starts from |
 
 ## How updates work — no forking

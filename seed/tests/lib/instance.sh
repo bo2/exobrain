@@ -4,7 +4,7 @@
 # build_template <run_root> [builder_agent]  -> $run_root/template
 # make_run_copy <template> <dest>
 #
-# The template is produced by running the REAL exobrain-create skill via the
+# The template is produced by running the REAL create-instance skill via the
 # builder agent (default claude) against a local clone of the seed under test, so
 # the bootstrap flow is itself exercised. The instance content is agent-neutral;
 # one template is built and every agent-under-test runs against copies of it. The
@@ -23,7 +23,7 @@ The seed (source framework to copy from) is ALREADY present at
 ./src/exobrain-seed — use it as $SRC. Do NOT clone anything from GitHub or the
 network; work entirely from that local copy.
 
-Follow the procedure in ./src/exobrain-seed/skills/exobrain-create/SKILL.md
+Follow the procedure in ./src/exobrain-seed/seed/skills/create-instance/SKILL.md
 exactly, scaffolding the new instance into the current directory ($DST = the
 current directory, which currently contains only src/exobrain-seed — it is fine
 to add to it).
@@ -60,10 +60,10 @@ build_template() {
     local prompt_file="$run_root/.build-prompt.txt"
     render_build_prompt "$builder" >"$prompt_file"
 
-    log "[build] running exobrain-create via $builder (one agent session; may take minutes)…"
+    log "[build] running create-instance via $builder (one agent session; may take minutes)…"
     invoke_agent "$builder" "$template" "$prompt_file" build "${BUILD_TIMEOUT:-900}" "${BUILD_MODEL:-}" \
         text "$run_root/build.stdout.txt"
-    log "[build] exobrain-create session finished ($builder rc=$?)"
+    log "[build] create-instance session finished ($builder rc=$?)"
 
     finalize_template "$template"
 }
@@ -72,7 +72,7 @@ finalize_template() {
     local template="$1"
 
     if [[ ! -d "$template/.git" ]]; then
-        err "[build] no .git in template — exobrain-create did not run 'git init'"
+        err "[build] no .git in template — create-instance did not run 'git init'"
         return 1
     fi
 
@@ -94,7 +94,7 @@ finalize_template() {
     git -C "$template" config core.hooksPath /dev/null
 
     # Establish a `main` base branch so worktree-based cases have something to
-    # branch from (exobrain-create deliberately leaves committing to the user).
+    # branch from (create-instance deliberately leaves committing to the user).
     git -C "$template" add -A
     git -C "$template" \
         -c user.email=harness@exobrain.test -c user.name='exobrain harness' \

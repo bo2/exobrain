@@ -45,7 +45,7 @@ The seed and its feed are public; downstream instances are mostly private. When 
 
 ## Instantiating a new exobrain
 
-When an agent builds a fresh exobrain by reading this concept (`exobrain-create`):
+When an agent builds a fresh exobrain by reading this concept (`create-instance`):
 
 1. Read this meta-domain. It describes *principles*, not a rigid layout.
 2. Choose names and structure that fit the principal — durable-content dir name, whether groups exist, which scopes are populated. Divergence is expected.

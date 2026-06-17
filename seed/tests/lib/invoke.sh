@@ -81,13 +81,12 @@ _invoke_codex() {
 
     make_timeout "$tmo"
 
-    # In workspace-write, also allow the parent run dir so a sibling worktree
-    # created by create-worktree.sh is writable (only added for writable runs, so
-    # a malformed override can't break read-only cases).
+    # In workspace-write, also make the parent run dir writable so a sibling
+    # worktree created by create-worktree.sh (…/run-N/instance--<branch>) can be
+    # written (codex's first-class flag for extra writable roots).
     local rundir; rundir="$(dirname "$inst")"
     local -a extra=()
-    [[ "$sandbox" == "workspace-write" ]] && \
-        extra=(-c "sandbox_workspace_write.writable_roots=[\"$rundir\"]")
+    [[ "$sandbox" == "workspace-write" ]] && extra=(--add-dir "$rundir")
 
     (
         cd "$inst" || exit 127

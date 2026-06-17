@@ -1,15 +1,15 @@
 ---
-name: exobrain-create
+name: create-instance
 description: >
   Scaffold a new exobrain instance for the user from the canonical concept. Use
   when the user wants to set up, create, bootstrap, or initialize their own
   exobrain — a personal knowledge base their AI agent loads as context — or when
   they paste the bootstrap prompt from github.com/bo2/exobrain. Interviews the
   user, then generates a working repo (scopes, framework scripts, seed domains)
-  adapted to their answers.
+  adapted to their answers. Seed-local (under seed/); never copied into instances.
 ---
 
-# exobrain-create
+# create-instance
 
 You are scaffolding a **new exobrain** for the user, in the directory they're
 working in. An exobrain is a version-controlled knowledge base their AI agent
@@ -60,9 +60,9 @@ Create under `$DST`:
 - `AGENTS.md` — copy `$SRC/AGENTS.md`. It's the auto-loaded spec and is already
   generic. If the user renamed the durable-content dir, update the few references to
   `domains/` in it (see step 5).
-- `README.md` — stamp `$SRC/skills/exobrain-create/instance-readme.md` (a template,
-  not the seed's own `README.md`, which is the "concept + generator" pitch and is
-  wrong for an instance). Replace `{{OWNER}}` with the user's handle or the
+- `README.md` — stamp `$SRC/seed/skills/create-instance/instance-readme.md` (a
+  template, not the seed's own `README.md`, which is the "concept + generator" pitch
+  and is wrong for an instance). Replace `{{OWNER}}` with the user's handle or the
   group/org name, set the `connect-agent.sh` line to the agent(s) they chose, and
   delete the leading template comment.
 - Per-agent root sidecar — copy `$SRC/CLAUDE.md` (and/or `CODEX.md`/`OPENCLAW.md`)
@@ -77,9 +77,11 @@ Create under `$DST`:
   `skills-validate.sh`, `skills-status.sh`, `skills-promote.sh`, …). `chmod +x scripts/*.sh`.
 - `skills/exobrain-reader-lens/`, `skills/exobrain-update/`, and
   `skills/exobrain-persist/` — copy all three from `$SRC`. `exobrain-update` is how
-  the instance pulls future changes, so it ships *in* the instance. Leave
-  `exobrain-create` behind — it's a one-shot generator that lives only in the
-  canonical repo.
+  the instance pulls future changes, so it ships *in* the instance.
+- **Never copy `$SRC/seed/`.** Everything under `seed/` is seed-local — the
+  `create-instance` generator and the behavioral test harness — and lives only in
+  the canonical seed. An instance has nothing to generate or test, so `seed/` must
+  not appear in `$DST`.
 
 ## 3. Copy the concept (the meta-domain)
 

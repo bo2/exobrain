@@ -35,9 +35,12 @@ for arg in "$@"; do case "$arg" in --strict) strict=true ;; esac; done
 errors=0
 warnings=0
 
-# Shared find prune for repo-wide scans.
+# Shared find prune for repo-wide scans. seed/ is seed-local tooling outside the
+# skills registry (the create-instance generator and the test harness), so it is
+# excluded from both the declaration scan and the orphan walk below.
 _find_jsons() { find "$REPO_DIR" -name "$1" \
     -not -path "$REPO_DIR/.claude/*" -not -path "$REPO_DIR/src/*" \
+    -not -path "$REPO_DIR/seed/*" \
     -not -path "$REPO_DIR/.worktrees/*" -not -path "$REPO_DIR/.git/*" \
     -not -path '*/node_modules/*' 2>/dev/null; }
 
@@ -96,6 +99,7 @@ while IFS= read -r skills_dir; do
     done
 done < <(find "$REPO_DIR" -type d -name skills \
     -not -path "$REPO_DIR/.claude/*" -not -path "$REPO_DIR/src/*" \
+    -not -path "$REPO_DIR/seed/*" \
     -not -path "$REPO_DIR/.worktrees/*" -not -path "$REPO_DIR/.git/*" \
     -not -path '*/node_modules/*' 2>/dev/null)
 
