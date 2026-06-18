@@ -19,7 +19,7 @@ An agent's available tool set is the union of all tool files visible across its 
 
 ## Connecting a tool
 
-Connecting is a per-machine act — credentials, VPN, and OS differ per host — so connection state lives in the untracked, machine-local `.exobrain.json` at the repo root, never committed. To connect a tool, follow its doc's **Setup**, then run its **Verify**. (A setup skill can automate add / status / refresh / doctor; this seed ships the docs, not the skill — add one when you maintain more than a couple of tools.)
+Connecting is a per-machine act — credentials, VPN, and OS differ per host — so connection state lives in the untracked, machine-local `.exobrain.json` at the repo root, never committed. To connect a tool, follow its doc's **Setup**, then run its **Verify** — or let the `exobrain-tools` skill drive it (`onboard` / `status` / `add <tool>` / `refresh <tool>` / `doctor`), which discovers tools by globbing these scope locations, reads each doc on demand, and tracks per-tool state in `.exobrain.json`.
 
 ## Each tool file
 

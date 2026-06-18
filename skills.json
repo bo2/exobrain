@@ -5,6 +5,7 @@
     { "name": "exobrain-reader-lens", "scope": "global", "owner": "", "tier": "optional" },
     { "name": "exobrain-persist",     "scope": "global", "owner": "", "tier": "optional" },
     { "name": "exobrain-domains",     "scope": "global", "owner": "", "tier": "optional" },
-    { "name": "exobrain-ab",          "scope": "global", "owner": "", "tier": "optional" }
+    { "name": "exobrain-ab",          "scope": "global", "owner": "", "tier": "optional" },
+    { "name": "exobrain-tools",       "scope": "global", "owner": "", "tier": "optional" }
   ]
 }
