@@ -64,7 +64,7 @@ Physical skill directories at any scope, inert until declared in a `skills.json`
 | `scripts/fetch-external-skills.sh` | Fetch `scope: external` (third-party) skills. |
 | optional-skills index *(generated)* | Index of optional-tier skills, read on demand — `.claude/optional-skills.md` (Claude) or inlined into `~/.codex/AGENTS.md` / `~/.openclaw/workspace/USER.md`. |
 
-Global skills the seed ships: `exobrain-ab`, `exobrain-domains`, `exobrain-evolve`, `exobrain-persist`, `exobrain-reader-lens`.
+Global skills the seed ships: `exobrain-ab`, `exobrain-domains`, `exobrain-evolve`, `exobrain-persist`, `exobrain-reader-lens`, `exobrain-tools`.
 
 ## Tools
 
@@ -73,9 +73,10 @@ The per-tool catalog of external data sources — see [`tools.md`](tools.md).
 | Artifact | Role |
 |---|---|
 | `tools/*.md` | The catalog: one self-contained doc per tool (its presence at a scope *is* its registration). The seed ships `tools/README.md` + `tools/example-tool.md` (a template); add a doc per tool you connect, with group/person/host overlays as needed. |
-| `.exobrain.json` *(gitignored)* | Per-machine, per-tool connection state. |
+| `.exobrain.json` *(gitignored)* | Per-machine, per-tool connection state (the `tools` block). |
+| `exobrain-tools` skill | Drives the catalog: `onboard` / `status` / `add` / `refresh` / `doctor` over the connected scope chain. |
 
-Each tool doc carries its own Setup → Verify procedure; run it by hand (credentials make the human drive setup).
+Each tool doc carries its own Setup → Verify procedure; run it by hand, or let the `exobrain-tools` skill drive it (it never reads or stores a secret value).
 
 ## Git workflow
 
