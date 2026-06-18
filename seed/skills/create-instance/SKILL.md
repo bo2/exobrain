@@ -70,14 +70,15 @@ Create under `$DST`:
 - `scopes.json` — copy `$SRC/scopes.json` (declares collection→type labels).
 - `tools/` — copy `$SRC/tools/` (the catalog `README.md` + the `example-tool.md` template).
 - `skills.schema.json` — copy `$SRC/skills.schema.json`.
-- `skills.json` — start minimal, registering the copied skills: `{ "$schema": "./skills.schema.json", "skills": [ { "name": "exobrain-reader-lens", "scope": "global", "owner": "", "tier": "optional" }, { "name": "exobrain-evolve", "scope": "global", "owner": "", "tier": "optional" }, { "name": "exobrain-persist", "scope": "global", "owner": "", "tier": "optional" } ] }`.
+- `skills.json` — start minimal, registering the copied skills: `{ "$schema": "./skills.schema.json", "skills": [ { "name": "exobrain-reader-lens", "scope": "global", "owner": "", "tier": "optional" }, { "name": "exobrain-evolve", "scope": "global", "owner": "", "tier": "optional" }, { "name": "exobrain-persist", "scope": "global", "owner": "", "tier": "optional" }, { "name": "exobrain-ab", "scope": "global", "owner": "", "tier": "optional" } ] }`.
 - `.gitignore`, `.env.example` — copy from `$SRC`.
 - `scripts/` — copy the whole `$SRC/scripts/` directory. These are the framework
   (`connect-agent.sh`, `skills-registry.sh`, `validate-exobrain.sh`,
   `skills-validate.sh`, `skills-status.sh`, `skills-promote.sh`, …). `chmod +x scripts/*.sh`.
-- `skills/exobrain-reader-lens/`, `skills/exobrain-evolve/`, and
-  `skills/exobrain-persist/` — copy all three from `$SRC`. `exobrain-evolve` is how
-  the instance pulls future changes, so it ships *in* the instance.
+- `skills/exobrain-reader-lens/`, `skills/exobrain-evolve/`, `skills/exobrain-persist/`,
+  and `skills/exobrain-ab/` — copy all from `$SRC`. `exobrain-evolve` is how the instance
+  pulls future changes, so it ships *in* the instance; `exobrain-ab` lets the instance
+  A/B-test its own context changes.
 - **Never copy `$SRC/seed/`.** Everything under `seed/` is seed-local — the
   `create-instance` generator and the behavioral test harness — and lives only in
   the canonical seed. An instance has nothing to generate or test, so `seed/` must

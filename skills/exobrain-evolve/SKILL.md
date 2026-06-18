@@ -25,11 +25,12 @@ This is a procedure; follow it, keeping the user in control of what's adopted.
 ## Framework files
 
 The files that arrived in this instance as verbatim copies of the seed — the ones
-"copy" applies to: `scripts/*`, `skills.schema.json`, `skills/exobrain-reader-lens/`,
-`tools/README.md`, `<domains-dir>/exobrain/*` (the concept),
-`skills/exobrain-evolve/`, and the root spec (`AGENTS.md`, agent sidecars).
-Everything else (`people/*`, your domains, `scopes.json`, your per-tool docs
-under `tools/`, `skills.json`, `workspaces/*`, the adoption ledger) is
+"copy" applies to: `scripts/*`, `skills.schema.json`, the framework skills
+(`skills/exobrain-evolve/`, `skills/exobrain-persist/`, `skills/exobrain-reader-lens/`,
+`skills/exobrain-domains/`, `skills/exobrain-ab/`), `tools/README.md`,
+`<domains-dir>/exobrain/*` (the concept), and the root spec (`AGENTS.md`, agent
+sidecars). Everything else (`people/*`, your domains, `scopes.json`, your per-tool
+docs under `tools/`, `skills.json`, `workspaces/*`, the adoption ledger) is
 **instance-owned — never overwrite it from the seed**.
 
 ## 1. Fetch the seed

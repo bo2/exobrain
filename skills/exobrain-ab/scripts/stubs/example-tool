@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+# PATH-shadow stub template. Copy to scripts/stubs/<bare-command-name> for every tool a
+# task measures: the filename must be the exact command the agent would type. It logs the
+# invocation (so the grader sees which tool the agent reached for) and returns canned
+# output, so no real system is touched. Keep it to these two lines plus a plausible exit.
+echo "example-tool $*" >> "${STUB_LOG:-/tmp/stub.log}"
+echo "[stub:example-tool] ok"
+exit 0
