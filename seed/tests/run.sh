@@ -204,7 +204,10 @@ for agent in "${AGENTS[@]}"; do
 
     met=0
     if threshold_met "$passes" "$N" "$thr"; then met=1; fi
-    log "  -> $agent/$case: $passes/$N passed${errors:+, $errors error(s)} (threshold $thr -> $([[ $met -eq 1 ]] && echo MET || echo MISSED))"
+    if [[ "$thr" == "informational" ]]; then verdict_word="INFO"
+    elif [[ $met -eq 1 ]]; then verdict_word="MET"
+    else verdict_word="MISSED"; fi
+    log "  -> $agent/$case: $passes/$N passed${errors:+, $errors error(s)} (threshold $thr -> $verdict_word)"
     summary_add "$agent/$case" "$passes" "$errors" "$N" "$thr" "$met"
   done
 done

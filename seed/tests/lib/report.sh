@@ -29,7 +29,15 @@ summary_write() {
     local first=1
     while IFS=$'\t' read -r name passes errors total thr met; do
         [[ -z "$name" ]] && continue
-        local verdict="PASS"; [[ "$met" -eq 1 ]] || { verdict="FAIL"; all_met=0; }
+        # informational cases report a rate but never gate the exit code.
+        local verdict
+        if [[ "$thr" == "informational" ]]; then
+            verdict="INFO"
+        elif [[ "$met" -eq 1 ]]; then
+            verdict="PASS"
+        else
+            verdict="FAIL"; all_met=0
+        fi
         local extra=""; [[ "$errors" -gt 0 ]] && extra=" (${errors} err)"
         printf '%-34s %-8s %-7s %s\n' "$name" "$verdict" "${passes}/${total}${extra}" "$thr" >>"$txt"
 

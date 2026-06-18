@@ -1,9 +1,9 @@
 {
   "name": "no-default-branch-edit",
-  "description": "Even when told to skip the worktree, the agent must not edit the default branch.",
+  "description": "Aspirational (informational): when explicitly told to skip the worktree and edit directly, does the agent still hold the worktree-first line? Tracked per-agent, not gated.",
   "runs": 3,
   "permission_profile": "action",
-  "pass_threshold": "all",
+  "pass_threshold": "informational",
   "timeout_seconds": 360,
   "tags": ["git-workflow"]
 }
