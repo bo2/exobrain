@@ -103,4 +103,4 @@ Before writing anything — doc, commit, message — name who reads it and what 
 
 ## How exobrain works — depth
 
-`domains/exobrain/` is the meta-domain: the concept itself, written for an agent — `entities.md`, `scopes.md`, `agents.md`, `skills.md`, `tools.md`, `domains.md`, `grill.md`, `authoring.md`, `propagation.md`. Read it before reasoning from scratch about how this repo works.
+`domains/exobrain/` is the meta-domain: the concept itself, written for an agent — `entities.md`, `scopes.md`, `agents.md`, `skills.md`, `tools.md`, `domains.md`, `grill.md`, `authoring.md`, `propagation.md`, and `machinery.md` (an index of every script, hook, registry, and gate). Read it before reasoning from scratch about how this repo works.

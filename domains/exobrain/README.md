@@ -27,6 +27,7 @@ Crucially, an exobrain is **one implementation of a shared concept, not a fork o
 | [`authoring.md`](authoring.md) | How to write well-formed domains — horizon, current-state, synthesis, citations |
 | [`grill.md`](grill.md) | The interview discipline — distilling and curating knowledge through adversarial, one-question-at-a-time interrogation |
 | [`propagation.md`](propagation.md) | How exobrains share improvements — the read-target/feed model, the borrow workflow, invariants |
+| [`machinery.md`](machinery.md) | Index of the concrete machinery — every script, git/session hook, registry, and quality gate, with the verify-a-connector-change flow |
 
 ## For an agent instantiating a new exobrain
 
