@@ -10,7 +10,7 @@
 #
 # Agent surfaces (each gets the same composed context; only delivery differs):
 #   claude   → .claude/AGENTS.override.md (composed), @-imported by .claude/CLAUDE.md
-#   codex    → ~/.codex/AGENTS.md, marker-block injection
+#   codex    → ~/.codex/AGENTS.md, marker-block injection; skills in repo-local .agents/skills/
 #   openclaw → ~/.openclaw/workspace/USER.md, marker-block injection
 #
 # --render-specs-only builds the in-repo context surface (scope specs, skills,
@@ -304,6 +304,17 @@ case "$AGENT" in
               AGENT_SIDECAR="OPENCLAW.md"; AGENT_SIDECAR_BASE="OPENCLAW" ;;
 esac
 
+# Where this agent's always-tier skills are linked. Most agents read skills from
+# their context surface ($TARGET_DIR/skills). Codex is the exception: it scans a
+# repo-local .agents/skills (cwd→repo-root), so its skills go there — keeping them
+# out of the global ~/.codex config, scoped to this repo. SKILLS_OPTIONAL_DIR is the
+# sibling the external-skill fetcher derives the same way.
+case "$AGENT" in
+    codex) SKILLS_DIR="$REPO_DIR/.agents/skills" ;;
+    *)     SKILLS_DIR="$TARGET_DIR/skills" ;;
+esac
+SKILLS_OPTIONAL_DIR="$(dirname "$SKILLS_DIR")/skills-optional"
+
 # On --relink, do nothing unless this agent has a marker (the user connected it).
 if $RELINK; then
     if $MARKER_IS_DIR; then [[ -d "$MARKER" ]] || exit 0; else [[ -e "$MARKER" ]] || exit 0; fi
@@ -337,8 +348,10 @@ echo "Agent:     $AGENT"
 echo "Target:    $TARGET_DIR"
 echo "Connected: ${CONNECTED_LEAVES[*]:-<guest: global only>}"
 
-mkdir -p "$TARGET_DIR/skills"
-clean_stale "$TARGET_DIR/skills"
+# Both are real directories (the skills parent must be real, not a symlink, for
+# codex to scan it); skill children are symlinked in below.
+mkdir -p "$TARGET_DIR" "$SKILLS_DIR"
+clean_stale "$SKILLS_DIR"
 # Specs compose into a single file now (claude: AGENTS.override.md; codex/openclaw:
 # the marker block), not a fan of per-scope symlinks. Remove any AGENTS.<suffix>.md
 # or sidecar symlink an earlier connect (old scheme) left behind. Only symlinks are
@@ -377,7 +390,7 @@ while IFS= read -r _row; do
     src="$(skills_dir_for "$REPO_DIR" "$scope" "$owner" "$name")"
     [[ -n "$src" && -d "$src" ]] || continue
     suffix="$(skills_link_suffix "$scope" "$owner")"
-    dst="$TARGET_DIR/skills/${name}${suffix:+.$suffix}"
+    dst="$SKILLS_DIR/${name}${suffix:+.$suffix}"
     link_path "$src" "$dst" "skills/${name}${suffix:+.$suffix}"
     _EXPECT_SKILL["${name}${suffix:+.$suffix}"]=1
     linked_any=true
@@ -391,18 +404,30 @@ $linked_any || echo "  (no always-tier skills)"
 if awk -F'\t' '$2=="external"{f=1} END{exit !f}' <<< "$RESOLVED_TSV" && [[ -x "$SCRIPT_DIR/fetch-external-skills.sh" ]]; then
     echo ""; echo "External skills:"
     LEAVES_CSV="$(IFS=','; echo "${CONNECTED_LEAVES[*]:-}")"
-    "$SCRIPT_DIR/fetch-external-skills.sh" "$TARGET_DIR/skills" --agent "$AGENT" --leaves "$LEAVES_CSV" || \
+    "$SCRIPT_DIR/fetch-external-skills.sh" "$SKILLS_DIR" --agent "$AGENT" --leaves "$LEAVES_CSV" || \
         echo "  (fetch-external-skills.sh failed — non-fatal)"
 fi
 
 # Prune managed in-tree skill symlinks no longer expected — a removed/off skill,
 # or a link from a previous suffix scheme. External skills are fetched as real
 # directories, not symlinks, so this loop never touches them.
-for d in "$TARGET_DIR"/skills/*; do
+for d in "$SKILLS_DIR"/*; do
     [[ -L "$d" ]] || continue
     bn="$(basename "$d")"
     [[ -n "${_EXPECT_SKILL[$bn]:-}" ]] || { rm "$d"; echo "  - removed stale skill $bn"; }
 done
+
+# Legacy migration: codex skills used to link under ~/.codex/skills (global); they
+# now live in the repo-local .agents/skills. Remove the old exobrain symlinks (only
+# links pointing back into this repo) so a re-linked codex install keeps no stale
+# global copies; anything else under there is left untouched.
+if [[ "$AGENT" == codex && "$SKILLS_DIR" != "$TARGET_DIR/skills" && -d "$TARGET_DIR/skills" ]]; then
+    for _l in "$TARGET_DIR"/skills/*; do
+        [[ -L "$_l" ]] || continue
+        [[ "$(readlink "$_l")" == "$REPO_DIR"/* ]] && { rm "$_l"; echo "  - removed legacy codex skill link $(basename "$_l")"; }
+    done
+    rmdir "$TARGET_DIR/skills" 2>/dev/null || true
+fi
 
 # --------------------------------------------------------------------------
 # Optional-skills index
@@ -431,7 +456,7 @@ HEADER
             tier="${_row%%$'\t'*}"
             [[ "$tier" == "optional" ]] || continue
             if [[ "$scope" == "external" ]]; then
-                src="$TARGET_DIR/skills-optional/${name}.$(sanitize_suffix "$owner")"
+                src="$SKILLS_OPTIONAL_DIR/${name}.$(sanitize_suffix "$owner")"
                 [[ -d "$src" ]] || continue
                 local_path="$src"
             else

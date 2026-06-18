@@ -55,7 +55,7 @@ A single run:
 
 1. **Resolve config** — read `.exobrain.json` (or run the wizard): person `id`, connected groups (if any), `hostname`.
 2. **Resolve the skills registry** — walk every `skills.json` in priority order into a plan.
-3. **Link always-tier skills** — symlink each into the agent's `skills/<name>.<scope-owner>/`.
+3. **Link always-tier skills** — symlink each into the agent's skills dir as `<name>.<scope-owner>/`. Most agents read it from their context surface (`.claude/skills`, `~/.openclaw/workspace/skills`); Codex scans a repo-local `.agents/skills`, so its skills link there — out of the global `~/.codex`, scoped to this repo.
 4. **Fetch external skills** — route to `skills/` (always) or `skills-optional/` (optional).
 5. **Generate `optional-skills.md`** from optional-tier entries.
 6. **Compose + inject** — concatenate each connected scope's `AGENTS.md` (+ agent sidecar, shallow→deep) and the optional-skills index into one context surface, then deliver it: Claude `@-imports` the composed `.claude/AGENTS.override.md`; OpenClaw/Codex inline it into a marker block.

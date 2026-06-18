@@ -35,11 +35,14 @@ for arg in "$@"; do case "$arg" in --strict) strict=true ;; esac; done
 errors=0
 warnings=0
 
-# Shared find prune for repo-wide scans. seed/ is seed-local tooling outside the
-# skills registry (the create-instance generator and the test harness), so it is
-# excluded from both the declaration scan and the orphan walk below.
+# Shared find prune for repo-wide scans. Excludes every agent backend's
+# linker-output dir (.claude, .agents — codex's repo-local skills) so generated
+# symlinks never read as orphans; add a new backend's link dir here when one lands.
+# seed/ is seed-local tooling outside the skills registry (the create-instance
+# generator and the test harness). Both lists below must stay identical.
 _find_jsons() { find "$REPO_DIR" -name "$1" \
-    -not -path "$REPO_DIR/.claude/*" -not -path "$REPO_DIR/src/*" \
+    -not -path "$REPO_DIR/.claude/*" -not -path "$REPO_DIR/.agents/*" \
+    -not -path "$REPO_DIR/src/*" \
     -not -path "$REPO_DIR/seed/*" \
     -not -path "$REPO_DIR/.worktrees/*" -not -path "$REPO_DIR/.git/*" \
     -not -path '*/node_modules/*' 2>/dev/null; }
@@ -98,7 +101,8 @@ while IFS= read -r skills_dir; do
         fi
     done
 done < <(find "$REPO_DIR" -type d -name skills \
-    -not -path "$REPO_DIR/.claude/*" -not -path "$REPO_DIR/src/*" \
+    -not -path "$REPO_DIR/.claude/*" -not -path "$REPO_DIR/.agents/*" \
+    -not -path "$REPO_DIR/src/*" \
     -not -path "$REPO_DIR/seed/*" \
     -not -path "$REPO_DIR/.worktrees/*" -not -path "$REPO_DIR/.git/*" \
     -not -path '*/node_modules/*' 2>/dev/null)
