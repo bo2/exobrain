@@ -38,9 +38,11 @@ agent_available() {
 }
 
 # threshold_met <passes> <total> <threshold> — exit 0 if the pass count clears
-# the bar. threshold is "all" (every run must pass) or a fraction like 0.8.
+# the bar. threshold is "all" (every run must pass), "informational" (never gates —
+# the case reports its rate but doesn't affect MET/exit code), or a fraction like 0.8.
 threshold_met() {
     local passes="$1" total="$2" thr="$3"
+    [[ "$thr" == "informational" ]] && return 0
     [[ "$total" -eq 0 ]] && return 1
     if [[ "$thr" == "all" ]]; then
         [[ "$passes" -eq "$total" ]]
