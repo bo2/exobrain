@@ -80,8 +80,9 @@ Set per case in `meta.json` (`permission_profile`):
 Create `cases/<name>/` with:
 
 - `meta.json` — `name, description, runs, permission_profile, pass_threshold`
-  (`"all"` = N/N, or a fraction like `0.8`), `timeout_seconds`, optional `model`,
-  `output_format`, `tags`.
+  (`"all"` = N/N, a fraction like `0.8`, or `"informational"` = reports its k/N
+  but never gates the exit code — for aspirational probes of debatable behavior),
+  `timeout_seconds`, optional `model`, `output_format`, `tags`.
 - `prompt.md` — the task, piped to the agent on stdin (keep it agent-neutral).
 - `setup.sh` *(optional)* — seeds fixtures; receives `$1` = instance dir.
 - `check.sh` — receives `$1` instance dir, `$2` transcript, `$3` engine exit code,
