@@ -27,12 +27,13 @@ Because no two agents write the same file, relink order stops mattering and no a
 compose_scope_manifest() {                      # emits, relative to .claude/:
     for scope in "${CHAIN[@]}"; do
         [[ "$scope" == "global" ]] && continue  # global loads via the checked-in root CLAUDE.md
-        [[ -f "$REPO_DIR/$scope/AGENTS.md" ]]      && echo "@../$scope/AGENTS.md"
-        [[ -f "$REPO_DIR/$scope/$AGENT_SIDECAR" ]] && echo "@../$scope/$AGENT_SIDECAR"
+        # `if`, not trailing `&& echo` — see the set -e adapt note below
+        if [[ -f "$REPO_DIR/$scope/AGENTS.md" ]];      then echo "@../$scope/AGENTS.md"; fi
+        if [[ -f "$REPO_DIR/$scope/$AGENT_SIDECAR" ]]; then echo "@../$scope/$AGENT_SIDECAR"; fi
     done
 }
 compose_scope_manifest > .claude/connected-scopes.md
-{ echo "@connected-scopes.md"; [[ -f "$INDEX_FILE" ]] && echo "@optional-skills.md"; } > .claude/CLAUDE.md
+{ echo "@connected-scopes.md"; if [[ -f "$INDEX_FILE" ]]; then echo "@optional-skills.md"; fi; } > .claude/CLAUDE.md
 
 # import-less agent: inline the same context into its own file via marker block
 compose_context > "$TARGET_DIR/AGENTS.md"       # or USER.md
@@ -43,5 +44,6 @@ compose_context > "$TARGET_DIR/AGENTS.md"       # or USER.md
 - **Manifest paths must be relative** (`@../<scope>/AGENTS.md`), not absolute — a copied or relocated checkout (test sandbox, worktree) won't resolve absolute paths that point back at the original tree.
 - **Verify the import directive's limits first** — that it resolves *nested* imports (the entry point imports the manifest, which imports the specs), arbitrary filenames, and the path depth your manifest needs — before relying on a manifest instead of inlining.
 - The import-capable agent must tolerate a **missing** generated file on a fresh clone (regenerate on first connect).
+- **Watch `set -e`** when the emitter is a shell function: end every loop branch with an `if` block, not a trailing `[[ … ]] && echo`. A conditional that tests false returns 1, becoming the function's exit status, which trips `set -e` at the `func > file` call site — so the manifest writes but the next steps (the entry-point file, cleanup of the old surface) silently never run. Assert the exit code, not just the file contents, when verifying.
 - This **supersedes card 0030's "one composed file" compromise** — sharing was only ever safe while the content was truly agent-neutral. Once any part is agent-filtered, a shared file corrupts whichever agent didn't write last, so split per agent. Keep emitting any per-scope agent sidecars the inlined form carried.
 - Preserve the **agent-isolation** rule: each agent's filtered view lives in a surface only that agent reads.
