@@ -1,6 +1,6 @@
 # Feed
 
-The feed is the **changelog** of exobrain improvements — dated pattern-cards. The canonical exobrain publishes one dated card per change here; instances read the cards they haven't adopted yet (via `exobrain-update`) and apply each — **copying** the seed's files where undiverged, **re-synthesizing** where they've diverged in names or structure. Background: [`../propagation.md`](../propagation.md).
+The feed is the **changelog** of exobrain improvements — dated pattern-cards. The canonical exobrain publishes one dated card per change here; instances read the cards they haven't adopted yet (via `exobrain-evolve`) and apply each — **copying** the seed's files where undiverged, **re-synthesizing** where they've diverged in names or structure. Background: [`../propagation.md`](../propagation.md).
 
 A card describes a **problem and a pattern**, optionally naming the files it touches. Any reference snippet is **illustration**: an instance that diverged adapts the pattern; an instance that didn't can copy the seed's files directly.
 
@@ -35,4 +35,4 @@ What to watch when porting to a divergent setup; which invariant (if any) to pre
 
 ## Adoption ledger
 
-Each downstream exobrain records which cards it has absorbed in its own `adopted-feed.md` (next to this `feed/` in that instance) — card ID, date adopted, and a one-line note on how it was applied (copied / rewired). Its header also records the **seed repository URL** this instance updates from, so `exobrain-update` knows where to pull the cache (`src/exobrain-seed/`) — the seed address is instance data, committed here, not a per-machine setting. The `exobrain-update` skill diffs the feed's card IDs against that ledger to show only what's new. The ledger is the answer to *"am I current? did I get the fix for X?"* in a world with no shared code. (This canonical repo publishes the feed and has no ledger of its own.)
+Each downstream exobrain records which cards it has absorbed in its own `adopted-feed.md` (next to this `feed/` in that instance) — card ID, date adopted, and a one-line note on how it was applied (copied / rewired). Its header also records the **seed repository URL** this instance updates from, so `exobrain-evolve` knows where to pull the cache (`src/exobrain-seed/`) — the seed address is instance data, committed here, not a per-machine setting. The `exobrain-evolve` skill diffs the feed's card IDs against that ledger to show only what's new. The ledger is the answer to *"am I current? did I get the fix for X?"* in a world with no shared code. (This canonical repo publishes the feed and has no ledger of its own.)
