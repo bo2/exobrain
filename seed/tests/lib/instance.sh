@@ -89,8 +89,8 @@ finalize_template() {
         return 1
     fi
 
-    # Neutralize hooks so the pre-push authoring-review (an LLM call) and the
-    # relink hooks never fire while a case's agent runs git inside the instance.
+    # Neutralize hooks so the pre-push validator and the relink hooks never fire
+    # while a case's agent runs git inside the instance.
     git -C "$template" config core.hooksPath /dev/null
 
     # Establish a `main` base branch so worktree-based cases have something to

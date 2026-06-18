@@ -1,17 +1,19 @@
 #!/usr/bin/env bash
-# authoring-review.sh — LLM review of changed domain/spec files against the
-# exobrain authoring & convention rules. The judgment layer that complements
+# authoring-review.sh — on-demand LLM review of changed domain/spec files against
+# the exobrain authoring & convention rules. The judgment layer that complements
 # the deterministic checks in validate-exobrain.sh.
+#
+# Not a push gate: the pre-push hook runs only validate-exobrain.sh, since a
+# per-push model round-trip taxes every push for an occasional payoff. Run this by
+# hand before a substantial spec/domain edit:
+#   scripts/authoring-review.sh [<base-ref>]   # default base: origin/main
 #
 # Engine: claude (headless, read-only) if installed, else codex; if neither is
 # available — or the checker errors/times out — it DEGRADES OPEN (exit 0), so a
-# missing or flaky checker never blocks a push. It blocks (exit 1) only when the
-# model reports clear violations.
+# missing or flaky checker never reports a false violation. It exits 1 only when
+# the model reports clear violations.
 #
-# Runs from the pre-push hook and is also runnable manually:
-#   scripts/authoring-review.sh [<base-ref>]   # default base: origin/main
-#
-# Opt out for a session/user:  EXOBRAIN_SKIP_AUTHORING_REVIEW=1
+# Opt out:  EXOBRAIN_SKIP_AUTHORING_REVIEW=1
 
 set -uo pipefail
 [[ "${EXOBRAIN_SKIP_AUTHORING_REVIEW:-}" == "1" ]] && exit 0
@@ -132,13 +134,12 @@ if grep -q 'AUTHORING-OK' <<<"$output"; then
 fi
 
 echo "" >&2
-echo "Authoring review flagged possible issues in the files you're pushing:" >&2
+echo "Authoring review flagged possible issues in the changed files:" >&2
 echo "" >&2
 echo "$output" >&2
 echo "" >&2
 echo "For a deeper reader-lens pass on new or justification-heavy docs, run the" >&2
-echo "exobrain-reader-lens skill before re-pushing." >&2
+echo "exobrain-reader-lens skill." >&2
 echo "" >&2
-echo "Fix them and re-push, recheck with 'scripts/authoring-review.sh'," >&2
-echo "or bypass with 'git push --no-verify' if it's a false positive." >&2
+echo "Fix them and recheck with 'scripts/authoring-review.sh'." >&2
 exit 1

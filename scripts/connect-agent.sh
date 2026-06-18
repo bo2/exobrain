@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # connect-agent.sh — wire exobrain scope content into an AI agent's surface.
 #
-#   connect-agent.sh <claude|codex|openclaw> [--relink] [--configure]
+#   connect-agent.sh <claude|codex|openclaw> [--relink] [--configure] [--render-specs-only]
 #
 # A scope is any directory containing an AGENTS.md. Connecting a leaf scope
 # (recorded in .exobrain.json `connected`) wires in that leaf plus every
@@ -12,6 +12,13 @@
 #   claude   → .claude/ dir, generates .claude/CLAUDE.md with @-imports
 #   codex    → ~/.codex/AGENTS.md, marker-block injection
 #   openclaw → ~/.openclaw/workspace/USER.md, marker-block injection
+#
+# --render-specs-only builds the in-repo context surface (scope specs, skills,
+# optional-skills index, per-agent injection) and stops before any write outside
+# the target dir — no shell-profile edits, no sibling clones, no git hooks, no
+# connect marker. It lets a throwaway copy (a test sandbox, a CI checkout) be
+# wired exactly like a real checkout with zero global side effects; codex/openclaw
+# land in the copy when CODEX_HOME / OPENCLAW_WORKSPACE point there.
 
 set -euo pipefail
 
@@ -108,11 +115,6 @@ if [[ -x "$REPO_DIR/scripts/validate-exobrain.sh" ]]; then
         echo "Push blocked by exobrain validation. Fix the above, or 'git push --no-verify'." >&2
         exit 1
     }
-fi
-# Judgment layer: LLM authoring review of changed specs/domains. Degrades open
-# when no engine is installed; skip with EXOBRAIN_SKIP_AUTHORING_REVIEW=1.
-if [[ -x "$REPO_DIR/scripts/authoring-review.sh" ]]; then
-    "$REPO_DIR/scripts/authoring-review.sh" || exit 1
 fi
 HOOK
     chmod +x "$hook_tmp"; mv -f "$hook_tmp" "$hooks_dir/pre-push"
@@ -270,16 +272,17 @@ run_wizard() {
 # Argument parsing + agent setup
 # --------------------------------------------------------------------------
 
-AGENT="" ; RELINK=false ; CONFIGURE=false
+AGENT="" ; RELINK=false ; CONFIGURE=false ; RENDER_ONLY=false
 for arg in "$@"; do
     case "$arg" in
         claude|codex|openclaw) AGENT="$arg" ;;
-        --relink)    RELINK=true ;;
-        --configure) CONFIGURE=true ;;
-        *) echo "Usage: $0 <claude|codex|openclaw> [--relink] [--configure]" >&2; exit 2 ;;
+        --relink)             RELINK=true ;;
+        --configure)          CONFIGURE=true ;;
+        --render-specs-only)  RENDER_ONLY=true ;;
+        *) echo "Usage: $0 <claude|codex|openclaw> [--relink] [--configure] [--render-specs-only]" >&2; exit 2 ;;
     esac
 done
-[[ -n "$AGENT" ]] || { echo "Usage: $0 <claude|codex|openclaw> [--relink] [--configure]" >&2; exit 2; }
+[[ -n "$AGENT" ]] || { echo "Usage: $0 <claude|codex|openclaw> [--relink] [--configure] [--render-specs-only]" >&2; exit 2; }
 
 # Hard dependency: jq drives config persistence and skills resolution. Fail
 # early with an install hint rather than deep inside the run with a cryptic error.
@@ -311,7 +314,9 @@ fi
 # --------------------------------------------------------------------------
 
 if $CONFIGURE || ! load_config; then
-    if $CONFIGURE || ! $RELINK; then
+    # --render-specs-only never prompts or writes config: a copy with no config
+    # renders as guest (global scope only), like --relink.
+    if $CONFIGURE || { ! $RELINK && ! $RENDER_ONLY; }; then
         run_wizard
     else
         CONNECTED_LEAVES=()
@@ -549,6 +554,16 @@ case "$AGENT" in
         fi
         ;;
 esac
+
+# --render-specs-only stops here. Everything above writes only inside the target
+# dir (the in-repo .claude surface, or a *_HOME-overridden copy dir for codex/
+# openclaw); the connect marker and git hooks below are the first writes outside
+# it. Truncating here — not forking a parallel render path — keeps the rendered
+# surface identical to what a full connect produces.
+if $RENDER_ONLY; then
+    echo ""; echo "✓ Rendered $AGENT context surface (no out-of-dir writes)."
+    exit 0
+fi
 
 # --------------------------------------------------------------------------
 # Marker + hooks (first run only)
