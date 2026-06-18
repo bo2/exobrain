@@ -8,8 +8,8 @@
 # AGENTS.md-bearing ancestor up to the repo root — resolving skills, specs, and
 # the optional-skills index innermost-wins. See domains/exobrain/ for the model.
 #
-# Agent surfaces:
-#   claude   → .claude/ dir, generates .claude/CLAUDE.md with @-imports
+# Agent surfaces (each gets the same composed context; only delivery differs):
+#   claude   → .claude/AGENTS.override.md (composed), @-imported by .claude/CLAUDE.md
 #   codex    → ~/.codex/AGENTS.md, marker-block injection
 #   openclaw → ~/.openclaw/workspace/USER.md, marker-block injection
 #
@@ -339,9 +339,12 @@ echo "Connected: ${CONNECTED_LEAVES[*]:-<guest: global only>}"
 
 mkdir -p "$TARGET_DIR/skills"
 clean_stale "$TARGET_DIR/skills"
-# Drop stale scope-spec symlinks (renamed/removed scopes)
+# Specs compose into a single file now (claude: AGENTS.override.md; codex/openclaw:
+# the marker block), not a fan of per-scope symlinks. Remove any AGENTS.<suffix>.md
+# or sidecar symlink an earlier connect (old scheme) left behind. Only symlinks are
+# deleted, so the real AGENTS.override.md generated below is never touched.
 find "$TARGET_DIR" -maxdepth 1 \( -name "AGENTS.*.md" -o -name "${AGENT_SIDECAR_BASE}.*.md" \) \
-    -type l ! -exec test -e {} \; -delete 2>/dev/null || true
+    -type l -delete 2>/dev/null || true
 
 # --------------------------------------------------------------------------
 # Resolve the scope chain + skills registry
@@ -353,37 +356,6 @@ while IFS= read -r s; do CHAIN+=("$s"); done < <(build_scope_chain "$REPO_DIR" "
 RESOLVED_TSV="$(skills_resolve "$REPO_DIR" "$AGENT" "${CONNECTED_LEAVES[@]:-}")"
 REGISTRY_ACTIVE=false
 [[ -n "$RESOLVED_TSV" ]] && REGISTRY_ACTIVE=true
-
-# --------------------------------------------------------------------------
-# Link per-scope specs (AGENTS.<suffix>.md + agent sidecar) for the chain
-# --------------------------------------------------------------------------
-# Global (root AGENTS.md + root sidecar) is auto-loaded by the agent directly,
-# so it is NOT re-linked here — only deeper scopes are.
-
-echo ""; echo "Scope specs:"
-declare -A _EXPECT_SPEC=()
-for scope in "${CHAIN[@]}"; do
-    [[ "$scope" == "global" ]] && continue
-    suffix="$(sanitize_suffix "$scope")"
-    link_path "$REPO_DIR/$scope/AGENTS.md" "$TARGET_DIR/AGENTS.${suffix}.md" "AGENTS.${suffix}.md"
-    _EXPECT_SPEC["AGENTS.${suffix}.md"]=1
-    # Claude links per-scope sidecars next to AGENTS.*; codex/openclaw inline them below.
-    if [[ "$AGENT" == "claude" && -f "$REPO_DIR/$scope/$AGENT_SIDECAR" ]]; then
-        link_path "$REPO_DIR/$scope/$AGENT_SIDECAR" \
-                  "$TARGET_DIR/${AGENT_SIDECAR_BASE}.${suffix}.md" "${AGENT_SIDECAR_BASE}.${suffix}.md"
-        _EXPECT_SPEC["${AGENT_SIDECAR_BASE}.${suffix}.md"]=1
-    fi
-done
-# Prune managed scope-spec symlinks no longer expected — a renamed/removed scope,
-# or a link from a previous suffix scheme. Its old target may still resolve, so it
-# survives the broken-link sweep and must be pruned by name. Only symlinks are
-# touched; the generated CLAUDE.md import file is a real file, never swept.
-for f in "$TARGET_DIR"/AGENTS.*.md "$TARGET_DIR"/${AGENT_SIDECAR_BASE}.*.md; do
-    [[ -L "$f" ]] || continue
-    bn="$(basename "$f")"
-    [[ -n "${_EXPECT_SPEC[$bn]:-}" ]] || { rm "$f"; echo "  - removed stale $bn"; }
-done
-[[ ${#CHAIN[@]} -le 1 ]] && echo "  (none — global scope only)"
 
 # --------------------------------------------------------------------------
 # Link always-tier in-tree skills (direct from the resolved registry)
@@ -482,17 +454,39 @@ fi
 # --------------------------------------------------------------------------
 # Per-agent injection of scope specs into the agent surface
 # --------------------------------------------------------------------------
+# compose_context emits the connected chain's deeper-scope specs — each scope's
+# AGENTS.md plus this agent's sidecar, shallow→deep — followed by the optional-
+# skills index, as one stream. The global scope (root AGENTS.md + root sidecar) is
+# auto-loaded by the agent and is deliberately omitted. Shared by all backends so
+# the composition lives in one place; only the delivery below differs.
+compose_context() {
+    for scope in "${CHAIN[@]}"; do
+        [[ "$scope" == "global" ]] && continue
+        if [[ -f "$REPO_DIR/$scope/AGENTS.md" ]]; then
+            echo "<!-- scope: $scope -->"; echo ""; cat "$REPO_DIR/$scope/AGENTS.md"; echo ""
+        fi
+        if [[ -f "$REPO_DIR/$scope/$AGENT_SIDECAR" ]]; then
+            echo "<!-- scope: $scope — $AGENT -->"; echo ""; cat "$REPO_DIR/$scope/$AGENT_SIDECAR"; echo ""
+        fi
+    done
+    if [[ -f "$INDEX_FILE" ]]; then
+        echo "<!-- optional-skills index -->"; echo ""; cat "$INDEX_FILE"; echo ""
+    fi
+}
 
 case "$AGENT" in
     claude)
-        echo ""; echo "Generating .claude/CLAUDE.md …"
+        # One composed, gitignored file @-imported by the generated CLAUDE.md, in
+        # place of a fan of per-scope symlinks with one @-import each. The root spec
+        # loads via the checked-in root CLAUDE.md (@AGENTS.md), so it stays out of
+        # the override.
+        echo ""; echo "Composing .claude/AGENTS.override.md …"
         {
-            for f in "$TARGET_DIR"/AGENTS.*.md "$TARGET_DIR"/CLAUDE.*.md; do
-                [[ -L "$f" ]] && echo "@$(basename "$f")"
-            done
-            [[ -f "$INDEX_FILE" ]] && echo "@optional-skills.md"
-        } > "$TARGET_DIR/CLAUDE.md"
-        echo "  ✓ .claude/CLAUDE.md"
+            echo "<!-- Auto-generated by connect-agent.sh — do not edit; regenerated on relink. -->"; echo ""
+            compose_context
+        } > "$TARGET_DIR/AGENTS.override.md"
+        printf '@AGENTS.override.md\n' > "$TARGET_DIR/CLAUDE.md"
+        echo "  ✓ .claude/AGENTS.override.md + .claude/CLAUDE.md"
 
         # Disable Claude Code's auto-memory — this exobrain provides context via
         # AGENTS.md/CLAUDE.md, so the separate auto-memory layer just adds drift.
@@ -514,24 +508,16 @@ case "$AGENT" in
         # into the agent's auto-loaded file, between markers.
         if [[ "$AGENT" == codex ]]; then DEST="$TARGET_DIR/AGENTS.md"; else DEST="$TARGET_DIR/USER.md"; fi
         echo ""; echo "Injecting agent context into $(basename "$DEST") …"
+        # Same composition as claude, delivered by marker-block rewrite (no import
+        # primitive). codex/openclaw auto-load the root AGENTS.md but not the root
+        # sidecar, so it is prepended here ahead of the shared deeper-scope content.
         CONTENT_TMP="$(mktemp)"
         {
             echo "<!-- Auto-generated by connect-agent.sh — do not edit manually. -->"; echo ""
             if [[ -f "$REPO_DIR/$AGENT_SIDECAR" ]]; then
                 echo "<!-- scope: root ($AGENT) -->"; echo ""; cat "$REPO_DIR/$AGENT_SIDECAR"; echo ""
             fi
-            for scope in "${CHAIN[@]}"; do
-                [[ "$scope" == "global" ]] && continue
-                if [[ -f "$REPO_DIR/$scope/AGENTS.md" ]]; then
-                    echo "<!-- scope: $scope -->"; echo ""; cat "$REPO_DIR/$scope/AGENTS.md"; echo ""
-                fi
-                if [[ -f "$REPO_DIR/$scope/$AGENT_SIDECAR" ]]; then
-                    echo "<!-- scope: $scope — $AGENT -->"; echo ""; cat "$REPO_DIR/$scope/$AGENT_SIDECAR"; echo ""
-                fi
-            done
-            if [[ -f "$INDEX_FILE" ]]; then
-                echo "<!-- scope: optional-skills index -->"; echo ""; cat "$INDEX_FILE"; echo ""
-            fi
+            compose_context
         } > "$CONTENT_TMP"
         mkdir -p "$TARGET_DIR"
         inject_block "$DEST" "exobrain" "$CONTENT_TMP" "$(basename "$DEST")"
