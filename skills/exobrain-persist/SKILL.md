@@ -5,7 +5,7 @@ description: "The default way completed exobrain work lands: worktree → timeli
 
 # Persist
 
-Land a completed logical change on the default branch in one shot, through a pull request. This is the **default** flow: `AGENTS.md` § Git workflow grants standing authorization to run it without being asked whenever a logical change is done; the user can also invoke it by name. Follow that git workflow throughout.
+Land a completed logical change on the default branch in one shot, through a pull request. This is the **default** flow: `AGENTS.md` § Git workflow grants standing authorization to run it without being asked once a logical change is genuinely done — when more edits or a correction are likely (mid-task, or the user is still iterating), hold and confirm first. The user can also invoke it by name. Follow that git workflow throughout.
 
 1. **Get onto a branch.** Normally you're already in the worktree you started the work in (`AGENTS.md` § Git workflow — worktree-first), so this is a no-op. Recovery only — if work wrongly began in-place on the default branch, move it to a branch first (`git stash -u` → `scripts/create-worktree.sh <branch>` → `cd` into it → `git stash pop`); worktree-first means this shouldn't happen.
 2. **Update timelines.** For each workspace or domain touched by this persist, check its `README.md` frontmatter for `timeline: true`. If present, diff the folder against the default branch, summarize the changes in one line, and append a row (`| date | author | summary |`) to the `TIMELINE.md` beside that `README.md` — creating it with a header row if absent. See [`domains/exobrain/domains.md`](../../domains/exobrain/domains.md) → "Timeline tracking".
