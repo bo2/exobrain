@@ -43,11 +43,11 @@ Each agent pulls auto-loaded specs into its prompt differently; the content is i
 
 | Agent | Universal + sidecar injection | Optional-skills index |
 |---|---|---|
-| **Claude Code** | Symlinks `AGENTS.<scope>.md` / `CLAUDE.<scope>.md` into `.claude/`; root `CLAUDE.md` `@-imports` each | `@optional-skills.md` line in `CLAUDE.md` |
+| **Claude Code** | Every connected scope's spec composes into one `.claude/AGENTS.override.md`, `@-imported` by the generated `.claude/CLAUDE.md` | Inlined in `AGENTS.override.md` |
 | **OpenClaw** | Inlined into `USER.md` via a marker block (`<!-- exobrain --> … <!-- END exobrain -->`) | Inlined in the same block |
 | **Codex** | Inlined into `AGENTS.md` via a marker block | Inlined in the same block |
 
-Claude's `@-import` composes; OpenClaw and Codex use a marker-block rewrite because they lack an import primitive.
+All three deliver the **same composition** — deeper-scope specs (shallow→deep) plus the index, with the global scope auto-loaded separately. Claude `@-imports` one composed file; OpenClaw and Codex inline it via a marker-block rewrite because they lack an import primitive.
 
 ## `connect-agent.sh` end-to-end
 
@@ -56,14 +56,13 @@ A single run:
 1. **Resolve config** — read `.exobrain.json` (or run the wizard): person `id`, connected groups (if any), `hostname`.
 2. **Resolve the skills registry** — walk every `skills.json` in priority order into a plan.
 3. **Link always-tier skills** — symlink each into the agent's `skills/<name>.<scope-owner>/`.
-4. **Link sidecar specs** — per scope, symlink `AGENTS.<scope>.md` and the matching `<AGENT>.<scope>.md`.
-5. **Fetch external skills** — route to `skills/` (always) or `skills-optional/` (optional).
-6. **Generate `optional-skills.md`** from optional-tier entries.
-7. **Inject** into the agent surface (Claude `@-imports`; OpenClaw/Codex marker block).
-8. **Install the post-merge hook** (first run) — re-links every marked agent after `git pull`.
-9. **Run scope hooks** — if a scope dir has an executable `scripts/connect-agent.sh`, run it.
+4. **Fetch external skills** — route to `skills/` (always) or `skills-optional/` (optional).
+5. **Generate `optional-skills.md`** from optional-tier entries.
+6. **Compose + inject** — concatenate each connected scope's `AGENTS.md` (+ agent sidecar, shallow→deep) and the optional-skills index into one context surface, then deliver it: Claude `@-imports` the composed `.claude/AGENTS.override.md`; OpenClaw/Codex inline it into a marker block.
+7. **Install the post-merge hook** (first run) — re-links every marked agent after `git pull`.
+8. **Run scope hooks** — if a scope dir has an executable `scripts/connect-agent.sh`, run it.
 
-`--relink` repeats steps 2–7 without prompting; `--configure` re-runs the wizard.
+`--relink` repeats steps 2–6 without prompting; `--configure` re-runs the wizard; `--render-specs-only` runs steps 2–6 and stops before any write outside the target dir (no marker, no hooks) — for wiring a throwaway copy.
 
 ## Adding a new agent
 
