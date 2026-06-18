@@ -20,7 +20,7 @@ done
 [[ -d "$INST/domains/exobrain/feed" ]] || fail "missing domains/exobrain/feed/"
 
 # The three shipped skills are present.
-for s in exobrain-persist exobrain-update exobrain-reader-lens; do
+for s in exobrain-persist exobrain-evolve exobrain-reader-lens; do
     [[ -f "$INST/skills/$s/SKILL.md" ]] || fail "missing shipped skill: $s"
 done
 # The seed-local area (generator + tests) must never be copied into an instance.
