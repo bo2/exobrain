@@ -54,7 +54,7 @@ Gitignored, at the repo root. Holds an **identity** block (person `id`, `hostnam
 
 ## Connecting a tool
 
-Connecting is per-machine. To connect a tool, follow its doc's **Setup**, then run its **Verify**. A small setup skill can automate this — `add <tool>` / `status` / `refresh <tool>` / `doctor`, discovering tools by globbing the scope locations and reading each doc on demand — but this seed ships only the docs; add such a skill once you maintain more than a couple of tools.
+Connecting is per-machine. To connect a tool, follow its doc's **Setup**, then run its **Verify** by hand — or invoke the `exobrain-tools` skill, which automates the flow (`onboard` / `status` / `add <tool>` / `refresh <tool>` / `doctor`): it discovers tools by globbing the scope locations, reads each doc on demand, drives Setup/Verify, and records per-tool state in `.exobrain.json` — never reading or storing a secret value itself.
 
 ## Adding a new tool
 
