@@ -54,14 +54,14 @@ Full model: [`domains/exobrain/`](domains/exobrain/).
 |------|-----------|
 | [`domains/exobrain/`](domains/exobrain/) | **The concept** — entities, scopes, agents, skills, tools, authoring, propagation, written for an agent to read |
 | [`seed/`](seed/) | **Seed-local** — the `create-instance` generator and the behavioral test harness. Operates on the seed itself; never copied into an instance |
-| [`skills/exobrain-update/`](skills/exobrain-update/) | Bring an instance up to date — read this repo's feed, copy/rewire each change, record it. Copied into every instance. |
-| [`domains/exobrain/feed/`](domains/exobrain/feed/) | **The feed** — the changelog of dated pattern-cards `exobrain-update` reads to bring instances forward |
+| [`skills/exobrain-evolve/`](skills/exobrain-evolve/) | Bring an instance up to date — read this repo's feed, copy/rewire each change, record it. Copied into every instance. |
+| [`domains/exobrain/feed/`](domains/exobrain/feed/) | **The feed** — the changelog of dated pattern-cards `exobrain-evolve` reads to bring instances forward |
 | [`scripts/`](scripts/) | The framework `create-instance` copies into a new instance (`connect-agent`, `skills-registry`, validators) |
 | `AGENTS.md`, `scopes.json`, `skills.schema.json` | The spec and registries a new instance starts from |
 
 ## How updates work — no forking
 
-Your instance is **independent** — no upstream remote, no merge. When this repo ships a change, you ask your agent to run `exobrain-update`: it reads the feed since you last updated, **copies** the files you haven't diverged and **re-synthesizes** the rest into your setup, then records the card IDs in your adoption ledger. See [`domains/exobrain/propagation.md`](domains/exobrain/propagation.md).
+Your instance is **independent** — no upstream remote, no merge. When this repo ships a change, you ask your agent to run `exobrain-evolve`: it reads the feed since you last updated, **copies** the files you haven't diverged and **re-synthesizes** the rest into your setup, then records the card IDs in your adoption ledger. See [`domains/exobrain/propagation.md`](domains/exobrain/propagation.md).
 
 ## License
 

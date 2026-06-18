@@ -1,5 +1,5 @@
 ---
-name: exobrain-update
+name: exobrain-evolve
 description: >
   Bring this exobrain instance up to date with the canonical seed
   (github.com/bo2/exobrain). Use when the user wants to update their exobrain,
@@ -9,7 +9,7 @@ description: >
   diverged, then records what was adopted.
 ---
 
-# exobrain-update
+# exobrain-evolve
 
 Update this instance from the canonical seed. The model: the seed's **feed is a
 changelog** — dated cards, each describing a change (a framework fix, a feature,
@@ -27,7 +27,7 @@ This is a procedure; follow it, keeping the user in control of what's adopted.
 The files that arrived in this instance as verbatim copies of the seed — the ones
 "copy" applies to: `scripts/*`, `skills.schema.json`, `skills/exobrain-reader-lens/`,
 `tools/README.md`, `<domains-dir>/exobrain/*` (the concept),
-`skills/exobrain-update/`, and the root spec (`AGENTS.md`, agent sidecars).
+`skills/exobrain-evolve/`, and the root spec (`AGENTS.md`, agent sidecars).
 Everything else (`people/*`, your domains, `scopes.json`, your per-tool docs
 under `tools/`, `skills.json`, `workspaces/*`, the adoption ledger) is
 **instance-owned — never overwrite it from the seed**.

@@ -44,7 +44,7 @@ starts each session already knowing my world.
 ## Stay current
 
 This exobrain is **independent** — no upstream remote, no merge. When the
-canonical exobrain ships a change, ask the agent to run `exobrain-update`: it
+canonical exobrain ships a change, ask the agent to run `exobrain-evolve`: it
 reads the feed since the last update, **copies** the files undiverged and
 **re-synthesizes** the rest into this setup, then records the card IDs in
 `domains/exobrain/adopted-feed.md`. Background:

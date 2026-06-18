@@ -34,9 +34,9 @@ committed) and call that path `$SRC`:
   copy that clone into `$DST/src/exobrain-seed/`.
 - Otherwise `git clone https://github.com/bo2/exobrain $DST/src/exobrain-seed`.
 - Can't clone at all? Read the raw files from GitHub as needed; the instance starts
-  without a cache and `exobrain-update` clones one on its first run.
+  without a cache and `exobrain-evolve` clones one on its first run.
 
-`exobrain-update` later reuses or refreshes this same cache (see `propagation.md`).
+`exobrain-evolve` later reuses or refreshes this same cache (see `propagation.md`).
 
 ## 1. Interview
 
@@ -70,13 +70,13 @@ Create under `$DST`:
 - `scopes.json` — copy `$SRC/scopes.json` (declares collection→type labels).
 - `tools/` — copy `$SRC/tools/` (the catalog `README.md` + the `example-tool.md` template).
 - `skills.schema.json` — copy `$SRC/skills.schema.json`.
-- `skills.json` — start minimal, registering the copied skills: `{ "$schema": "./skills.schema.json", "skills": [ { "name": "exobrain-reader-lens", "scope": "global", "owner": "", "tier": "optional" }, { "name": "exobrain-update", "scope": "global", "owner": "", "tier": "optional" }, { "name": "exobrain-persist", "scope": "global", "owner": "", "tier": "optional" } ] }`.
+- `skills.json` — start minimal, registering the copied skills: `{ "$schema": "./skills.schema.json", "skills": [ { "name": "exobrain-reader-lens", "scope": "global", "owner": "", "tier": "optional" }, { "name": "exobrain-evolve", "scope": "global", "owner": "", "tier": "optional" }, { "name": "exobrain-persist", "scope": "global", "owner": "", "tier": "optional" } ] }`.
 - `.gitignore`, `.env.example` — copy from `$SRC`.
 - `scripts/` — copy the whole `$SRC/scripts/` directory. These are the framework
   (`connect-agent.sh`, `skills-registry.sh`, `validate-exobrain.sh`,
   `skills-validate.sh`, `skills-status.sh`, `skills-promote.sh`, …). `chmod +x scripts/*.sh`.
-- `skills/exobrain-reader-lens/`, `skills/exobrain-update/`, and
-  `skills/exobrain-persist/` — copy all three from `$SRC`. `exobrain-update` is how
+- `skills/exobrain-reader-lens/`, `skills/exobrain-evolve/`, and
+  `skills/exobrain-persist/` — copy all three from `$SRC`. `exobrain-evolve` is how
   the instance pulls future changes, so it ships *in* the instance.
 - **Never copy `$SRC/seed/`.** Everything under `seed/` is seed-local — the
   `create-instance` generator and the behavioral test harness — and lives only in
@@ -89,11 +89,11 @@ Copy `$SRC/domains/exobrain/` into `$DST/<domains-dir>/exobrain/` — entities,
 scopes, agents, skills, tools, authoring, propagation, and `feed/`. This is what
 makes the new exobrain self-documenting. Then create `<domains-dir>/exobrain/adopted-feed.md`
 as the provenance ledger: a header that records the **seed repository URL** this
-instance updates from (the address `exobrain-update` pulls `src/exobrain-seed/`
+instance updates from (the address `exobrain-evolve` pulls `src/exobrain-seed/`
 from — `https://github.com/bo2/exobrain`, or the intermediate seed you built from),
 plus **one row per feed card currently in `$SRC/domains/exobrain/feed/`**, each
 marked adopted today ("built in at creation"). The instance starts current, so
-`exobrain-update` only ever processes cards published *after* this point (see
+`exobrain-evolve` only ever processes cards published *after* this point (see
 `propagation.md`).
 
 Do **not** copy `adopted-feed.md` from `$SRC` (the canonical repo has none — it
@@ -146,7 +146,7 @@ Tell the user, briefly:
 - To open their agent **in that directory** to start using it.
 - To fill in `people/<handle>/AGENTS.md` (their preferences) and replace the
   example domain with real ones, then commit (and push, if they want a remote).
-- That they can pull future updates anytime with `exobrain-update` (no forking;
+- That they can pull future updates anytime with `exobrain-evolve` (no forking;
   their repo stays their own).
 
 ## Notes
