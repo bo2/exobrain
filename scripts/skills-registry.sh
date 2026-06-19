@@ -73,6 +73,8 @@
 #   skills_resolve_external_json <repo_dir> <agent> <leaf...>
 #                                            — JSON array of resolved external skills
 #   skills_extract_description <skill_md>    — YAML frontmatter `description`
+#   tools_resolve <repo_dir> <leaf...>       — TSV <name>\t<doc-path> of visible tools
+#   tools_extract_summary <tool_md>          — the tool doc's one-line purpose
 
 # sanitize_suffix <path> — filename-safe scope suffix. "/" → "__" (a separator
 # that can't be confused with a hyphen in an id), everything else lowercased and
@@ -324,5 +326,50 @@ skills_extract_description() {
             print
             exit
         }
+    ' "$file"
+}
+
+# tools_resolve <repo_dir> <leaf...>
+# Resolve the visible tool catalog across the connected chain. Unlike skills,
+# tools carry no tiers/force/owner — a tool doc's presence at a scope lists it for
+# everyone whose chain includes that scope. Walk build_scope_chain shallow→deep,
+# glob each scope's tools/*.md (excluding README.md and the example-tool template),
+# and dedupe by name with the deepest scope winning on collision. Emits TSV:
+# <name>\t<repo-relative-doc-path>, sorted by name.
+tools_resolve() {
+    local repo_dir="$1"; shift
+    local scope dir f name rel
+    {
+        while IFS= read -r scope; do
+            if [[ "$scope" == "global" ]]; then dir="$repo_dir/tools"; else dir="$repo_dir/$scope/tools"; fi
+            [[ -d "$dir" ]] || continue
+            for f in "$dir"/*.md; do
+                [[ -e "$f" ]] || continue   # guard the no-match literal glob
+                name="$(basename "$f" .md)"
+                [[ "$name" == "README" || "$name" == "example-tool" ]] && continue
+                rel="${f#"$repo_dir"/}"
+                printf '%s\t%s\n' "$name" "$rel"
+            done
+        done < <(build_scope_chain "$repo_dir" "$@")
+    } | awk -F'\t' '{ last[$1] = $0 } END { for (k in last) print last[k] }' | sort
+    # build_scope_chain emits shallow→deep, so the last line per name is the
+    # deepest scope's — awk keeps it; the final sort restores name order.
+}
+
+# tools_extract_summary <tool_md> — the tool doc's one-line purpose: the first
+# non-blank, non-heading content line (skipping any leading YAML frontmatter).
+# Mirrors skills_extract_description, but tool docs open with prose rather than a
+# frontmatter field, so it reads the first content line instead.
+tools_extract_summary() {
+    local file="$1"
+    [[ -f "$file" ]] || { echo ""; return 0; }
+    awk '
+        BEGIN { in_fm = 0 }
+        NR == 1 && /^---[[:space:]]*$/ { in_fm = 1; next }
+        in_fm && /^---[[:space:]]*$/  { in_fm = 0; next }
+        in_fm { next }
+        /^[[:space:]]*$/ { next }   # skip blank lines
+        /^#/ { next }               # skip headings
+        { print; exit }
     ' "$file"
 }

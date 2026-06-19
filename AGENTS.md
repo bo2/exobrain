@@ -46,7 +46,7 @@ Skills are directories under `skills/` (global) or any scope's `skills/`. A scop
 
 ## Tools
 
-A **tool** is an external system an agent reads from or acts on. The catalog is one self-contained markdown doc per tool under `tools/` (plus group/person/host overlays) — a doc's presence at a scope *is* its registration; there is no JSON registry. Connection state is per-machine in `.exobrain.json` (gitignored). Starts with a template; add what you connect. Depth: `domains/exobrain/tools.md`.
+A **tool** is an external system an agent reads from or acts on. The catalog is one self-contained markdown doc per tool under `tools/` (plus group/person/host overlays) — a doc's presence at a scope *is* its registration; there is no JSON registry. Connection state is per-machine in `.exobrain.json` (gitignored). Starts with a template; add what you connect. A generated **tools index** (a flat catalog of every visible tool doc + its one-line purpose) is auto-loaded into your context so you know what exists — read the full doc before using a tool. Depth: `domains/exobrain/tools.md`.
 
 **Propose connecting a tool when the task needs one.** If a task would be materially better served by a tool that isn't set up on this machine — you hit a not-connected or missing-credential error — name the tool, say what it unlocks *for this task*, and offer to connect it (follow its doc's Setup → Verify). Propose, don't auto-connect: setup involves credentials, so the human drives it. Don't surface tools the task doesn't need.
 

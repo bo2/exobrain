@@ -74,6 +74,7 @@ The per-tool catalog of external data sources — see [`tools.md`](tools.md).
 |---|---|
 | `tools/*.md` | The catalog: one self-contained doc per tool (its presence at a scope *is* its registration). The seed ships `tools/README.md` + `tools/example-tool.md` (a template); add a doc per tool you connect, with group/person/host overlays as needed. |
 | `.exobrain.json` *(gitignored)* | Per-machine, per-tool connection state (the `tools` block). |
+| tools index *(generated)* | Flat catalog of every visible tool doc (name + path + first-line purpose), composed into each agent's surface like the optional-skills index — `.claude/tools-index.md` (Claude) or inlined into `~/.codex/AGENTS.md` / `~/.openclaw/workspace/USER.md`. Visibility only; connection stays per-machine in `.exobrain.json`. |
 | `exobrain-tools` skill | Drives the catalog: `onboard` / `status` / `add` / `refresh` / `doctor` over the connected scope chain. |
 
 Each tool doc carries its own Setup → Verify procedure; run it by hand, or let the `exobrain-tools` skill drive it (it never reads or stores a secret value).

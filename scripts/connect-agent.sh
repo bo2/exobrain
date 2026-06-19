@@ -12,7 +12,7 @@
 # same generated file (the composed content is agent-specific — filtered skills
 # index, per-agent paths — so a shared file would let the last writer clobber it):
 #   claude   → .claude/CLAUDE.md @-imports .claude/connected-scopes.md (a manifest of
-#              live source specs, by reference) + .claude/optional-skills.md (index)
+#              live source specs) + .claude/optional-skills.md + .claude/tools-index.md
 #   codex    → ~/.codex/AGENTS.md, marker-block injection; skills in repo-local .agents/skills/
 #   openclaw → ~/.openclaw/workspace/USER.md, marker-block injection
 #
@@ -480,13 +480,49 @@ else
 fi
 
 # --------------------------------------------------------------------------
+# Tools index — a flat catalog of every tool doc visible across the chain
+# --------------------------------------------------------------------------
+# Unlike skills, tools carry no tiers/force/owner: a doc's presence at a scope
+# lists it for everyone in that chain. Connection state (which tools this machine
+# has set up) lives separately in .exobrain.json; the index is a pure catalog, so
+# it stays a function of committed docs and regenerates on the same relink triggers.
+echo ""; echo "Tools index:"
+TOOLS_INDEX_FILE="$TARGET_DIR/tools-index.md"
+TOOLS_TSV="$(tools_resolve "$REPO_DIR" "${CONNECTED_LEAVES[@]:-}")"
+if [[ -n "$TOOLS_TSV" ]]; then
+    {
+        cat <<'HEADER'
+# Tools
+
+External systems this agent can read from or act on. Each row points at a self-contained tool doc — **read the doc before using the tool**; it carries the setup, credentials, exact commands, and failure modes. Reach for one whenever a task maps to its summary.
+
+Everyone sees the full catalog; connecting a tool is a separate per-machine step (the `exobrain-tools` skill; connection state in `.exobrain.json`). If a task needs a tool that isn't set up here, propose connecting it.
+
+| Tool | Doc | Summary |
+|------|-----|---------|
+HEADER
+        while IFS= read -r _row; do
+            [[ -n "$_row" ]] || continue
+            name="${_row%%$'\t'*}"; path="${_row#*$'\t'}"
+            summary="$(tools_extract_summary "$REPO_DIR/$path")"
+            summary="${summary//|/\\|}"
+            printf '| %s | %s | %s |\n' "$name" "$path" "$summary"
+        done <<< "$TOOLS_TSV"
+    } > "$TOOLS_INDEX_FILE"
+    echo "  + $TOOLS_INDEX_FILE"
+else
+    [[ -f "$TOOLS_INDEX_FILE" ]] && rm "$TOOLS_INDEX_FILE"
+    echo "  SKIP (no tool docs in any connected scope)"
+fi
+
+# --------------------------------------------------------------------------
 # Per-agent injection of scope specs into the agent surface
 # --------------------------------------------------------------------------
 # compose_context emits the connected chain's deeper-scope specs — each scope's
 # AGENTS.md plus this agent's sidecar, shallow→deep — followed by the optional-
-# skills index, as one stream. The global scope (root AGENTS.md + root sidecar) is
-# auto-loaded by the agent and is deliberately omitted. Shared by all backends so
-# the composition lives in one place; only the delivery below differs.
+# skills index and the tools index, as one stream. The global scope (root AGENTS.md
+# + root sidecar) is auto-loaded by the agent and is deliberately omitted. Shared by
+# all backends so the composition lives in one place; only the delivery below differs.
 compose_context() {
     for scope in "${CHAIN[@]}"; do
         [[ "$scope" == "global" ]] && continue
@@ -499,6 +535,9 @@ compose_context() {
     done
     if [[ -f "$INDEX_FILE" ]]; then
         echo "<!-- optional-skills index -->"; echo ""; cat "$INDEX_FILE"; echo ""
+    fi
+    if [[ -f "$TOOLS_INDEX_FILE" ]]; then
+        echo "<!-- tools index -->"; echo ""; cat "$TOOLS_INDEX_FILE"; echo ""
     fi
 }
 
@@ -530,17 +569,18 @@ case "$AGENT" in
         # Claude's own surface — never a file another agent also writes. Claude
         # resolves recursive @-imports, so reference the live source specs through a
         # manifest (no inlined copy: scope edits show up without a recompose) plus the
-        # agent-filtered optional-skills index. The generated .claude/CLAUDE.md
-        # @-imports both; the root spec loads via the checked-in root CLAUDE.md
-        # (@AGENTS.md), so global stays out of the manifest.
+        # agent-filtered optional-skills index and the tools index. The generated
+        # .claude/CLAUDE.md @-imports them; the root spec loads via the checked-in root
+        # CLAUDE.md (@AGENTS.md), so global stays out of the manifest.
         echo ""; echo "Composing Claude context surface …"
         compose_scope_manifest > "$TARGET_DIR/connected-scopes.md"
         echo "  ✓ .claude/connected-scopes.md (manifest of source specs)"
         {
             echo "@connected-scopes.md"
-            # `if`, not `&& printf`: when there is no optional-skills index the trailing
-            # conditional would return 1 and trip `set -e` at the `} > file` redirection.
+            # `if`, not `&& printf`: when an index is absent the trailing conditional
+            # would return 1 and trip `set -e` at the `} > file` redirection.
             if [[ -f "$INDEX_FILE" ]]; then echo "@optional-skills.md"; fi
+            if [[ -f "$TOOLS_INDEX_FILE" ]]; then echo "@tools-index.md"; fi
         } > "$TARGET_DIR/CLAUDE.md"
         echo "  ✓ .claude/CLAUDE.md"
         # Supersedes the earlier single inlined file; drop one an old connect left behind.
