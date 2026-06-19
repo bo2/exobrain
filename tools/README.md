@@ -42,6 +42,8 @@ Connecting is a per-machine act — credentials, VPN, and OS differ per host —
 
 The credential line names *where* each value lives, never the value itself — the agent reads it at use-time and never ingests a secret into context (see [`/AGENTS.md`](../AGENTS.md) § Security).
 
+The `<one-line purpose>` directly under the heading is pulled verbatim into the generated **tools index** that `connect-agent.sh` composes into each agent's auto-loaded context (so the agent knows the tool exists and reaches for its doc). Keep it a complete, self-contained one-liner — a wrapped or buried first line yields a useless index row.
+
 ## Use-case glossary
 
 Onboarding maps a stated goal to tools via each file's `Use cases` tags. Keep the vocabulary small and extend it as needs arise:
