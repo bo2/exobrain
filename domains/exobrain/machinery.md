@@ -55,13 +55,13 @@ Physical skill directories at any scope, inert until declared in a `skills.json`
 
 | Artifact | Role |
 |---|---|
-| `skills.json` (root) + per-scope (`<group>/`, `<person>/`, `<host>/`) | Registries. Each entry is `(name, scope, owner, tier)`; tiers `always` / `optional` / `off`; agent filtering via `agent` / `skipAgents`. |
-| `skills.schema.json` | Registry schema. |
-| `scripts/skills-registry.sh` | Resolver — walks the connected scope chain (`build_scope_chain`), deepest scope wins. |
-| `scripts/skills-status.sh` | Show the resolved registry for a checkout. |
-| `scripts/skills-validate.sh` | Verify registry entries match real directories; flag orphans. |
-| `scripts/skills-promote.sh` | Edit personal/host tiers without hand-editing JSON. |
-| `scripts/fetch-external-skills.sh` | Fetch `scope: external` (third-party) skills. |
+| `skills.json` (root) + per-scope (`<group>/`, `<person>/`, `<host>/`) | Registries. **Declarations** (`name`, `owner`, `tier`, optional `force`) introduce a skill in their own scope; **overrides** (`from` + `tier`) opt one in/out elsewhere. Tiers `always` / `optional` / `unlisted` / `off`; agent filtering via `agent` / `skipAgents`. |
+| `skills.schema.json` | Registry schema (declaration/override). |
+| `scripts/skills-registry.sh` | Resolver — walks the connected scope chain (`build_scope_chain`), deepest contribution wins; a declaration fires only if forced or owned. |
+| `scripts/skills-status.sh` | Show the resolved registry; `--all` catalogs every declared skill for discovery. |
+| `scripts/skills-validate.sh` | Verify declarations have directories and overrides reference real declarations. |
+| `scripts/skills-promote.sh` | Opt a skill in/out (override) or `--force` a declaration, without hand-editing JSON. |
+| `scripts/fetch-external-skills.sh` | Fetch external (third-party) skills declared with `source`. |
 | optional-skills index *(generated)* | Index of optional-tier skills, read on demand — `.claude/optional-skills.md` (Claude) or inlined into `~/.codex/AGENTS.md` / `~/.openclaw/workspace/USER.md`. |
 
 Global skills the seed ships: `exobrain-ab`, `exobrain-domains`, `exobrain-evolve`, `exobrain-persist`, `exobrain-reader-lens`, `exobrain-tools`.
