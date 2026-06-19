@@ -2,74 +2,87 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://exobrain.local/schemas/skills.json",
   "title": "Skills registry",
-  "description": "Explicit list of skills to link into the agent's space. Skills are physical directories at any scope (a directory with an AGENTS.md) or fetched from third-party repos (external) but stay inert until added to a skills.json. Resolution merges the connected scope chain shallow-to-deep keyed by (name, scope, owner); the deepest scope wins.",
+  "description": "Per-scope skill registry. A skills.json lives in a scope directory (any dir with an AGENTS.md). Two record kinds: a DECLARATION introduces a skill that lives in this scope's skills/ folder (no `from` — the folder is its home scope); an OVERRIDE (`from` set) sets the effective tier of a skill declared in another scope. Resolution walks the connected scope chain shallow->deep, deepest wins. A declaration contributes its tier only if `force` is true or the connecting user is its `owner`; an override always contributes (including `off` to opt out). Absence of any contribution = off.",
   "type": "object",
   "additionalProperties": false,
   "properties": {
     "$schema": {
       "type": "string",
       "format": "uri-reference",
-      "description": "Path or URL to this schema, used by editors for autocomplete and validation."
+      "description": "Path or URL to this schema, for editor autocomplete and validation."
     },
     "skills": {
       "type": "array",
-      "description": "Skill entries to link or fetch into the agent's space.",
+      "description": "Declaration and override records.",
       "items": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["name", "scope", "owner", "tier"],
+        "required": ["name", "tier"],
         "properties": {
           "name": {
             "type": "string",
-            "description": "Skill directory name (e.g. 'review-pr', 'home-inventory').",
-            "pattern": "^[a-z0-9][a-z0-9-]*$"
-          },
-          "scope": {
-            "type": "string",
-            "pattern": "^(global|external|[a-z0-9][a-z0-9_./-]*)$",
-            "description": "Where the skill physically lives. 'global' = <repo>/skills/. 'external' = fetched into <TARGET_DIR>/skills/<name>.<owner>/. Otherwise the repo-relative path of the owning scope directory (the dir with an AGENTS.md), e.g. 'people/oleg' = people/oleg/skills/, 'groups/acme/teams/ads' = that dir's skills/."
+            "pattern": "^[a-z0-9][a-z0-9-]*$",
+            "description": "Skill directory name (e.g. 'review-pr', 'home-inventory')."
           },
           "owner": {
             "type": "string",
-            "description": "Scope leaf id — the basename of the scope path (person handle, host name, group/team name, or external author). Empty string for global."
+            "description": "Declarations: who added the skill — the person to ask before changing or removing it, and whose connection auto-enables it. Metadata, not access control. For external skills it is also the discriminator (the source author). Required on declarations and on external overrides; unused on in-tree overrides."
           },
           "tier": {
-            "enum": ["always", "optional", "off"],
-            "description": "always: full description loaded into agent context, invokable via the Skill tool. optional: listed in optional-skills.md, agent reads SKILL.md on demand (in-tree skills point at the source path; external skills are fetched into <TARGET_DIR>/skills-optional/<name>.<owner>/ where the agent does NOT auto-load them). off: shadow an entry inherited from a lower-priority scope."
+            "enum": ["always", "optional", "unlisted", "off"],
+            "description": "always: full description auto-loaded, invokable via the agent's Skill primitive. optional: listed in the optional-skills index, SKILL.md read on demand. unlisted: registered and invocable by name, but not surfaced in any auto-loaded index. off: shadow/disable (overrides only). Declarations recommend always|optional|unlisted; overrides set the effective tier and may also use off to opt out."
+          },
+          "force": {
+            "type": "boolean",
+            "description": "Declarations only; default false. false => the declared tier reaches only the owner. true => it reaches everyone whose chain includes the skill's home scope (a deliberate, reviewed decision to share — the loud name is the social gate). Overridable: a deeper override still wins."
+          },
+          "from": {
+            "type": "string",
+            "pattern": "^(external|[a-z0-9][a-z0-9_./-]*)$",
+            "description": "Overrides only. The home scope of the skill being overridden — its repo-relative scope path (e.g. 'groups/acme'), 'global', or 'external'. The presence of `from` is what marks an entry as an override rather than a declaration."
           },
           "source": {
             "type": "object",
-            "description": "Required for external scope. Where to fetch the skill from. Only the team scope (the team's skills.json) should declare source — person/host scopes inherit it and can only change tier.",
             "additionalProperties": false,
             "required": ["repo", "path", "ref"],
+            "description": "Declarations only, required for external skills. Where to fetch the skill from. Only the scope that declares the external skill carries source; overrides reference it by from='external' + name + owner.",
             "properties": {
               "repo": { "type": "string", "format": "uri", "description": "GitHub HTTPS URL of the source repository." },
               "path": { "type": "string", "description": "Path within the repo to the skill directory." },
               "ref":  { "type": "string", "description": "Pinned git ref — commit SHA, tag, or branch." }
             }
           },
+          "agent": {
+            "type": "string",
+            "description": "Load only when connect-agent.sh runs for this agent (e.g. 'claude'). Mutually exclusive with skipAgents."
+          },
           "skipAgents": {
             "type": "array",
-            "description": "External entries: agents in this list don't fetch this skill (e.g. ['openclaw'] when the agent ships its own copy). Inverse of `agent` — use this when an entry is universal except for a few agents that already have it. Mutually exclusive with `agent`.",
+            "description": "Load for every agent except those listed. Mutually exclusive with agent.",
             "items": { "type": "string" },
             "uniqueItems": true
           },
-          "agent": {
-            "type": "string",
-            "description": "If set, the skill is loaded ONLY when connect-agent.sh runs for this agent (e.g. 'claude'). Use for skills that genuinely depend on one agent's runtime — Claude-specific orchestration providers, Codex tool-call shapes, OpenClaw primitives. Universal skills omit this field. Mutually exclusive with `skipAgents`."
-          },
           "notes": { "type": "string", "description": "Free-form notes for humans reviewing the entry." },
-          "reviewed_by": { "type": "string", "description": "Username of the person who vetted the source repo." },
+          "reviewed_by": { "type": "string", "description": "Username of the person who vetted an external source repo." },
           "reviewed_at": { "type": "string", "format": "date", "description": "Date of the source review (YYYY-MM-DD)." }
         },
         "allOf": [
+          { "not": { "required": ["agent", "skipAgents"] } },
           {
-            "if":   { "properties": { "scope": { "const": "external" } }, "required": ["scope"] },
-            "then": { "required": ["source"] },
-            "else": { "not": { "required": ["source"] } }
-          },
-          {
-            "not": { "required": ["agent", "skipAgents"] }
+            "if": { "required": ["from"] },
+            "then": {
+              "not": { "anyOf": [ { "required": ["force"] }, { "required": ["source"] } ] },
+              "allOf": [
+                {
+                  "if": { "properties": { "from": { "const": "external" } }, "required": ["from"] },
+                  "then": { "required": ["owner"] }
+                }
+              ]
+            },
+            "else": {
+              "required": ["owner"],
+              "properties": { "tier": { "enum": ["always", "optional", "unlisted"] } }
+            }
           }
         ]
       }

@@ -1,30 +1,44 @@
 #!/usr/bin/env bash
 # skills-registry.sh — resolve effective skills tiers for a connected agent.
 #
-# Format
-# ------
-# Each skills.json declares a list of explicit (name, scope, owner, tier)
-# entries. Skills are physical directories at any scope but stay inert until a
-# skills.json references them. Resolution reads the skills.json of every scope
-# in the connected chain (see build_scope_chain) in priority order — shallow
-# (global) to deep — keyed by (name, scope, owner). Deepest scope wins.
+# Format (declaration / override model)
+# -------------------------------------
+# A skills.json lives in a scope directory and holds two record kinds:
 #
-# Scope model (generalized)
-# -------------------------
-# A scope is any directory containing an AGENTS.md. Its `scope` value is the
-# repo-relative path of that directory; the special value "global" is the repo
-# root, and "external" marks a fetched third-party skill.
+#   DECLARATION (no `from`) — introduces a skill that lives in THIS scope's
+#       skills/<name>/ folder. The folder is its home scope, so a declaration
+#       carries no scope field. Holds `owner` (who to ask; also whose connection
+#       auto-enables it), a recommended `tier`, and an optional `force` flag.
+#   OVERRIDE (`from` set) — references a skill declared in another scope (`from`
+#       = that home scope, or "external") and sets a tier for the referencing
+#       scope. Used to opt in (any tier) or opt out (`off`).
 #
-#   scope = "global"            → <repo>/skills/<name>/                 (owner "")
-#   scope = "<path>"            → <repo>/<path>/skills/<name>/          (owner = leaf id)
-#   scope = "external"          → fetched into <TARGET_DIR>/skills/<name>.<owner>/
+# Resolution reads the skills.json of every scope in the connected chain (see
+# build_scope_chain) shallow (global) → deep, keyed by the skill's identity
+# (home-scope + name, or external + name + owner):
 #
-# Entries may reference a skill owned by a *different* scope than the file they
-# live in (that is how skills-promote.sh pins a deeper scope's tier onto a
-# shallower scope's skill). So the entry's declared scope/owner identify the
-# skill directory; the file the entry lives in only sets its priority.
+#   - a declaration contributes its tier IFF `force` is true OR `owner` is one of
+#     the connecting user's self ids (a connected person-scope leaf basename);
+#   - an override always contributes its tier (including `off`);
+#   - the deepest contribution wins; a skill with no contribution is off.
 #
-# tier values: always | optional | off
+# Placement therefore expresses only POTENTIAL audience — a skill dropped in a
+# shared scope reaches just its owner until someone sets `force` (a reviewed act)
+# or another scope overrides it in. Everyone else discovers it via
+# `skills-status.sh --all` and opts in with an override.
+#
+# Scope model (generalized — a scope is any dir with an AGENTS.md)
+# ---------------------------------------------------------------
+# A skill's home scope is the repo-relative path of its declaring directory; the
+# special value "global" is the repo root, and "external" marks a fetched
+# third-party skill. The resolver discovers scopes from the filesystem rather
+# than assuming a fixed ladder.
+#
+#   home = "global"            → <repo>/skills/<name>/                 (owner free metadata)
+#   home = "<path>"            → <repo>/<path>/skills/<name>/          (e.g. people/oleg, groups/acme)
+#   home = "external"          → fetched into the agent's skills dir as <name>.<owner>/
+#
+# tier values: always | optional | unlisted | off
 #
 # Public functions
 # ----------------
@@ -34,22 +48,31 @@
 #       included iff that directory contains an AGENTS.md, so non-scope
 #       collection dirs (people/, hosts/, …) are skipped automatically.
 #
-#   skills_resolve <repo_dir> <agent> <leaf...>
-#       TSV: <name>\t<scope>\t<owner>\t<tier>\t<declared-by>, sorted by name.
-#       declared-by is the scope path whose skills.json contributed the winning
-#       entry. When <agent> is non-empty, drops entries whose `agent` is set and
-#       != <agent>, or whose `skipAgents` contains <agent>. Empty disables it.
+#   owner_self_ids <repo_dir> <leaf...>
+#       JSON array of the connecting user's "self" owner ids — the leaf basenames
+#       of connected person-type scopes. A declaration auto-enables for its owner;
+#       these are the ids that satisfy that owner-match.
 #
-#   skills_dir_for <repo_dir> <scope> <owner> <name>
-#       Absolute path to the skill directory implied by (scope, owner, name).
+#   skills_resolve <repo_dir> <agent> <leaf...>
+#       TSV: <name>\t<home-scope>\t<owner>\t<tier>\t<declared-by>, sorted by name.
+#       One row per skill with an effective (possibly off) tier. home-scope drives
+#       skills_dir_for / skills_link_suffix exactly like a scope column, so
+#       downstream consumers are unchanged. When <agent> is non-empty, drops
+#       entries whose `agent` is set and != <agent>, or whose `skipAgents`
+#       contains <agent>. Empty disables that filter.
+#
+#   skills_dir_for <repo_dir> <home-scope> <owner> <name>
+#       Absolute path to the skill directory implied by (home-scope, owner, name).
 #       Empty for external (caller resolves the $TARGET_DIR-relative target).
 #
-#   skills_link_suffix <scope> <owner>     — filename suffix for the symlink
-#   scope_type_for <repo_dir> <scope>      — human type label for a scope
+#   skills_link_suffix <home-scope> <owner>  — filename suffix for the symlink
+#   scope_type_for <repo_dir> <scope>        — human type label for a scope
 #   scopes_collection_for_type <repo_dir> <type> — collection dir for a scope type
 #   scopes_container_collections <repo_dir>      — collections that can hold a person
-#   sanitize_suffix <path>                 — filename-safe form of a scope path
-#   skills_extract_description <skill_md>  — YAML frontmatter `description`
+#   sanitize_suffix <path>                   — filename-safe form of a scope path
+#   skills_resolve_external_json <repo_dir> <agent> <leaf...>
+#                                            — JSON array of resolved external skills
+#   skills_extract_description <skill_md>    — YAML frontmatter `description`
 
 # sanitize_suffix <path> — filename-safe scope suffix. "/" → "__" (a separator
 # that can't be confused with a hyphen in an id), everything else lowercased and
@@ -123,6 +146,9 @@ scopes_container_collections() {
 }
 
 # build_scope_chain <repo_dir> <leaf...>
+# For each connected leaf, walk its path segments from the root down; a segment
+# prefix is a scope iff that directory contains an AGENTS.md. Union across leaves,
+# dedup, sort shallow→deep (then by path for a stable order among equal depths).
 build_scope_chain() {
     local repo_dir="$1"; shift
     {
@@ -137,46 +163,82 @@ build_scope_chain() {
                 [[ -z "$seg" ]] && continue
                 prefix="${prefix:+$prefix/}$seg"
                 depth=$((depth + 1))
-                [[ -f "$repo_dir/$prefix/AGENTS.md" ]] && printf '%s\t%s\n' "$depth" "$prefix"
+                # if/fi (not &&) so a false test doesn't leave the loop — and thus
+                # the whole function — with a non-zero status under a `set -e` caller.
+                if [[ -f "$repo_dir/$prefix/AGENTS.md" ]]; then
+                    printf '%s\t%s\n' "$depth" "$prefix"
+                fi
             done
         done
     } | sort -t$'\t' -k1,1n -k2,2 -u | cut -f2
 }
 
-# _emit_scope <skills_json> <declared-by> <agent>
-_emit_scope() {
-    local file="$1" declared_by="$2" agent="$3"
-    [[ -f "$file" ]] || return 0
-    jq -r --arg d "$declared_by" --arg a "$agent" '
-        (.skills // [])
-        | .[]
-        | select(
-            $a == ""
-            or (
-                ((.agent // "") == "" or (.agent // "") == $a)
-                and (((.skipAgents // []) | index($a)) | not)
-            )
-          )
-        | [.name, .scope, .owner, .tier, $d] | @tsv
-    ' "$file" 2>/dev/null || true
+# owner_self_ids <repo_dir> <leaf...> — JSON array of the connecting user's "self"
+# owner ids: the leaf basenames of connected person-type scopes. A declaration
+# auto-enables for its owner, so these are the ids that satisfy owner-match.
+owner_self_ids() {
+    local repo_dir="$1"; shift
+    local s ids=()
+    while IFS= read -r s; do
+        [[ -z "$s" || "$s" == "global" ]] && continue
+        [[ "$(scope_type_for "$repo_dir" "$s")" == "person" ]] && ids+=("${s##*/}")
+    done < <(build_scope_chain "$repo_dir" "$@")
+    if [[ ${#ids[@]} -eq 0 ]]; then echo '[]'; else printf '%s\n' "${ids[@]}" | jq -R . | jq -cs .; fi
 }
 
+# skills_resolve <repo_dir> <agent> <leaf...>
+# Resolve effective skill tiers across the connected chain under the declaration/
+# override model. Emits TSV: name<TAB>home-scope<TAB>owner<TAB>tier<TAB>declared-by,
+# one row per skill with an effective (non-off) tier, sorted by name. home-scope
+# drives skills_dir_for / skills_link_suffix exactly like the old `scope` column,
+# so downstream consumers (connect-agent, status, validate) are unchanged.
+#
+#   declaration (no `from`) — contributes its tier IFF force==true OR owner is a
+#       connected self id.
+#   override    (`from` set) — always contributes its tier (incl. off) at its
+#       declaring depth.
+#   Deepest contribution wins; a skill with no contribution is off (omitted).
 skills_resolve() {
     local repo_dir="$1" agent="$2"; shift 2
-    local leaves=("$@") scope
+    local self; self="$(owner_self_ids "$repo_dir" "$@")"
+    local depth=0 scope f
     {
         while IFS= read -r scope; do
-            if [[ "$scope" == "global" ]]; then
-                _emit_scope "$repo_dir/skills.json" "global" "$agent"
-            else
-                _emit_scope "$repo_dir/$scope/skills.json" "$scope" "$agent"
-            fi
-        done < <(build_scope_chain "$repo_dir" "${leaves[@]}")
-    } | awk -F'\t' '
-        # Key on (name, scope, owner): same name in two scopes = two entries.
-        # Last write wins; the chain feeds shallow→deep so deeper scopes win.
-        { key = $1 "\t" $2 "\t" $3; row[key] = $0 }
-        END { for (k in row) print row[k] }
+            if [[ "$scope" == "global" ]]; then f="$repo_dir/skills.json"; else f="$repo_dir/$scope/skills.json"; fi
+            [[ -f "$f" ]] && jq -c --arg s "$scope" --argjson d "$depth" \
+                '(.skills // [])[] | . + {_scope:$s, _depth:$d}' "$f" 2>/dev/null
+            depth=$((depth + 1))
+        done < <(build_scope_chain "$repo_dir" "$@")
+    } | jq -rs --arg agent "$agent" --argjson self "$self" '
+        def idof:
+            if (.from // null) != null
+            then (if .from == "external" then "external|\(.name)|\(.owner)" else "\(.from)|\(.name)" end)
+            else (if (.source // null) != null then "external|\(.name)|\(.owner)" else "\(._scope)|\(.name)" end)
+            end;
+        ( map(select(
+            $agent == "" or (
+                ((.agent // "") == "" or (.agent // "") == $agent)
+                and (((.skipAgents // []) | index($agent)) | not)
+            )
+          )) ) as $all
+        | ( [ $all[] | select((.from // null) == null)
+              | { key: idof,
+                  value: { home: (if (.source // null) != null then "external" else ._scope end),
+                           owner: (.owner // "") } } ]
+            | from_entries ) as $meta
+        | [ $all[]
+            | { id: idof, depth: ._depth, tier: .tier, src: ._scope,
+                keep: ( if (.from // null) != null then true
+                        else ( (.force // false)
+                               or ( .owner as $o | ($self | index($o)) != null ) ) end ) } ]
+        | map(select(.keep))
+        | group_by(.id)
+        | map( (sort_by([.depth, .src]) | last) as $w
+               | { id: $w.id, tier: $w.tier, src: $w.src,
+                   home:  ($meta[$w.id].home  // ($w.id | split("|")[0])),
+                   owner: ($meta[$w.id].owner // (if ($w.id | startswith("external|")) then ($w.id | split("|")[2]) else "" end)) } )
+        | .[]
+        | [ (.id | split("|")[1]), .home, .owner, .tier, .src ] | @tsv
     ' | sort
 }
 
@@ -190,8 +252,8 @@ skills_dir_for() {
 }
 
 # Suffix in the symlink filename: <name>.<suffix>. Global skills get no suffix;
-# external skills key on the author; everything else on the sanitized scope path
-# (so people/oleg and groups/acme/people/oleg never collide).
+# external skills key on the author; everything else on the sanitized home-scope
+# path (so people/oleg and groups/acme/people/oleg never collide).
 skills_link_suffix() {
     local scope="$1" owner="$2"
     case "$scope" in
@@ -202,51 +264,46 @@ skills_link_suffix() {
 }
 
 # skills_resolve_external_json <repo_dir> <agent> <leaf...>
-# JSON array of resolved external entries with full metadata. Tier resolved
-# across scopes (deepest wins); source/skipAgents/notes/agent taken from
-# whichever scope declares them.
+# JSON array of external skills with effective tier + source, under the
+# declaration/override model. An external skill is a declaration carrying
+# `source` (identity = name+owner, the source author). Its effective tier follows
+# the same rules as in-tree: the declaration fires iff force or owner-self;
+# overrides with from="external" apply; deepest wins; no contribution = off.
+# Output per skill: {name, owner, tier, source}. The fetcher consumes this.
 skills_resolve_external_json() {
     local repo_dir="$1" agent="$2"; shift 2
-    local leaves=("$@")
-    local files=() prio=0 scope f
-    while IFS= read -r scope; do
-        if [[ "$scope" == "global" ]]; then f="$repo_dir/skills.json"; else f="$repo_dir/$scope/skills.json"; fi
-        [[ -f "$f" ]] && files+=("$prio:$f")
-        prio=$((prio + 1))
-    done < <(build_scope_chain "$repo_dir" "${leaves[@]}")
-
+    local self; self="$(owner_self_ids "$repo_dir" "$@")"
+    local depth=0 scope f
     {
-        local entry prio_val path
-        for entry in "${files[@]}"; do
-            prio_val="${entry%%:*}"
-            path="${entry#*:}"
-            jq --argjson p "$prio_val" \
-               '(.skills // []) | map(select(.scope == "external") | . + {_prio: $p})' \
-               "$path" 2>/dev/null
-        done
-    } | jq -s --arg a "$agent" '
-        flatten
-        | group_by([.name, .owner])
-        | map(
-            (max_by(._prio)) as $top
-            | (map(select(.source))     | first | .source)     as $src
-            | (map(select(.skipAgents)) | first | .skipAgents) as $skip
-            | (map(select(.notes))      | first | .notes)      as $notes
-            | (map(select(.agent))      | first | .agent)      as $agentf
-            | $top
-            | del(._prio)
-            | if $src    then .source     = $src    else . end
-            | if $skip   then .skipAgents = $skip   else . end
-            | if $notes  then .notes      = $notes  else . end
-            | if $agentf then .agent      = $agentf else . end
-          )
-        | map(select(
-            $a == ""
-            or (
-                ((.agent // "") == "" or (.agent // "") == $a)
-                and (((.skipAgents // []) | index($a)) | not)
+        while IFS= read -r scope; do
+            if [[ "$scope" == "global" ]]; then f="$repo_dir/skills.json"; else f="$repo_dir/$scope/skills.json"; fi
+            [[ -f "$f" ]] && jq -c --arg s "$scope" --argjson d "$depth" \
+                '(.skills // [])[] | . + {_scope:$s, _depth:$d}' "$f" 2>/dev/null
+            depth=$((depth + 1))
+        done < <(build_scope_chain "$repo_dir" "$@")
+    } | jq -s --arg agent "$agent" --argjson self "$self" '
+        def extid: "\(.name)|\(.owner)";
+        ( map(select(
+            $agent == "" or (
+                ((.agent // "") == "" or (.agent // "") == $agent)
+                and (((.skipAgents // []) | index($agent)) | not)
             )
-          ))
+          )) ) as $all
+        | ( [ $all[] | select((.from // null) == null and .source != null)
+              | { key: extid, value: { name: .name, owner: .owner, source: .source } } ]
+            | from_entries ) as $meta
+        | ( [ $all[]
+              | select( ((.from // null) == "external") or ((.from // null) == null and .source != null) )
+              | { id: extid, depth: ._depth, tier: .tier,
+                  keep: ( if (.from // null) == "external" then true
+                          else ( (.force // false)
+                                 or ( .owner as $o | ($self | index($o)) != null ) ) end ) } ]
+            | map(select(.keep)) ) as $contribs
+        | [ $meta | to_entries[]
+            | .key as $id | .value as $m
+            | ($contribs | map(select(.id == $id))) as $cs
+            | (if ($cs | length) > 0 then ($cs | sort_by(.depth) | last | .tier) else "off" end) as $eff
+            | { name: $m.name, owner: $m.owner, tier: $eff, source: $m.source } ]
         | sort_by([.name, .owner])
     '
 }

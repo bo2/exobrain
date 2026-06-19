@@ -1,106 +1,81 @@
 #!/usr/bin/env bash
-# skills-promote.sh — add or change a skills.json entry at some scope.
+# skills-promote.sh — manage skill tiers under the declaration/override model.
 #
-# Each entry is a (name, scope, owner, tier) tuple. `--scope`/`--owner` identify
-# the skill being registered; `--into` picks which scope's skills.json file to
-# write the entry into (default: the deepest connected leaf in .exobrain.json).
+# Two operations:
 #
-# Usage:
-#   skills-promote.sh <name> --scope=<path|global|external> --owner=<id> --to=<tier> [--into=<scope-path>]
-#   skills-promote.sh <name> --scope=<path|global|external> --owner=<id> --remove [--into=<scope-path>]
-#   skills-promote.sh --list [--into=<scope-path>]
+#   OVERRIDE — opt a skill in or out for a scope. Writes an override entry
+#   {name, from, tier} (+ owner for external) into the chosen scope's skills.json.
+#   `from` is the skill's home scope (where it is declared); the entry's own
+#   location sets its priority. Overrides win over declarations (deepest scope).
 #
-# Flags:
-#   --scope=<path|global|external>   where the skill physically lives (a scope
-#                                    dir path like people/oleg, or global/external)
-#   --owner=<id>                     scope leaf id (basename); "" for global
-#   --to=always|optional|off         tier to set
-#   --into=<scope-path|global>       which skills.json to edit (default: deepest connected leaf)
-#   --remove                         delete the entry
-#   --list                           print the target skills.json
+#     skills-promote <name> --from=<home-scope|global|external> [--owner=<author>] \
+#                    --to=always|optional|unlisted|off [--into=<scope>]
+#     skills-promote <name> --from=<home-scope|global|external> [--owner=<author>] \
+#                    --remove [--into=<scope>]
+#
+#   FORCE — bless or unbless a declaration so its recommended tier reaches the
+#   whole scope, not just the owner. Edits the declaration in its home scope.
+#
+#     skills-promote <name> --in=<home-scope> --force[=true|false]
+#
+#   LIST — print a scope's skills.json.
+#     skills-promote --list [--into=<scope>]
+#
+# --into / --in default to the deepest connected leaf in .exobrain.json.
 #
 # Examples:
-#   skills-promote.sh review-pr --scope=people/oleg --owner=oleg --to=always
-#   skills-promote.sh tidy --scope=groups/acme --owner=acme --to=optional --into=people/oleg
-#   skills-promote.sh review-pr --scope=people/oleg --owner=oleg --remove
+#   skills-promote review-pr --from=groups/acme --to=always       # opt in for your deepest scope
+#   skills-promote review-pr --from=groups/acme --to=off          # opt out
+#   skills-promote skill-creator --from=external --owner=anthropic --to=off  # disable external
+#   skills-promote review-pr --in=groups/acme --force             # bless for everyone in the group
 
 set -euo pipefail
-
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 REPO_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+# shellcheck source=skills-registry.sh
+source "$SCRIPT_DIR/skills-registry.sh"
 
 CONFIG_FILE="$REPO_DIR/.exobrain.json"
 CONNECTED_LEAVES=()
 if [[ -f "$CONFIG_FILE" ]]; then
-    while IFS= read -r _l; do [[ -n "$_l" ]] && CONNECTED_LEAVES+=("$_l"); done \
+    while IFS= read -r l; do [[ -n "$l" ]] && CONNECTED_LEAVES+=("$l"); done \
         < <(jq -r '(.connected // [])[]' "$CONFIG_FILE" 2>/dev/null)
 fi
+deepest_leaf() { [[ ${#CONNECTED_LEAVES[@]} -gt 0 ]] && echo "${CONNECTED_LEAVES[$((${#CONNECTED_LEAVES[@]}-1))]}"; }
 
-name="" ; scope="" ; owner="" ; tier="" ; into="" ; do_remove=false ; do_list=false
-
+name="" ; from="" ; owner="" ; tier="" ; into="" ; in_scope="" ; force="" ; do_remove=false ; do_list=false
 for arg in "$@"; do
     case "$arg" in
-        --scope=*)  scope="${arg#--scope=}" ;;
+        --from=*)   from="${arg#--from=}" ;;
         --owner=*)  owner="${arg#--owner=}" ;;
         --to=*)     tier="${arg#--to=}" ;;
         --into=*)   into="${arg#--into=}" ;;
+        --in=*)     in_scope="${arg#--in=}" ;;
+        --force)    force="true" ;;
+        --force=*)  force="${arg#--force=}" ;;
         --remove)   do_remove=true ;;
         --list)     do_list=true ;;
-        -h|--help)  head -n 22 "$0" | tail -n +2 | sed 's/^# \{0,1\}//'; exit 0 ;;
+        -h|--help)  head -n 31 "$0" | tail -n +2 | sed 's/^# \{0,1\}//'; exit 0 ;;
         --*)        echo "Unknown flag: $arg" >&2; exit 2 ;;
         *)          [[ -z "$name" ]] && name="$arg" || { echo "Unexpected argument: $arg" >&2; exit 2; } ;;
     esac
 done
 
-# Default --into to the deepest connected leaf.
-if [[ -z "$into" ]]; then
-    [[ ${#CONNECTED_LEAVES[@]} -gt 0 ]] && into="${CONNECTED_LEAVES[$((${#CONNECTED_LEAVES[@]}-1))]}"
-    [[ -z "$into" ]] && { echo "Error: no connected leaf to write into; pass --into=<scope-path>." >&2; exit 2; }
-fi
-
-if [[ "$into" == "global" ]]; then
-    override_file="$REPO_DIR/skills.json"; schema_rel="./skills.schema.json"
-else
-    override_file="$REPO_DIR/$into/skills.json"
-    # one ../ per path segment of $into
-    depth="$(awk -F/ '{print NF}' <<< "$into")"; schema_rel=""
-    for ((i=0;i<depth;i++)); do schema_rel="../$schema_rel"; done
-    schema_rel="${schema_rel}skills.schema.json"
-fi
-
-if $do_list; then
-    [[ -f "$override_file" ]] && { echo "$override_file:"; jq . "$override_file"; } || echo "(no file at $override_file)"
-    exit 0
-fi
-
-[[ -z "$name" ]]  && { echo "Error: missing skill name." >&2; exit 2; }
-[[ -z "$scope" ]] && { echo "Error: missing --scope." >&2; exit 2; }
-[[ -z "$owner" && "$scope" != "global" ]] && { echo "Error: missing --owner (only 'global' allows empty owner)." >&2; exit 2; }
-[[ "$scope" == *__* ]] && { echo "Error: scope path may not contain '__'." >&2; exit 2; }
-
-if [[ ! -f "$override_file" ]]; then
-    mkdir -p "$(dirname "$override_file")"
-    printf '{\n  "$schema": "%s",\n  "skills": []\n}\n' "$schema_rel" > "$override_file"
-fi
-
-if $do_remove; then
-    jq --arg n "$name" --arg s "$scope" --arg o "$owner" '
-        .skills = (.skills // [] | map(select(.name != $n or .scope != $s or .owner != $o)))
-    ' "$override_file" > "${override_file}.tmp"
-elif [[ -n "$tier" ]]; then
-    case "$tier" in always|optional|off) ;; *) echo "Invalid --to: $tier" >&2; exit 2 ;; esac
-    jq --arg n "$name" --arg s "$scope" --arg o "$owner" --arg t "$tier" '
-        .skills = (
-            (.skills // [] | map(select(.name != $n or .scope != $s or .owner != $o)))
-            + [{ name: $n, scope: $s, owner: $o, tier: $t }]
-        )
-    ' "$override_file" > "${override_file}.tmp"
-else
-    echo "Error: provide --to=<tier> or --remove" >&2; exit 2
-fi
-
-# Reformat one entry per line for readable diffs.
-python3 - "${override_file}.tmp" "$override_file" <<'PY'
+target_file()    { [[ "$1" == "global" ]] && echo "$REPO_DIR/skills.json" || echo "$REPO_DIR/$1/skills.json"; }
+schema_rel_for() {
+    [[ "$1" == "global" ]] && { echo "./skills.schema.json"; return; }
+    local depth rel="" i; depth="$(awk -F/ '{print NF}' <<< "$1")"
+    for ((i=0; i<depth; i++)); do rel="../$rel"; done
+    echo "${rel}skills.schema.json"
+}
+ensure_file() {
+    [[ -f "$1" ]] && return 0
+    mkdir -p "$(dirname "$1")"
+    printf '{\n  "$schema": "%s",\n  "skills": []\n}\n' "$(schema_rel_for "$2")" > "$1"
+}
+# one-entry-per-line reformat for readable diffs
+reformat() {
+    python3 - "$1" "$2" <<'PY'
 import json, sys
 src, dst = sys.argv[1], sys.argv[2]
 with open(src) as f: data = json.load(f)
@@ -111,15 +86,78 @@ for i, k in enumerate(keys):
         if not data[k]: lines.append(f'  "skills": []{sep}')
         else:
             lines.append('  "skills": [')
-            for j, entry in enumerate(data[k]):
-                lines.append(f"    {json.dumps(entry, ensure_ascii=False)}{',' if j < len(data[k])-1 else ''}")
+            for j, e in enumerate(data[k]):
+                lines.append(f"    {json.dumps(e, ensure_ascii=False)}{',' if j < len(data[k])-1 else ''}")
             lines.append(f"  ]{sep}")
     else:
         lines.append(f'  {json.dumps(k, ensure_ascii=False)}: {json.dumps(data[k], ensure_ascii=False)}{sep}')
 lines.append("}")
 with open(dst, "w") as f: f.write("\n".join(lines) + "\n")
 PY
-rm -f "${override_file}.tmp"
+}
 
-echo "Updated ${override_file#"$REPO_DIR"/}:"; jq . "$override_file"
+# ---- LIST ----
+if $do_list; then
+    [[ -z "$into" ]] && into="$(deepest_leaf)"
+    f="$(target_file "${into:-global}")"
+    [[ -f "$f" ]] && { echo "$f:"; jq . "$f"; } || echo "(no file at $f)"
+    exit 0
+fi
+
+[[ -z "$name" ]] && { echo "Error: missing skill name." >&2; exit 2; }
+
+# ---- FORCE (edit a declaration in its home scope) ----
+if [[ -n "$force" ]]; then
+    case "$force" in true|false) ;; *) echo "Invalid --force: $force (use true|false)" >&2; exit 2 ;; esac
+    [[ -z "$in_scope" ]] && in_scope="$(deepest_leaf)"
+    [[ -z "$in_scope" ]] && { echo "Error: --force needs --in=<home-scope>." >&2; exit 2; }
+    file="$(target_file "$in_scope")"
+    [[ -f "$file" ]] || { echo "Error: no skills.json at $in_scope (skill not declared there)." >&2; exit 2; }
+    if ! jq -e --arg n "$name" '(.skills // []) | any(.name == $n and (has("from") | not))' "$file" >/dev/null; then
+        echo "Error: no declaration for '$name' in $in_scope/skills.json." >&2; exit 2
+    fi
+    if [[ "$force" == "true" ]]; then
+        jq --arg n "$name" '.skills |= map(if (.name==$n and (has("from")|not)) then .force=true else . end)' "$file" > "$file.tmp"
+    else
+        jq --arg n "$name" '.skills |= map(if (.name==$n and (has("from")|not)) then del(.force) else . end)' "$file" > "$file.tmp"
+    fi
+    reformat "$file.tmp" "$file"; rm -f "$file.tmp"
+    echo "Set force=$force on declaration '$name' in ${file#"$REPO_DIR"/}:"; jq . "$file"
+    echo ""; echo "Run scripts/connect-agent.sh <agent> --relink to apply."
+    exit 0
+fi
+
+# ---- OVERRIDE (write into --into scope) ----
+[[ -z "$from" ]] && { echo "Error: missing --from=<home-scope|global|external> (or use --force / --list)." >&2; exit 2; }
+[[ "$from" == "external" && -z "$owner" ]] && { echo "Error: --from=external requires --owner=<author>." >&2; exit 2; }
+[[ "$from" == *__* ]] && { echo "Error: --from path may not contain '__'." >&2; exit 2; }
+[[ -z "$into" ]] && into="$(deepest_leaf)"
+[[ -z "$into" ]] && { echo "Error: no connected leaf to write into; pass --into=<scope>." >&2; exit 2; }
+
+file="$(target_file "$into")"
+ensure_file "$file" "$into"
+
+# An existing override matches on (name, from) plus owner when from=external.
+if $do_remove; then
+    jq --arg n "$name" --arg f "$from" --arg o "$owner" '
+        .skills = (.skills // [] | map(select(
+            ((.from // null) != $f) or (.name != $n) or ($f == "external" and (.owner // "") != $o)
+        )))
+    ' "$file" > "$file.tmp"
+elif [[ -n "$tier" ]]; then
+    case "$tier" in always|optional|unlisted|off) ;; *) echo "Invalid --to: $tier" >&2; exit 2 ;; esac
+    jq --arg n "$name" --arg f "$from" --arg o "$owner" --arg t "$tier" '
+        ( { name: $n, from: $f, tier: $t } + (if $f == "external" then { owner: $o } else {} end) ) as $entry
+        | .skills = (
+            (.skills // [] | map(select(
+                ((.from // null) != $f) or (.name != $n) or ($f == "external" and (.owner // "") != $o)
+            )))
+            + [ $entry ]
+          )
+    ' "$file" > "$file.tmp"
+else
+    echo "Error: provide --to=<tier> or --remove." >&2; exit 2
+fi
+reformat "$file.tmp" "$file"; rm -f "$file.tmp"
+echo "Updated ${file#"$REPO_DIR"/}:"; jq . "$file"
 echo ""; echo "Run scripts/connect-agent.sh <agent> --relink to apply."
