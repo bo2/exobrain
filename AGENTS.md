@@ -42,7 +42,7 @@ Links the right scopes into the agent's space and installs a post-merge hook to 
 
 ## Skills
 
-Skills are directories under `skills/` (global) or any scope's `skills/`, registered in that scope's `skills.json` as `(name, scope, owner, tier)`. Tiers: **always** (auto-loaded), **optional** (listed in `optional-skills.md`, read on demand), **off** (shadow a lower scope). Schema: `skills.schema.json`. Depth: `domains/exobrain/skills.md`. Helpers: `scripts/skills-status.sh`, `scripts/skills-promote.sh`, `scripts/skills-validate.sh`.
+Skills are directories under `skills/` (global) or any scope's `skills/`. A scope's `skills.json` either **declares** a skill living in its own `skills/` (`name`, `owner`, recommended `tier`, optional `force`) or **overrides** one declared elsewhere (`from` + `tier`). A declaration reaches only its `owner` until `force: true` shares it scope-wide; an override opts a skill in (any tier) or out (`off`); deepest scope wins, absence means off. Tiers: **always** (auto-loaded), **optional** (listed in `optional-skills.md`, read on demand), **unlisted** (registered and invocable by name but not surfaced in any index), **off** (shadow). To invoke a skill you don't see listed, resolve it from the registry — `scripts/skills-status.sh --all` catalogs every declared skill. Schema: `skills.schema.json`. Depth: `domains/exobrain/skills.md`. Helpers: `scripts/skills-status.sh`, `scripts/skills-promote.sh`, `scripts/skills-validate.sh`.
 
 ## Tools
 

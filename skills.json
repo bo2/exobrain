@@ -1,11 +1,11 @@
 {
   "$schema": "./skills.schema.json",
   "skills": [
-    { "name": "exobrain-evolve",      "scope": "global", "owner": "", "tier": "optional" },
-    { "name": "exobrain-reader-lens", "scope": "global", "owner": "", "tier": "optional" },
-    { "name": "exobrain-persist",     "scope": "global", "owner": "", "tier": "optional" },
-    { "name": "exobrain-domains",     "scope": "global", "owner": "", "tier": "optional" },
-    { "name": "exobrain-ab",          "scope": "global", "owner": "", "tier": "optional" },
-    { "name": "exobrain-tools",       "scope": "global", "owner": "", "tier": "optional" }
+    { "name": "exobrain-evolve",      "owner": "oleg", "tier": "optional", "force": true },
+    { "name": "exobrain-reader-lens", "owner": "oleg", "tier": "optional", "force": true },
+    { "name": "exobrain-persist",     "owner": "oleg", "tier": "optional", "force": true },
+    { "name": "exobrain-domains",     "owner": "oleg", "tier": "optional", "force": true },
+    { "name": "exobrain-ab",          "owner": "oleg", "tier": "optional", "force": true },
+    { "name": "exobrain-tools",       "owner": "oleg", "tier": "optional", "force": true }
   ]
 }
