@@ -21,7 +21,7 @@ The catalog says *"the calendar tool needs an OAuth token"*; the state says *"ca
 
 ## One doc per tool
 
-Each tool is a single self-contained markdown file, `<name>.md`, where the filename stem is the tool's name. There is no JSON entry and no separate connector doc — the file *is* the connector, and its presence at a scope *is* its registration. The file opens with a one-line purpose and an **At a glance** block, then carries the setup contract:
+Each tool is a single self-contained markdown file, `<name>.md`, where the filename stem is the tool's name. There is no JSON entry and no separate connector doc — the file *is* the connector, and its presence at a scope *is* its registration. The file opens with a one-line purpose and an **At a glance** block, then carries the setup contract. That opening line is pulled verbatim into the generated tools index as the tool's summary, so it must be a **complete, self-contained one-liner** (not a wrapped or buried sentence).
 
 | Part | Holds |
 |---|---|
@@ -63,7 +63,7 @@ Connecting is per-machine. To connect a tool, follow its doc's **Setup**, then r
 3. **`.env.example`.** Add any `.env` variables with placeholder values. Keychain/OAuth credentials are documented in the tool doc, not `.env.example`.
 4. **Test the flow** from a fresh checkout: walk the doc's Setup, then confirm Verify passes.
 
-The tool doc is the single source — its presence at a scope is its registration. Humans browse `tools/`; a setup skill reads the docs on demand. There is no separate summary table to keep in sync.
+The tool doc is the single source — its presence at a scope is its registration. Humans browse `tools/`; the `exobrain-tools` skill reads the docs on demand; and `connect-agent.sh` regenerates the auto-loaded **tools index** (name + path + first-line purpose, deepest scope wins on a name collision) on every relink. There is no hand-maintained summary table — the index is a pure function of the committed docs.
 
 ## Cross-references
 
