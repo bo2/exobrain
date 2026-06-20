@@ -10,7 +10,7 @@ The `connect-agent.sh` ecosystem wires repo content into each agent's context �
 
 | Artifact | Role |
 |---|---|
-| `scripts/connect-agent.sh` | The connector. Interactive wizard on first run; `--relink` / `--configure` / `--render-specs-only` thereafter. Resolves config + the skills registry, links always-tier skills, fetches external skills, composes each agent's own context surface, installs the git hooks. |
+| `scripts/connect-agent.sh` | The connector. Resolves identity by name-match from one of four sources — flags (`--handle`/`--host`/`--scope`/`--guest`), existing config, the interactive wizard (checkbox menu, person/host pre-checked), or guest; `--relink` / `--configure` / `--render-specs-only` thereafter. Resolves the skills registry, links always-tier skills, fetches external skills, composes each agent's own context surface, installs the git hooks. |
 | `.claude/CLAUDE.md` *(generated)* | Claude's generated entry point — `@-import`s `.claude/connected-scopes.md` + `.claude/optional-skills.md`. (The handcrafted root `CLAUDE.md` is separate and loads the global scope via `@AGENTS.md`.) |
 | `.claude/connected-scopes.md` *(generated)* | A manifest of `@-import`s to each connected deeper scope's source `AGENTS.md`/`CLAUDE.md`, shallow→deep — referenced by relative path, not copied, so scope edits show up without a recompose. |
 | `.claude/optional-skills.md` *(generated)* | The Claude-filtered optional-skills index. |
@@ -19,7 +19,7 @@ The `connect-agent.sh` ecosystem wires repo content into each agent's context �
 | `.exobrain.json` *(gitignored)* | Saved config: `connected` scope leaves, `agents`, per-tool state. |
 | `.agents/skills/` *(generated, Codex)* | Repo-local Codex skills dir (real dir, symlinked children) — keeps exobrain skills out of the global `~/.codex/skills`. |
 | `scripts/skills-registry.sh` · `scripts/fetch-external-skills.sh` | Sourced/invoked by the connector — see § Skills system. |
-| `scripts/test-connect-agent.sh` | Test harness — builds isolated fake exobrains in temp dirs and asserts scope-chain resolution, opt-in skill tiers, the Claude manifest / Codex inline surfaces, the tools index, and validator/fetcher plumbing. |
+| `scripts/test-connect-agent.sh` | Test harness — builds isolated fake exobrains in temp dirs and asserts scope-chain resolution, opt-in skill tiers, flag-driven identity (name-match / guest / extra scope / stored person), the Claude manifest / Codex inline surfaces, the tools index, and validator/fetcher plumbing. |
 
 **Verifying a connector/wiring change** (`connect-agent.sh`, `skills-registry.sh`, `fetch-external-skills.sh`, the injection): first run `scripts/test-connect-agent.sh` for the fixture-level logic. Then render a real checkout side-effect-free with `connect-agent.sh <agent> --render-specs-only` (point `CODEX_HOME` / `OPENCLAW_WORKSPACE` at a throwaway dir to render those agents without touching your home config), and spot-check the agent's surface — for Claude that `.claude/connected-scopes.md` + `.claude/optional-skills.md` exist and every manifest `@-import` resolves to a real file; for Codex/OpenClaw that the marker block in `AGENTS.md` / `USER.md` holds the expected scopes — plus the `.claude/` and `.agents/skills/` dirs. Finally run `scripts/validate-exobrain.sh` for conventions.
 
