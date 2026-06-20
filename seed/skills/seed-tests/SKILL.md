@@ -29,9 +29,10 @@ seed/skills/seed-tests/scripts/run.sh --list           # list the behavioral cas
 It (1) builds a fresh instance from the seed by running the real `create-instance`
 skill via a builder agent — so the **bootstrap flow is itself exercised** — then
 (2) runs the `create-valid` static checks on the result (well-formed instance, no
-`seed/` leaked, connection established), then (3) delegates to the universal
-[`exobrain-tests`](../../../skills/exobrain-tests/) suite with `--instance <built>`
-for the behavioral cases. Consumes real agent usage; never auto-runs.
+`seed/` leaked, connection established), commits it, then (3) runs the **built
+instance's own** [`exobrain-tests`](../../../skills/exobrain-tests/) for the
+behavioral cases — exactly as any instance self-tests. Consumes real agent usage;
+never auto-runs.
 
 ## Connector / registry harness (deterministic)
 
