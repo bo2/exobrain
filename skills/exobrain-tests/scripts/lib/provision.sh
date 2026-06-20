@@ -1,27 +1,18 @@
 #!/usr/bin/env bash
 # provision.sh — provision a throwaway template instance for the suite. Sourced.
 #
-# The suite always tests a COPY, never a live instance. Two sources:
-#   provision_self <dest>           — the current repo (this instance) at HEAD.
-#   provision_from <src> <dest>     — an already-built instance dir (e.g. from
-#                                     seed-tests' from-seed build).
-# Then finalize_template validates it, neutralizes hooks, commits a `main` base
-# branch for worktree cases, and refuses any github origin (a scratch instance
-# must never point at a real remote).
+# The suite always tests a COPY of the instance it is installed in, never the live
+# tree. provision_self snapshots REPO_DIR's tracked files at HEAD; finalize_template
+# then validates it, neutralizes hooks, commits a `main` base branch for worktree
+# cases, and refuses any github origin (a scratch instance must never point at a
+# real remote).
 
 # provision_self <dest> — tracked files of REPO_DIR at HEAD, no .git/src/tmp bloat.
 provision_self() {
     local dest="$1"
     mkdir -p "$dest"
     git -C "$REPO_DIR" archive HEAD | tar -x -C "$dest" \
-        || { err "[provision] git archive of the current repo failed"; return 1; }
-}
-
-# provision_from <src-instance> <dest> — copy an already-built instance verbatim.
-provision_from() {
-    local src="$1" dest="$2"
-    mkdir -p "$(dirname "$dest")"
-    cp -R "$src" "$dest"
+        || { err "[provision] git archive of the current instance failed"; return 1; }
 }
 
 # finalize_template <dir> — make a provisioned copy safe and ready to test.

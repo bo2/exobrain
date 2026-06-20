@@ -1,22 +1,22 @@
 #!/usr/bin/env bash
-# run.sh — exobrain behavioral test suite (universal; runs on any instance).
+# run.sh — exobrain behavioral test suite (runs on the current instance).
 #
-# Provisions a throwaway COPY of an instance, then runs concrete agent tasks
-# against fresh copies of it (each N times) for every selected agent, checks
-# pass/fail per run, and reports a k/N pass rate per agent+case. The instance
-# source is either the current repo (--self, default) or a pre-built one
-# (--instance <dir>, e.g. produced by seed-tests' from-seed build).
+# Snapshots the instance this skill is installed in into a throwaway copy, then
+# runs concrete agent tasks against fresh copies of it (each N times) for every
+# selected agent, checks pass/fail per run, and reports a k/N pass rate per
+# agent+case. An instance self-tests by invoking this with no source argument —
+# there is none; the suite always tests its own instance. (The seed tests an
+# instance by building one and running *that* instance's copy of this suite.)
 #
-#   run.sh                              # all cases, all available agents, against --self
-#   run.sh --instance /path/to/built   # against an already-built instance
+#   run.sh                              # all cases, all available agents
 #   run.sh --agents claude             # claude only
 #   run.sh --smoke                     # the trivial 'smoke' case, N=1
 #   run.sh --cases a,b --runs 3        # selected cases, override N
 #   run.sh --build-only                # provision + validate the template, stop
 #   run.sh --list                      # list cases
 #
-# Flags: --self  --instance <dir>  --agents <a1,a2>  --cases <c1,c2>  --runs <N>
-#        --smoke  --keep  --build-only  --list  -h|--help
+# Flags: --agents <a1,a2>  --cases <c1,c2>  --runs <N>  --smoke  --keep
+#        --build-only  --list  -h|--help
 #
 # An agent whose CLI is missing or not runnable is skipped with a notice. The
 # LLM-judge always runs on claude regardless of the agent under test.
@@ -37,7 +37,6 @@ CASES_DIR="$TESTS_DIR/cases"
 # ---- args -----------------------------------------------------------------
 AGENTS_SEL="claude,codex"
 SEL_CASES=""; RUNS_OVERRIDE=""; SMOKE=0; KEEP=0; BUILD_ONLY=0; LIST=0
-INSTANCE_SRC=""   # empty => --self (provision from the current repo at HEAD)
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --agents)       AGENTS_SEL="$2"; shift 2 ;;
@@ -46,9 +45,6 @@ while [[ $# -gt 0 ]]; do
         --cases=*)      SEL_CASES="${1#*=}"; shift ;;
         --runs)         RUNS_OVERRIDE="$2"; shift 2 ;;
         --runs=*)       RUNS_OVERRIDE="${1#*=}"; shift ;;
-        --instance)     INSTANCE_SRC="$2"; shift 2 ;;
-        --instance=*)   INSTANCE_SRC="${1#*=}"; shift ;;
-        --self)         INSTANCE_SRC=""; shift ;;
         --smoke)        SMOKE=1; shift ;;
         --keep)         KEEP=1; shift ;;
         --build-only)   BUILD_ONLY=1; shift ;;
@@ -116,18 +112,12 @@ for c in "${CASES[@]}"; do
 done
 est_sessions=$((per_agent_sessions * ${#AGENTS[@]}))
 est_judge=$((per_agent_judge * ${#AGENTS[@]}))
-src_desc="${INSTANCE_SRC:-the current repo (--self)}"
-log "plan: agents=[${AGENTS[*]}], ${#CASES[@]} case(s) against ${src_desc}; ~${est_sessions} agent session(s) + up to ${est_judge} judge call(s)"
+log "plan: agents=[${AGENTS[*]}], ${#CASES[@]} case(s) against this instance; ~${est_sessions} agent session(s) + up to ${est_judge} judge call(s)"
 log ""
 
 # ---- provision the template (once) ----------------------------------------
 TEMPLATE="$RUN_ROOT/template"
-if [[ -n "$INSTANCE_SRC" ]]; then
-    [[ -d "$INSTANCE_SRC" ]] || { err "--instance dir not found: $INSTANCE_SRC"; exit 2; }
-    provision_from "$INSTANCE_SRC" "$TEMPLATE" || { err "provisioning from $INSTANCE_SRC failed"; exit 2; }
-else
-    provision_self "$TEMPLATE" || { err "provisioning from the current repo failed"; exit 2; }
-fi
+provision_self "$TEMPLATE" || { err "provisioning from the current instance failed"; exit 2; }
 finalize_template "$TEMPLATE" || { err "template did not finalize (validate / safety)"; exit 2; }
 TPL_BASE_COMMITS="$(git -C "$TEMPLATE" rev-list --count HEAD 2>/dev/null || echo 0)"
 if [[ $BUILD_ONLY -eq 1 ]]; then

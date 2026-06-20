@@ -4,7 +4,7 @@
 
 # Resolve paths: this suite lives at <repo>/skills/exobrain-tests/scripts/lib/.
 # TESTS_DIR is the harness root (the scripts/ dir); REPO_DIR is the instance the
-# suite runs in (three levels up) — the current instance for --self.
+# suite runs in and tests (three levels up).
 TESTS_LIB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 TESTS_DIR="$(dirname "$TESTS_LIB_DIR")"               # .../exobrain-tests/scripts
 REPO_DIR="$(cd "$TESTS_DIR/../../.." && pwd)"         # <repo> — the instance under test

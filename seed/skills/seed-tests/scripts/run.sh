@@ -62,6 +62,14 @@ else
     exit 1
 fi
 
-# 3. Run the universal behavioral suite against the built instance.
-log "[seed-tests] running exobrain-tests against the built instance…"
-exec "$ETESTS/run.sh" --instance "$BUILD" ${PASS[@]+"${PASS[@]}"}
+# 3. Finish initializing the instance: commit it, so it's a normal committed repo
+#    (create-instance leaves committing to the user; the suite snapshots HEAD).
+git -C "$BUILD" add -A
+git -C "$BUILD" -c user.email=harness@exobrain.test -c user.name='exobrain harness' \
+    commit -q -m "harness: initial instance snapshot" || true
+
+# 4. Run the built instance's OWN exobrain-tests, exactly as any instance self-tests.
+INST_SUITE="$BUILD/skills/exobrain-tests/scripts/run.sh"
+[[ -f "$INST_SUITE" ]] || { err "built instance has no exobrain-tests at $INST_SUITE"; exit 2; }
+log "[seed-tests] running the built instance's own exobrain-tests…"
+exec "$INST_SUITE" ${PASS[@]+"${PASS[@]}"}
