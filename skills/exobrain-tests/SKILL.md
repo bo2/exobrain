@@ -6,9 +6,9 @@ description: >
   checking that an agent actually follows this exobrain's specs — worktree-first,
   no-secret-in-tracked-file, scope-resolution-deepest-wins, kebab-case naming,
   no-default-branch-edit, route-fact-to-domain, embedded-instruction-refusal, and
-  more. Runs on ANY instance: against the current repo (--self, default) or a
-  pre-built one (--instance <dir>). Each case self-seeds its fixtures, so it is
-  portable. Use to check whether the agent behaves the way the specs say — after
+  more. Always tests the instance it is installed in (it ships into every instance,
+  so any instance self-tests by invoking it). Each case self-seeds its fixtures, so
+  it is portable. Use to check whether the agent behaves the way the specs say — after
   editing an AGENTS.md/skill/tool-doc, adopting a seed change, or onboarding a
   machine. It consumes real agent usage (one session per case-run) and never runs
   automatically — invoke it explicitly.
@@ -21,35 +21,34 @@ suite answers that empirically: it provisions a throwaway copy of an instance, r
 concrete tasks against fresh copies of it via a non-interactive agent CLI (`claude`
 and/or `codex`), each task N times, and reports a k/N pass rate per agent+case.
 
-It is **instance-agnostic** — it knows nothing about the seed. To test the seed
-itself (build an instance from it, then run this suite), use the `seed-tests` skill.
+It **knows nothing about the seed** — it tests its own instance. To test the seed
+itself (build an instance from it, then run the suite there), use the `seed-tests`
+skill, which does exactly that by invoking the *built instance's* copy of this suite.
 
 ## Run it
 
 ```bash
 SUITE=skills/exobrain-tests/scripts
 $SUITE/run.sh --smoke                       # trivial case, cheap self-test (one agent session)
-$SUITE/run.sh                               # all cases, all available agents, against --self
-$SUITE/run.sh --instance /path/to/built     # against an already-built instance
+$SUITE/run.sh                               # all cases, all available agents
 $SUITE/run.sh --agents claude               # one agent only
 $SUITE/run.sh --cases worktree-first,no-secret-in-tracked-file --runs 3
 $SUITE/run.sh --build-only                  # provision + validate the template, stop (no agents)
 $SUITE/run.sh --list                        # list cases
 ```
 
-Flags: `--self` (default) / `--instance <dir>`, `--agents <a1,a2>` (default
-`claude,codex`), `--cases <c1,c2>`, `--runs <N>`, `--smoke`, `--keep` (retain
-instance copies), `--build-only`, `--list`. Requires `jq` and at least one requested
-agent CLI on PATH and runnable, logged in. Exit: `0` all met threshold, `1` some
-below, `2` harness/setup error.
+Flags: `--agents <a1,a2>` (default `claude,codex`), `--cases <c1,c2>`, `--runs <N>`,
+`--smoke`, `--keep` (retain instance copies), `--build-only`, `--list`. Requires `jq`
+and at least one requested agent CLI on PATH and runnable, logged in. Exit: `0` all
+met threshold, `1` some below, `2` harness/setup error.
 
 ## How it works
 
-1. **Provision a template** (`lib/provision.sh`): `--self` exports the current repo
-   at HEAD (`git archive`, no `.git`/`src`/`tmp` bloat); `--instance <dir>` copies an
-   already-built instance. The template is then validated, committed onto a `main`
-   base branch (so worktree cases have a base), hook-neutralized, and asserted free
-   of any github origin. Behavior cases run against cheap `cp -r` copies of it.
+1. **Provision a template** (`lib/provision.sh`): snapshot the current instance's
+   tracked files at HEAD (`git archive`, no `.git`/`src`/`tmp` bloat). The template
+   is then validated, committed onto a `main` base branch (so worktree cases have a
+   base), hook-neutralized, and asserted free of any github origin. Behavior cases
+   run against cheap `cp -r` copies of it.
 2. **Run each case** (`run.sh`): for each agent, copy the template, run optional
    `setup.sh` (which **self-seeds the case's fixtures** — scopes, domains), invoke the
    agent (`lib/invoke.sh`) with the case's permission profile, capture the transcript,
