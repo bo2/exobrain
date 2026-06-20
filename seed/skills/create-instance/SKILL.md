@@ -109,8 +109,9 @@ publishes the feed, it doesn't adopt).
 - For each starting domain: `<domains-dir>/<area>/README.md` with a
   one-line orientation (see `<domains-dir>/exobrain/authoring.md`).
 - `workspaces/README.md` — copy from `$SRC`.
-- Write `.exobrain.json` (gitignored) with the connected leaf and chosen agent(s):
-  `{ "connected_scopes": ["people/<handle>/hosts/<machine>"], "agents": [] }`.
+
+Don't write `.exobrain.json` here — `connect-agent.sh` is the sole writer of
+connection state and establishes it in step 6 from the flags you pass it.
 
 ## 5. If the user renamed the durable-content dir
 
@@ -132,13 +133,15 @@ Grep the tree for the old name and update every hit. This is the kind of
 cd "$DST"
 git init -q
 chmod +x scripts/*.sh
-scripts/validate-exobrain.sh          # must be clean
-scripts/connect-agent.sh <agent>      # links scopes into the agent's surface, installs hooks
-scripts/skills-status.sh              # sanity-check the registry
+scripts/validate-exobrain.sh                                          # must be clean
+scripts/connect-agent.sh <agent> --handle <handle> --host <machine>   # connects (writes .exobrain.json), links, installs hooks
+scripts/skills-status.sh                                              # sanity-check the registry
 ```
 
-`connect-agent.sh` reads the `.exobrain.json` you wrote, so it links the chosen
-scope chain without re-prompting. If validation fails, fix it before handing off.
+The `--handle`/`--host` flags let `connect-agent.sh` establish the connection
+non-interactively: it name-matches the person/host scopes you created in step 4,
+writes `.exobrain.json` (with the `person` id), and links the scope chain without
+prompting. If validation fails, fix it before handing off.
 
 ## 7. Hand off
 

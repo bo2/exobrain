@@ -165,14 +165,18 @@ Each phase is an independently shippable PR. Dependency order: 2 → 3 → {4, 5
 
 1. **Doc prerequisite** — land the arbitrary-scope-connection clarification
    (`scopes.md` + `AGENTS.md`). *Done — PR #25, feed card 0043.*
-2. **Rename + person id** — `connected` → `connected_scopes`; write/read `person`.
-   Update all consumers, `test-connect-agent.sh`, schema docs. Mechanical, isolated.
-3. **Connector refactor** — split identity layer / connector; name-match identity
-   with tiebreaker; drop discovery + non-interactive derive; parameterize via
-   flags; interactive multi-select (person/host pre-checked); `owner_self_ids`
-   reads stored id.
-4. **create-instance split** — stop writing `.exobrain.json`; call `connect-agent`
-   with params at the end.
+2. **Rename `connected` → `connected_scopes`.** All consumers + docs. *Done — PR
+   #27, feed card 0044.* (The `person`-id write moved to 3a — it's entangled with
+   the connector logic Phase 3 rewrites.)
+3. **Connector refactor** — split into two shippable steps:
+   - **3a** — store + read the `person` id (owner-match keys off it, falls back to
+     type-derivation). *Done — PR #28, feed card 0045.*
+   - **3b** — split identity layer / connector; name-match identity with tiebreaker;
+     `--handle`/`--host`/`--scope`/`--guest` flags; interactive multi-select
+     (person/host pre-checked); drop discovery + the headless auto-derive. *Done —
+     PR #29, feed card 0046.*
+4. **create-instance split** — scaffold only; stop writing `.exobrain.json`; end by
+   calling `connect-agent <agent> --handle … --host …`. *In progress.*
 5. **seed scope** — `seed/AGENTS.md` + `seed/skills.json`; `connect-agent` seed
    auto-detect.
 6. **Test split** — extract universal cases + runner into `exobrain-tests` (global,

@@ -38,8 +38,9 @@ This is a NON-INTERACTIVE run. Do not ask questions; use these interview answers
 
 Run the procedure to completion, including: copying the framework, the
 meta-domain, and the three shipped skills; creating the scope directories and the
-adopted-feed.md ledger; writing .exobrain.json; then `git init`,
-`scripts/validate-exobrain.sh` (must pass), and `scripts/connect-agent.sh __AGENT__`.
+adopted-feed.md ledger; then `git init`, `scripts/validate-exobrain.sh` (must
+pass), and `scripts/connect-agent.sh __AGENT__ --handle test-user --host test-host`
+(which establishes the connection and writes .exobrain.json).
 
 Do NOT create any git commits — leave committing to the harness. Do NOT push
 anything anywhere. When finished, briefly confirm the instance is scaffolded and
