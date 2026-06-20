@@ -176,10 +176,19 @@ build_scope_chain() {
 }
 
 # owner_self_ids <repo_dir> <leaf...> — JSON array of the connecting user's "self"
-# owner ids: the leaf basenames of connected person-type scopes. A declaration
-# auto-enables for its owner, so these are the ids that satisfy owner-match.
+# owner ids. A declaration auto-enables for its owner, so these are the ids that
+# satisfy owner-match. The authoritative source is the explicit `person` key in
+# `.exobrain.json` (string or array) — identity is location-independent, not a
+# function of where the person scope sits. When that key is absent (older configs,
+# or callers that pass leaves with no config), fall back to deriving ids from the
+# basenames of connected person-type scopes.
 owner_self_ids() {
     local repo_dir="$1"; shift
+    local cfg="$repo_dir/.exobrain.json" stored
+    if [[ -f "$cfg" ]]; then
+        stored="$(jq -c '(.person // empty) | if type == "array" then . else [.] end' "$cfg" 2>/dev/null)"
+        if [[ -n "$stored" && "$stored" != "[]" && "$stored" != "null" ]]; then echo "$stored"; return; fi
+    fi
     local s ids=()
     while IFS= read -r s; do
         [[ -z "$s" || "$s" == "global" ]] && continue

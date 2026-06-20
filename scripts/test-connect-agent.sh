@@ -171,6 +171,18 @@ test_owner_match_enables_for_owner() {
     assert_eq "always" "$(tier_of "$res" private)" "owner-match enables own non-forced skill"
 }
 
+# The stored .person key is authoritative for owner-match, not the folder type:
+# here the config names zoe while the connected person scope is bob, so bob's own
+# owner-gated skill must go off and self-ids must be ["zoe"].
+test_stored_person_overrides_type() {
+    local r; r="$(setup_fake_exobrain)"; add_person "$r" people/bob
+    declare_skill "$r" people/bob private always     # owner=bob, not forced
+    printf '{"connected_scopes":["people/bob/hosts/h1"],"person":"zoe","agents":["claude"]}\n' > "$r/.exobrain.json"
+    assert_eq '["zoe"]' "$(owner_self_ids "$r" people/bob/hosts/h1)" "stored .person wins over type-derivation" || return 1
+    local res; res="$(resolve "$r" people/bob/hosts/h1)"
+    assert_eq "ABSENT" "$(tier_of "$res" private)" "owner-match keys off stored person, not folder type"
+}
+
 test_override_opts_in() {
     local r; r="$(setup_fake_exobrain)"; add_group "$r" acme; add_person "$r" groups/acme/people/alice
     declare_skill "$r" groups/acme team-skill optional        # group decl, owner=acme, not forced
@@ -361,6 +373,7 @@ run_test "scope chain shallow->deep"          test_scope_chain_shallow_to_deep
 run_test "force reaches non-owner"             test_force_reaches_nonowner
 run_test "owner-gated off for others"          test_owner_gated_off_for_others
 run_test "owner-match enables for owner"       test_owner_match_enables_for_owner
+run_test "stored person wins over type"        test_stored_person_overrides_type
 run_test "override opts in"                    test_override_opts_in
 run_test "override off shadows force"          test_override_off_shadows_force
 run_test "deepest override wins"               test_deepest_override_wins
