@@ -53,7 +53,7 @@ All three deliver the **same composition** — deeper-scope specs (shallow→dee
 
 A single run:
 
-1. **Resolve config** — read `.exobrain.json` (or run the wizard): person `id`, connected groups (if any), `hostname`.
+1. **Resolve config** — establish `connected_scopes` + the `person` id from one of four sources, in precedence order: explicit flags (`--handle`/`--host`/`--scope`/`--guest`) > existing/parent `.exobrain.json` > the interactive wizard > guest. Identity is name-matched (handle/hostname → a scope by leaf name); the wizard offers a checkbox menu of connectable scopes with person + host pre-checked.
 2. **Resolve the skills registry** — walk every `skills.json` in priority order into a plan.
 3. **Link always-tier skills** — symlink each into the agent's skills dir as `<name>.<scope-owner>/`. Most agents read it from their context surface (`.claude/skills`, `~/.openclaw/workspace/skills`); Codex scans a repo-local `.agents/skills`, so its skills link there — out of the global `~/.codex`, scoped to this repo.
 4. **Fetch external skills** — route to `skills/` (always) or `skills-optional/` (optional).
@@ -62,7 +62,7 @@ A single run:
 7. **Install the post-merge hook** (first run) — re-links every marked agent after `git pull`.
 8. **Run scope hooks** — if a scope dir has an executable `scripts/connect-agent.sh`, run it.
 
-`--relink` repeats steps 2–6 without prompting; `--configure` re-runs the wizard; `--render-specs-only` runs steps 2–6 and stops before any write outside the target dir (no marker, no hooks) — for wiring a throwaway copy.
+`--relink` repeats steps 2–6 without prompting; `--configure` re-resolves identity (the wizard, or the identity flags); `--render-specs-only` runs steps 2–6 and stops before any write outside the target dir (no marker, no hooks) — for wiring a throwaway copy.
 
 ## Adding a new agent
 

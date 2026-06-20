@@ -2,11 +2,19 @@
 # connect-agent.sh — wire exobrain scope content into an AI agent's surface.
 #
 #   connect-agent.sh <claude|codex|openclaw> [--relink] [--configure] [--render-specs-only]
+#                     [--handle <id>] [--host <name>] [--scope <path>]... [--guest]
 #
-# A scope is any directory containing an AGENTS.md. Connecting a leaf scope
-# (recorded in .exobrain.json `connected_scopes`) wires in that leaf plus every
-# AGENTS.md-bearing ancestor up to the repo root — resolving skills, specs, and
-# the optional-skills index innermost-wins. See domains/exobrain/ for the model.
+# A scope is any directory containing an AGENTS.md. The connected scopes (recorded
+# in .exobrain.json `connected_scopes`) plus each one's AGENTS.md-bearing ancestors
+# are unioned and resolved innermost-wins — skills, specs, the optional-skills
+# index. See domains/exobrain/ for the model.
+#
+# Identity is resolved from one of four sources, in precedence order:
+#   explicit flags (--handle/--host/--scope/--guest)  >  existing/parent config  >
+#   interactive prompts (first-time setup)             >  guest (global only).
+# --handle/--host name-match a person/host scope (scaffolding the conventional
+# location if absent); --scope adds any standalone scope; --guest connects nothing.
+# The connecting person's id is stored as `person` for skill owner-match.
 #
 # Agent surfaces — each agent gets its OWN surface; no two agents ever write the
 # same generated file (the composed content is agent-specific — filtered skills
@@ -133,6 +141,8 @@ is_interactive() { [[ -t 0 && -t 1 ]]; }
 CONFIG="$REPO_DIR/.exobrain.json"
 CONNECTED_LEAVES=()
 PERSON_ID=""   # the connecting user's person id; persisted as .person for owner-match
+PERSON_PATH="" # resolved person scope path (set by resolve_identity)
+HOST_PATH=""   # resolved host scope path   (set by resolve_identity)
 
 load_config() {
     [[ -f "$CONFIG" ]] || return 1
@@ -140,6 +150,7 @@ load_config() {
     arr="$(jq -r '(.connected_scopes // []) | .[]' "$CONFIG" 2>/dev/null)" || return 1
     CONNECTED_LEAVES=()
     while IFS= read -r l; do [[ -n "$l" ]] && CONNECTED_LEAVES+=("$l"); done <<< "$arr"
+    PERSON_ID="$(jq -r '(.person // "")' "$CONFIG" 2>/dev/null)"
     return 0
 }
 
@@ -149,7 +160,11 @@ load_config() {
 save_config() {
     local leaves_json agents_json existing="{}"
     [[ -f "$CONFIG" ]] && existing="$(cat "$CONFIG")"
-    leaves_json="$(printf '%s\n' "${CONNECTED_LEAVES[@]}" | jq -R . | jq -s .)"
+    if [[ ${#CONNECTED_LEAVES[@]} -eq 0 ]]; then
+        leaves_json='[]'
+    else
+        leaves_json="$(printf '%s\n' "${CONNECTED_LEAVES[@]}" | jq -R . | jq -s .)"
+    fi
     agents_json="$(jq -r '(.agents // [])' <<< "$existing" 2>/dev/null || echo '[]')"
     agents_json="$(jq --arg a "$AGENT" '. as $cur | ($cur + [$a]) | unique' <<< "$agents_json")"
     jq -n --argjson e "$existing" --argjson c "$leaves_json" --argjson ag "$agents_json" --arg p "$PERSON_ID" \
@@ -171,107 +186,151 @@ scaffold_scope() {
     fi
 }
 
-# discover_person_dirs <repo_dir> <handle> — print the repo-relative path of every
-# existing person scope dir for <handle>, anywhere in the tree: top-level
-# <people>/<handle> or nested <…>/<people>/<handle>. The person collection name
-# comes from scopes.json vocabulary. Reads only; shared by the interactive wizard
-# and the non-interactive auto-detect path.
-discover_person_dirs() {
-    local repo_dir="$1" handle="$2" person_coll
-    person_coll="$(scopes_collection_for_type "$repo_dir" person)"
-    find "$repo_dir" \
-        \( -path '*/.git' -o -path '*/node_modules' -o -path '*/tmp' \
-           -o -path '*/src' -o -path '*/.src' \) -prune -o \
-        -type d -path "*/$person_coll/$handle" -print 2>/dev/null \
-        | sed "s#^$repo_dir/##" | sort
+# Dirs the scope search never descends into.
+SCOPE_FIND_PRUNE=( -path '*/.git' -o -path '*/node_modules' -o -path '*/tmp' -o -path '*/src' -o -path '*/.src' )
+
+# find_scope_by_name <repo_dir> <name> [keyword] — repo-relative paths of every
+# AGENTS.md-bearing dir whose basename is <name>, anywhere in the tree. Identity is
+# matched by name, not by a fixed parent-collection path. When several match and
+# <keyword> is given (the person/host collection name), the ones whose parent dir
+# is named <keyword> win — a tiebreaker, not a requirement. One path per line.
+find_scope_by_name() {
+    local repo_dir="$1" name="$2" keyword="${3:-}" d rel parent matches=() kept=()
+    while IFS= read -r d; do
+        [[ -f "$d/AGENTS.md" ]] || continue
+        matches+=("${d#"$repo_dir"/}")
+    done < <(find "$repo_dir" \( "${SCOPE_FIND_PRUNE[@]}" \) -prune -o -type d -name "$name" -print 2>/dev/null)
+    if [[ ${#matches[@]} -gt 1 && -n "$keyword" ]]; then
+        for rel in "${matches[@]}"; do
+            parent="${rel%/*}"
+            [[ "${parent##*/}" == "$keyword" ]] && kept+=("$rel")
+        done
+        [[ ${#kept[@]} -gt 0 ]] && matches=("${kept[@]}")
+    fi
+    if [[ ${#matches[@]} -gt 0 ]]; then printf '%s\n' "${matches[@]}" | sort; fi
+}
+
+# list_connectable_scopes <repo_dir> — every scope (AGENTS.md dir) except the
+# global root, repo-relative, one per line: the menu of what can be connected.
+list_connectable_scopes() {
+    local repo_dir="$1" f d
+    find "$repo_dir" \( "${SCOPE_FIND_PRUNE[@]}" \) -prune -o -name AGENTS.md -print 2>/dev/null \
+        | while IFS= read -r f; do
+            d="${f%/AGENTS.md}"
+            [[ "$d" == "$repo_dir" ]] && continue
+            echo "${d#"$repo_dir"/}"
+        done | sort
+}
+
+# resolve_identity <handle> <host> — set PERSON_PATH, HOST_PATH, PERSON_ID by
+# name-match (person anywhere; host within the person's subtree), falling back to
+# the conventional collection location when a scope doesn't exist yet.
+resolve_identity() {
+    local handle="$1" host="$2" person_coll host_coll found line
+    person_coll="$(scopes_collection_for_type "$REPO_DIR" person)"
+    host_coll="$(scopes_collection_for_type "$REPO_DIR" host)"
+    found="$(find_scope_by_name "$REPO_DIR" "$handle" "$person_coll")"
+    PERSON_PATH="${found%%$'\n'*}"
+    [[ -z "$PERSON_PATH" ]] && PERSON_PATH="$person_coll/$handle"
+    HOST_PATH=""
+    found="$(find_scope_by_name "$REPO_DIR" "$host" "$host_coll")"
+    while IFS= read -r line; do
+        [[ -n "$line" && "$line" == "$PERSON_PATH/"* ]] && { HOST_PATH="$line"; break; }
+    done <<< "$found"
+    [[ -z "$HOST_PATH" ]] && HOST_PATH="$PERSON_PATH/$host_coll/$host"
+    PERSON_ID="$handle"
 }
 
 # sanitize_id <raw> — lowercase, restrict to [a-z0-9._-] for a scope leaf id.
 sanitize_id() { printf '%s' "$1" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9._-]/-/g'; }
 
-# run_wizard — derive the connectable leaf from the scope tree plus your choice.
-# Person and host are "pinpoint" scopes (their leaf ids are your handle and this
-# machine's hostname), so they place automatically. Interactive: confirm handle +
-# host, then choose where the person scope lives — an existing one discovered in
-# the tree, a new one under a group/team, or a new top-level person. Non-interactive:
-# auto-connect the host leaf under every existing person scope for the handle,
-# writing nothing (guest if none). Shapes come from scopes.json vocabulary, not a
-# hardcoded people/…/hosts/… path; the scope resolver is left untouched.
+# multi_select <preselect-csv> <item...> — a checkbox menu on /dev/tty. Items whose
+# path is in the comma-separated <preselect-csv> start checked. Sets the SELECTED
+# variable (a local declared by the caller) to the checked items, in listed order.
+multi_select() {
+    local preselect="$1"; shift
+    local items=("$@") i key input n mark _pre p
+    declare -A checked=()
+    for i in "${items[@]}"; do checked["$i"]=0; done
+    IFS=',' read -r -a _pre <<< "$preselect"
+    for p in ${_pre[@]+"${_pre[@]}"}; do [[ -n "$p" ]] && checked["$p"]=1; done
+    while true; do
+        echo "" >/dev/tty
+        echo "Scopes to connect (type a number to toggle, Enter to accept):" >/dev/tty
+        n=1
+        for i in "${items[@]}"; do
+            mark="[ ]"; [[ "${checked[$i]}" == 1 ]] && mark="[x]"
+            printf '  %2d. %s %s\n' "$n" "$mark" "$i" >/dev/tty
+            n=$((n + 1))
+        done
+        printf 'Toggle # (Enter to accept): ' >/dev/tty
+        read -r input </dev/tty || true
+        [[ -z "$input" ]] && break
+        if [[ "$input" =~ ^[0-9]+$ ]] && (( input >= 1 && input <= ${#items[@]} )); then
+            key="${items[$((input - 1))]}"
+            checked["$key"]=$(( 1 - ${checked["$key"]} ))
+        else
+            echo "  ? enter a listed number, or Enter to accept" >/dev/tty
+        fi
+    done
+    SELECTED=()
+    for i in "${items[@]}"; do [[ "${checked[$i]}" == 1 ]] && SELECTED+=("$i"); done
+}
+
+# run_wizard — interactive first-time setup. Prompt for handle + host, resolve and
+# scaffold the person/host scopes by name, then present every connectable scope as a
+# checkbox menu with person + host pre-checked. The connector treats whatever is
+# selected as a flat list of scope paths; nothing here knows person/host are special
+# beyond proposing them as the default selection.
 run_wizard() {
     echo ""
     echo "First-time setup for this exobrain."
 
-    local default_id default_host id host person_coll host_coll
+    local default_id default_host id host
     default_id="$(git -C "$REPO_DIR" config user.email 2>/dev/null | sed 's/@.*//' || true)"
     [[ -z "$default_id" ]] && default_id="${USER:-me}"
     default_host="$(hostname -s 2>/dev/null || echo localhost)"
-    person_coll="$(scopes_collection_for_type "$REPO_DIR" person)"
-    host_coll="$(scopes_collection_for_type "$REPO_DIR" host)"
-
-    # Non-interactive: discover and connect, never write.
-    if ! is_interactive; then
-        id="$(sanitize_id "$default_id")"; host="$(sanitize_id "$default_host")"
-        CONNECTED_LEAVES=()
-        local p
-        while IFS= read -r p; do
-            [[ -n "$p" ]] && CONNECTED_LEAVES+=("$p/$host_coll/$host")
-        done < <(discover_person_dirs "$REPO_DIR" "$id")
-        if [[ ${#CONNECTED_LEAVES[@]} -eq 0 ]]; then
-            echo "  Non-interactive, no person scope for '$id' — guest mode (global scope only)."
-        else
-            echo "  Non-interactive — auto-connected: ${CONNECTED_LEAVES[*]}"
-        fi
-        return 0
-    fi
 
     printf 'Your handle (a short id for your person scope) [%s]: ' "$default_id" >/dev/tty
-    read -r id </dev/tty; id="$(sanitize_id "${id:-$default_id}")"
+    read -r id </dev/tty || true; id="$(sanitize_id "${id:-$default_id}")"
     printf 'This machine name (host scope) [%s]: ' "$default_host" >/dev/tty
-    read -r host </dev/tty; host="$(sanitize_id "${host:-$default_host}")"
+    read -r host </dev/tty || true; host="$(sanitize_id "${host:-$default_host}")"
 
-    # Build the shape menu: existing person dirs for this handle, then a new person
-    # under each existing container instance (group / team), then a new top-level person.
-    local opt_paths=() opt_labels=() rel cc cdir cname ctype
-    while IFS= read -r rel; do
-        [[ -n "$rel" ]] || continue
-        opt_paths+=("$rel"); opt_labels+=("Connect existing — $rel/")
-    done < <(discover_person_dirs "$REPO_DIR" "$id")
-    while IFS= read -r cc; do
-        [[ -n "$cc" ]] || continue
-        ctype="$(scope_type_for "$REPO_DIR" "$cc/_")"
-        for cdir in "$REPO_DIR/$cc"/*/; do
-            [[ -d "$cdir" ]] || continue
-            cname="${cdir%/}"; cname="${cname##*/}"
-            [[ -d "$REPO_DIR/$cc/$cname/$person_coll/$id" ]] && continue   # already listed above
-            opt_paths+=("$cc/$cname/$person_coll/$id")
-            opt_labels+=("New person under $ctype '$cname' — $cc/$cname/$person_coll/$id/")
-        done
-    done < <(scopes_container_collections "$REPO_DIR")
-    if [[ ! -d "$REPO_DIR/$person_coll/$id" ]]; then
-        opt_paths+=("$person_coll/$id"); opt_labels+=("New top-level person — $person_coll/$id/")
+    resolve_identity "$id" "$host"
+    scaffold_scope "$PERSON_PATH" person
+    scaffold_scope "$HOST_PATH" host
+
+    local items=() s SELECTED=()
+    while IFS= read -r s; do [[ -n "$s" ]] && items+=("$s"); done < <(list_connectable_scopes "$REPO_DIR")
+    multi_select "$PERSON_PATH,$HOST_PATH" ${items[@]+"${items[@]}"}
+
+    CONNECTED_LEAVES=( ${SELECTED[@]+"${SELECTED[@]}"} )
+    # Keep the person id only if the person scope was actually connected.
+    PERSON_ID=""
+    for s in ${SELECTED[@]+"${SELECTED[@]}"}; do [[ "$s" == "$PERSON_PATH" ]] && PERSON_ID="$id"; done
+    save_config
+}
+
+# resolve_from_flags — non-interactive identity from explicit flags. Used by
+# create-instance and the bootstrap test (which gather the answers themselves) and
+# any scripted setup. --guest connects nothing; --handle (+ --host) resolves and
+# scaffolds the person/host pair; --scope adds standalone scope paths verbatim.
+resolve_from_flags() {
+    CONNECTED_LEAVES=(); PERSON_ID=""
+    if ! $FLAG_GUEST && [[ -n "$FLAG_HANDLE" ]]; then
+        local handle host
+        handle="$(sanitize_id "$FLAG_HANDLE")"
+        host="$(sanitize_id "${FLAG_HOST:-$(hostname -s 2>/dev/null || echo localhost)}")"
+        resolve_identity "$handle" "$host"
+        scaffold_scope "$PERSON_PATH" person
+        scaffold_scope "$HOST_PATH" host
+        CONNECTED_LEAVES+=("$PERSON_PATH" "$HOST_PATH")
     fi
-
-    local person_path
-    if [[ ${#opt_paths[@]} -le 1 ]]; then
-        person_path="${opt_paths[0]}"
-    else
-        echo "" >/dev/tty; echo "Where should your person scope live?" >/dev/tty
-        local i
-        for i in "${!opt_labels[@]}"; do printf '  %d. %s\n' "$((i + 1))" "${opt_labels[$i]}" >/dev/tty; done
-        local choice
-        printf 'Select [1]: ' >/dev/tty; read -r choice </dev/tty; choice="${choice:-1}"
-        if [[ "$choice" =~ ^[0-9]+$ ]] && (( choice >= 1 && choice <= ${#opt_paths[@]} )); then
-            person_path="${opt_paths[$((choice - 1))]}"
-        else
-            echo "  Invalid selection — using the first option." >/dev/tty
-            person_path="${opt_paths[0]}"
-        fi
-    fi
-
-    scaffold_scope "$person_path" person
-    scaffold_scope "$person_path/$host_coll/$host" host
-    CONNECTED_LEAVES=("$person_path/$host_coll/$host")
-    PERSON_ID="$id"
+    local s
+    for s in ${FLAG_SCOPES[@]+"${FLAG_SCOPES[@]}"}; do
+        s="${s#/}"; s="${s%/}"
+        [[ -n "$s" ]] && CONNECTED_LEAVES+=("$s")
+    done
     save_config
 }
 
@@ -280,16 +339,27 @@ run_wizard() {
 # --------------------------------------------------------------------------
 
 AGENT="" ; RELINK=false ; CONFIGURE=false ; RENDER_ONLY=false
-for arg in "$@"; do
-    case "$arg" in
-        claude|codex|openclaw) AGENT="$arg" ;;
+FLAG_HANDLE="" ; FLAG_HOST="" ; FLAG_SCOPES=() ; FLAG_GUEST=false
+USAGE="Usage: $0 <claude|codex|openclaw> [--relink] [--configure] [--render-specs-only]
+              [--handle <id>] [--host <name>] [--scope <path>]... [--guest]"
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        claude|codex|openclaw) AGENT="$1" ;;
         --relink)             RELINK=true ;;
         --configure)          CONFIGURE=true ;;
         --render-specs-only)  RENDER_ONLY=true ;;
-        *) echo "Usage: $0 <claude|codex|openclaw> [--relink] [--configure] [--render-specs-only]" >&2; exit 2 ;;
+        --handle)             FLAG_HANDLE="${2:-}"; shift ;;
+        --handle=*)           FLAG_HANDLE="${1#*=}" ;;
+        --host)               FLAG_HOST="${2:-}"; shift ;;
+        --host=*)             FLAG_HOST="${1#*=}" ;;
+        --scope)              FLAG_SCOPES+=("${2:-}"); shift ;;
+        --scope=*)            FLAG_SCOPES+=("${1#*=}") ;;
+        --guest)              FLAG_GUEST=true ;;
+        *) echo "$USAGE" >&2; exit 2 ;;
     esac
+    shift
 done
-[[ -n "$AGENT" ]] || { echo "Usage: $0 <claude|codex|openclaw> [--relink] [--configure] [--render-specs-only]" >&2; exit 2; }
+[[ -n "$AGENT" ]] || { echo "$USAGE" >&2; exit 2; }
 
 # Hard dependency: jq drives config persistence and skills resolution. Fail
 # early with an install hint rather than deep inside the run with a cryptic error.
@@ -331,15 +401,26 @@ fi
 # Resolve config
 # --------------------------------------------------------------------------
 
-if $CONFIGURE || ! load_config; then
-    # --render-specs-only never prompts or writes config: a copy with no config
-    # renders as guest (global scope only), like --relink.
-    if $CONFIGURE || { ! $RELINK && ! $RENDER_ONLY; }; then
+# Identity source, in precedence order:
+#   explicit flags  >  existing/parent config  >  interactive prompts  >  guest
+flags_given=false
+if $FLAG_GUEST || [[ -n "$FLAG_HANDLE" || -n "$FLAG_HOST" || ${#FLAG_SCOPES[@]} -gt 0 ]]; then
+    flags_given=true
+fi
+
+if $flags_given; then
+    resolve_from_flags
+elif $CONFIGURE || ! load_config; then
+    # --relink / --render-specs-only never prompt or write config: with no config
+    # they render as guest (global scope only). A real first-time setup is
+    # interactive; a headless run with no flags and no config is guest.
+    if ! $RELINK && ! $RENDER_ONLY && is_interactive; then
         run_wizard
     else
         CONNECTED_LEAVES=()
     fi
 fi
+# else: load_config populated CONNECTED_LEAVES + PERSON_ID from existing config.
 
 GUEST_MODE=false
 [[ ${#CONNECTED_LEAVES[@]} -eq 0 ]] && GUEST_MODE=true

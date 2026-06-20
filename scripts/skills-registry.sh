@@ -68,7 +68,6 @@
 #   skills_link_suffix <home-scope> <owner>  — filename suffix for the symlink
 #   scope_type_for <repo_dir> <scope>        — human type label for a scope
 #   scopes_collection_for_type <repo_dir> <type> — collection dir for a scope type
-#   scopes_container_collections <repo_dir>      — collections that can hold a person
 #   sanitize_suffix <path>                   — filename-safe form of a scope path
 #   skills_resolve_external_json <repo_dir> <agent> <leaf...>
 #                                            — JSON array of resolved external skills
@@ -128,23 +127,6 @@ scopes_collection_for_type() {
         esac
     fi
     printf '%s' "$coll"
-}
-
-# scopes_container_collections <repo_dir> — collection names that can *contain* a
-# person scope: every scopes.json collection except the person and host pinpoint
-# collections, in scopes.json order. The setup wizard uses these to offer "a
-# person under a <group|team>" shapes.
-scopes_container_collections() {
-    local repo_dir="$1" person_coll host_coll
-    person_coll="$(scopes_collection_for_type "$repo_dir" person)"
-    host_coll="$(scopes_collection_for_type "$repo_dir" host)"
-    if [[ -f "$repo_dir/scopes.json" ]] && command -v jq >/dev/null 2>&1; then
-        jq -r --arg p "$person_coll" --arg h "$host_coll" \
-            '(.scopes // [])[] | .collection | select(. != $p and . != $h)' \
-            "$repo_dir/scopes.json" 2>/dev/null
-    else
-        printf '%s\n' groups teams
-    fi
 }
 
 # build_scope_chain <repo_dir> <leaf...>
