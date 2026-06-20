@@ -1,9 +1,0 @@
-{
-  "name": "route-fact-to-domain",
-  "description": "A durable financial fact is filed in the finance domain, not home or a workspace.",
-  "runs": 3,
-  "permission_profile": "action",
-  "pass_threshold": "all",
-  "timeout_seconds": 300,
-  "tags": ["scope", "routing"]
-}

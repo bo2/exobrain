@@ -176,12 +176,15 @@ Each phase is an independently shippable PR. Dependency order: 2 → 3 → {4, 5
      (person/host pre-checked); drop discovery + the headless auto-derive. *Done —
      PR #29, feed card 0046.*
 4. **create-instance split** — scaffold only; stop writing `.exobrain.json`; end by
-   calling `connect-agent <agent> --handle … --host …`. *In progress.*
-5. **seed scope** — `seed/AGENTS.md` + `seed/skills.json`; `connect-agent` seed
-   auto-detect.
-6. **Test split** — extract universal cases + runner into `exobrain-tests` (global,
-   tier `optional`); make cases self-seed fixtures; build `seed-tests`
-   (guest-on-seed + the connector harness + the builder-agent bootstrap test).
+   calling `connect-agent <agent> --handle … --host …`. *Done — PR #30, card 0047.*
+5. **seed scope** — `seed/AGENTS.md` + `build_scope_chain` seed auto-detect.
+   *Done — PR #31, card 0048.* (`seed/skills.json` landed in 6b with `seed-tests`.)
+6. **Test split** — *Done.*
+   - **6a** — `exobrain-tests` (global, optional): universal cases + runner + the
+     `--self`/`--instance` provisioner. *PR #32, card 0049.*
+   - **6b** — `seed-tests` (seed scope): from-seed build + `create-valid` + delegate
+     to `exobrain-tests`; relocate `test-connect-agent.sh`; `seed/skills.json`; retire
+     `seed/tests/`. *This PR, card 0050.*
 7. **Docs sweep** — `scopes.md`, `agents.md`, `machinery.md`, `skills.md`, seed
    READMEs; publish a feed card.
 
