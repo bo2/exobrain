@@ -108,10 +108,10 @@ How improvements move between this seed and downstream instances — see [`propa
 
 | Artifact | Role |
 |---|---|
-| `domains/exobrain/feed/` | The published changelog — dated pattern-cards (a problem, a pattern, the files it touches, adapt notes) that instances read to adopt. |
+| `seed/feed/` | The published changelog — dated pattern-cards (a problem, a pattern, the files it touches, adapt notes) that instances read (from the seed cache) to adopt. Seed-only; never copied into an instance. |
 | `exobrain-evolve` skill | The command an instance runs to move forward: fetch the seed into `src/exobrain-seed/`, diff the feed against its own adoption ledger, copy/re-synthesize each new card, record what it adopted. |
 
-A downstream instance keeps an adoption ledger of the card IDs it has taken; the seed, as the source, keeps none.
+A downstream instance keeps an adoption ledger (`adopted-feed.md` at its repo root) of the card IDs it has taken; the seed, as the source, keeps none.
 
 ## Behavioral rules
 

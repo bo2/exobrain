@@ -12,12 +12,15 @@ for f in AGENTS.md scopes.json skills.json skills.schema.json .exobrain.json \
     [[ -e "$INST/$f" ]] || fail "missing framework file: $f"
 done
 
-# Meta-domain copied in full, with the birth-time adoption ledger.
+# Meta-domain copied (concept docs only — the feed is seed-only, not shipped).
 for f in domains/exobrain/entities.md domains/exobrain/scopes.md \
-         domains/exobrain/propagation.md domains/exobrain/adopted-feed.md; do
+         domains/exobrain/propagation.md; do
     [[ -f "$INST/$f" ]] || fail "missing meta-domain file: $f"
 done
-[[ -d "$INST/domains/exobrain/feed" ]] || fail "missing domains/exobrain/feed/"
+# The birth-time adoption ledger lives at the instance root, not the meta-domain.
+[[ -f "$INST/adopted-feed.md" ]] || fail "missing adopted-feed.md ledger at instance root"
+# The seed's feed of cards must never ship into an instance.
+[[ ! -e "$INST/domains/exobrain/feed" ]] || fail "domains/exobrain/feed/ should not ship (cards are seed-only)"
 
 # The three shipped skills are present.
 for s in exobrain-persist exobrain-evolve exobrain-reader-lens; do

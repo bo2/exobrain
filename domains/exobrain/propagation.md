@@ -2,7 +2,7 @@
 
 How exobrains share improvements **without** a fork-and-merge relationship.
 
-Three words, kept distinct: **propagation** is the whole exchange between seed and instances; **adoption** (verb *adopt*) is the seed→instance direction — an instance taking in the seed's changes, run via the `exobrain-evolve` skill; **publishing** is the reverse — an instance contributing a pattern back as a feed card. The wiring-refresh op (`connect-agent.sh --relink`) is a separate concern and is deliberately not called "update", so the two never collide.
+Three words, kept distinct: **propagation** is the whole exchange between seed and instances; **adoption** (verb *adopt*) is the seed→instance direction — an instance taking in the seed's changes, run via the `exobrain-evolve` skill; **publishing** is the reverse — contributing a pattern back as a feed card; since cards live only on the seed, an instance publishes by adding one in the seed repo, not in its own tree. The wiring-refresh op (`connect-agent.sh --relink`) is a separate concern and is deliberately not called "update", so the two never collide.
 
 The template era assumed a human running `git merge upstream` against a fork. That breaks the moment two exobrains diverge — different durable-content dir names, with/without groups, restructured scripts. The agentic era assumes something the template era couldn't: **a competent adapter sits at every node.** So an exobrain has no upstream remote and never merges. Instead, an agent reads the seed's **feed**, **copies** the files an instance hasn't diverged, and **re-synthesizes** the rest into local names and structure.
 
@@ -18,7 +18,7 @@ This is a deliberate hybrid: **copy** is exact and cheap for the framework code 
 
 ## The feed is the changelog
 
-Every change worth propagating is **published** as a dated **pattern-card** under `domains/exobrain/feed/` — a problem, a pattern, optionally the files it touches, and adapt notes. The feed is the changelog an instance reads to adopt. Format + ledger: [`feed/README.md`](feed/README.md). Each card carries a stable ID so provenance survives even across divergence.
+Every change worth propagating is **published** by the seed as a dated **pattern-card** under `seed/feed/` — a problem, a pattern, optionally the files it touches, and adapt notes. The feed is the changelog an instance reads to adopt, from the seed cache — it keeps no copy of its own. Format: the seed's `seed/feed/README.md`. Each card carries a stable ID so provenance survives even across divergence.
 
 ## The adoption workflow
 
@@ -53,6 +53,6 @@ When an agent builds a fresh exobrain by reading this concept (`create-instance`
 2. Choose names and structure that fit the principal — durable-content dir name, whether groups exist, which scopes are populated. Divergence is expected.
 3. Preserve the **invariants** above. Carry the framework scripts, adapting them to your structure.
 4. Seed the minimum: `AGENTS.md`, a `domains/exobrain/` meta-domain, one person scope, an empty `workspaces/`, and the `exobrain-evolve` skill.
-5. Seed the adoption ledger with the cards the seed currently publishes — you built from them — so `exobrain-evolve` carries you forward from there.
+5. Seed the adoption ledger (`adopted-feed.md` at the instance root) with the cards the seed currently publishes — you built from them — so `exobrain-evolve` carries you forward from there.
 
 The proof of the model is that the exobrain you're reading this in was built exactly this way.
