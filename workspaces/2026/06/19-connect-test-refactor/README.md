@@ -1,5 +1,5 @@
 ---
-status: active
+status: resolved
 created: 2026-06-19
 owner: oleg
 related:
@@ -9,7 +9,8 @@ related:
   - scripts/connect-agent.sh
   - scripts/skills-registry.sh
   - seed/skills/create-instance/
-  - seed/tests/
+  - seed/skills/seed-tests/
+  - skills/exobrain-tests/
 ---
 
 # Connect & test refactor
@@ -185,8 +186,15 @@ Each phase is an independently shippable PR. Dependency order: 2 → 3 → {4, 5
    - **6b** — `seed-tests` (seed scope): from-seed build + `create-valid` + delegate
      to `exobrain-tests`; relocate `test-connect-agent.sh`; `seed/skills.json`; retire
      `seed/tests/`. *This PR, card 0050.*
-7. **Docs sweep** — `scopes.md`, `agents.md`, `machinery.md`, `skills.md`, seed
-   READMEs; publish a feed card.
+7. **Docs sweep** — consistency pass over the depth docs (`skills.md` for the
+   seed-scoped-skill model, `agents.md` sidecar scope wording); fix `create-instance`
+   to ship all global skills (incl. `exobrain-tests`) with the correct `force`-based
+   `skills.json` shape (the old example used an invalid `scope` field). *Done — this
+   PR, card 0051.*
+
+**All phases complete.** The connection model and test suite are reworked end to
+end; this workspace is the record of how. Durable behavior lives in the depth docs
+(`scopes.md`, `agents.md`, `skills.md`, `machinery.md`) and feed cards 0043–0051.
 
 ## Resolved questions
 

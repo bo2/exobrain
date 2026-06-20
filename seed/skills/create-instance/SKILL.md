@@ -70,15 +70,18 @@ Create under `$DST`:
 - `scopes.json` — copy `$SRC/scopes.json` (declares collection→type labels).
 - `tools/` — copy `$SRC/tools/` (the catalog `README.md` + the `example-tool.md` template).
 - `skills.schema.json` — copy `$SRC/skills.schema.json`.
-- `skills.json` — start minimal, registering the copied skills: `{ "$schema": "./skills.schema.json", "skills": [ { "name": "exobrain-reader-lens", "scope": "global", "owner": "", "tier": "optional" }, { "name": "exobrain-evolve", "scope": "global", "owner": "", "tier": "optional" }, { "name": "exobrain-persist", "scope": "global", "owner": "", "tier": "optional" }, { "name": "exobrain-ab", "scope": "global", "owner": "", "tier": "optional" } ] }`.
+- `skills.json` — register the copied global skills. Each is a declaration with
+  `force: true` (a global skill reaches everyone; there is **no `scope` field** — the
+  home scope is wherever the `skills.json` lives): `{ "$schema": "./skills.schema.json", "skills": [ { "name": "exobrain-reader-lens", "owner": "", "tier": "optional", "force": true }, { "name": "exobrain-evolve", "owner": "", "tier": "optional", "force": true }, { "name": "exobrain-persist", "owner": "", "tier": "optional", "force": true }, { "name": "exobrain-domains", "owner": "", "tier": "optional", "force": true }, { "name": "exobrain-ab", "owner": "", "tier": "optional", "force": true }, { "name": "exobrain-tools", "owner": "", "tier": "optional", "force": true }, { "name": "exobrain-tests", "owner": "", "tier": "optional", "force": true } ] }`.
 - `.gitignore`, `.env.example` — copy from `$SRC`.
 - `scripts/` — copy the whole `$SRC/scripts/` directory. These are the framework
   (`connect-agent.sh`, `skills-registry.sh`, `validate-exobrain.sh`,
   `skills-validate.sh`, `skills-status.sh`, `skills-promote.sh`, …). `chmod +x scripts/*.sh`.
-- `skills/exobrain-reader-lens/`, `skills/exobrain-evolve/`, `skills/exobrain-persist/`,
-  and `skills/exobrain-ab/` — copy all from `$SRC`. `exobrain-evolve` is how the instance
-  pulls future changes, so it ships *in* the instance; `exobrain-ab` lets the instance
-  A/B-test its own context changes.
+- `skills/` — copy each global skill dir from `$SRC/skills/`: `exobrain-reader-lens`,
+  `exobrain-evolve`, `exobrain-persist`, `exobrain-domains`, `exobrain-ab`,
+  `exobrain-tools`, `exobrain-tests`. These ship *in* the instance — e.g.
+  `exobrain-evolve` pulls future changes, and `exobrain-tests` lets the instance
+  self-test its own agent behavior. (Match this set to what `skills.json` registers.)
 - **Never copy `$SRC/seed/`.** Everything under `seed/` is seed-local — the
   `create-instance` generator and the behavioral test harness — and lives only in
   the canonical seed. An instance has nothing to generate or test, so `seed/` must
