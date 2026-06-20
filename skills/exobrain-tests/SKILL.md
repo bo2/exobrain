@@ -60,8 +60,11 @@ on `claude`** regardless of the agent under test, so verdicts are consistent.
 ## Permission profiles
 
 Set per case in `meta.json` (`permission_profile`): `read-only` → `--permission-mode
-plan`; `action`/`build` → `acceptEdits` + `settings/allow.json` (a curated allowlist);
-`static` → no agent call, `check.sh` asserts against the template directly.
+plan`; `action` → `acceptEdits` + `settings/allow.json` (a curated allowlist); `build`
+(the from-seed instance scaffold, not a case) → `bypassPermissions`, since it runs the
+instance's own framework scripts by arbitrary paths a relative-path allowlist can't
+match — hermetic and network-neutralized, so the gate is unnecessary; `static` → no
+agent call, `check.sh` asserts against the template directly.
 
 ## Add a case
 
