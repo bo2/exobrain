@@ -36,7 +36,7 @@ docs under `tools/`, `skills.json`, `workspaces/*`, the adoption ledger) is
 ## 1. Fetch the seed
 
 Read the seed repository URL from this instance's adoption-ledger header
-(`<domains-dir>/exobrain/adopted-feed.md`); fall back to
+(`adopted-feed.md`, at the repo root); fall back to
 `https://github.com/bo2/exobrain` if it's absent. Cache the seed in a gitignored
 `src/exobrain-seed/` and set `$SRC` to that path: if the cache exists, `git -C
 src/exobrain-seed pull --ff-only`; otherwise `git clone <url> src/exobrain-seed`.
@@ -45,8 +45,8 @@ it, so always pull-or-clone rather than assuming it's there.
 
 ## 2. Find what's new since last update
 
-- Read this instance's adoption ledger: `<domains-dir>/exobrain/adopted-feed.md` — the card IDs already adopted.
-- Read `$SRC/domains/exobrain/feed/` — every card. **New** = cards whose `id` is not in the ledger, oldest first.
+- Read this instance's adoption ledger: `adopted-feed.md` (repo root) — the card IDs already adopted.
+- Read `$SRC/seed/feed/` — every card. **New** = cards whose `id` is not in the ledger, oldest first.
 - If there are no new cards, say so — but still run the drift check (step 5), then stop.
 
 ## 3. Triage — permissive
@@ -90,7 +90,7 @@ Fix anything that breaks before recording.
 
 ## 7. Record
 
-Append each adopted card to `<domains-dir>/exobrain/adopted-feed.md`: id, title,
+Append each adopted card to `adopted-feed.md` (repo root): id, title,
 today's date, and how you applied it (copied / rewired). That ledger is your
 provenance — it's how the next update knows where you left off.
 
