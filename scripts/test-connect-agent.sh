@@ -120,7 +120,7 @@ add_tool() {
     printf '# %s\n\n%s\n' "$name" "$summary" > "$dir/$name.md"
 }
 
-write_config() { printf '{"connected":["%s"],"agents":["%s"]}\n' "$2" "${3:-claude}" > "$1/.exobrain.json"; }
+write_config() { printf '{"connected_scopes":["%s"],"agents":["%s"]}\n' "$2" "${3:-claude}" > "$1/.exobrain.json"; }
 
 # render <repo> <agent> — render the agent surface side-effect-free, HOME-isolated.
 render() {
