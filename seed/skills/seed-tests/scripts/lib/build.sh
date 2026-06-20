@@ -61,7 +61,7 @@ build_raw_instance() {
     render_build_prompt "$builder" >"$prompt_file"
 
     log "[build] running create-instance via $builder (one agent session; may take minutes)…"
-    invoke_agent "$builder" "$dest" "$prompt_file" build "${BUILD_TIMEOUT:-900}" "${BUILD_MODEL:-}" \
+    invoke_agent "$builder" "$dest" "$prompt_file" build "${BUILD_TIMEOUT:-1800}" "${BUILD_MODEL:-}" \
         text "$dest/build.stdout.txt"
     log "[build] create-instance session finished ($builder rc=$?)"
 

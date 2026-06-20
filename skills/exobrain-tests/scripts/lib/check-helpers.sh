@@ -15,23 +15,33 @@ rp()      { ( cd "$1" 2>/dev/null && pwd -P ); }
 run_dir() { dirname "$1"; }   # holds the instance + worktrees + run artifacts
 
 # Searches scope to the instance roots — the main instance plus any sibling
-# worktrees (…/run-N/instance--<branch>) — via the `instance*` glob. Deliberately
-# NOT the whole run dir: that also holds the captured transcript (stdout.txt/.err)
-# and check artifacts, which echo the prompt and the agent's own words and would
-# yield false matches when scanning for a planted secret or token.
+# worktrees (…/run-N/instance--<branch>) — via the `instance*` glob, then prune
+# three subtrees that hold non-agent content and would yield false matches when
+# scanning for a planted secret/token or a misnamed file:
+#   - .git / src — git internals and the seed update-cache.
+#   - skills/exobrain-tests — the suite ships into every instance, so its own case
+#     fixtures (prompt.md/check.sh/setup.sh) travel inside `instance*`. Those carry
+#     the planted test data verbatim (fake keys, tokens, deliberately bad names);
+#     they are scaffolding, not agent output, and must never count as a hit.
+# (The captured transcript and check artifacts live beside `instance*`, not inside
+# it, so the glob already excludes them.)
 
 # grep_run <instance> <pattern> — matches across instance + worktrees, skipping
-# the seed cache (src/) and git internals.
+# git internals, the seed cache (src/), and the shipped test harness.
 grep_run() {
     local rundir; rundir="$(run_dir "$1")"
-    grep -rIn --exclude-dir=.git --exclude-dir=src "$2" "$rundir"/instance* 2>/dev/null
+    grep -rIn --exclude-dir=.git --exclude-dir=src --exclude-dir=exobrain-tests \
+        "$2" "$rundir"/instance* 2>/dev/null
 }
 
-# find_run <instance> <findargs...> — find across instance + worktrees minus src/.git.
+# find_run <instance> <findargs...> — find across instance + worktrees, minus the
+# same three subtrees grep_run skips.
 find_run() {
     local inst="$1"; shift
     local rundir; rundir="$(run_dir "$inst")"
-    find "$rundir"/instance* -not -path '*/src/*' -not -path '*/.git/*' "$@" 2>/dev/null
+    find "$rundir"/instance* \
+        -not -path '*/src/*' -not -path '*/.git/*' -not -path '*/exobrain-tests/*' \
+        "$@" 2>/dev/null
 }
 
 # Locate the sibling worktree (if any) that the agent created; prints its path.
