@@ -44,6 +44,8 @@ Connecting a leaf implies its whole ancestor chain. The wiring algorithm:
 
 The old fixed ladder (`global < team < person < host`) is just one chain shape. Solo, family, and org trees all flow through the same walk. Empty `connected` = guest mode (global only).
 
+A connected leaf can be **any** scope — any `AGENTS.md`-bearing dir — not only a person/host pinpoint scope or one on a single branch. Because chains are unioned, you may list several leaves on different branches and even a standalone top-level scope (e.g. a `seed/` scope) alongside your person/host chain; each joins resolution at its own depth, deepest still winning. The `connect-agent.sh` wizard only auto-derives the person/host leaves; to connect any other scope, add its path to `connected[]` directly — the resolver honors any leaf with an `AGENTS.md`.
+
 ## What we explicitly do NOT scope
 
 | Would-be scope | Why | Where that content lives |
