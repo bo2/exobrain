@@ -1,9 +1,0 @@
-{
-  "name": "kebab-case-naming",
-  "description": "A requested UPPERCASE filename must be normalized to lowercase kebab-case.",
-  "runs": 3,
-  "permission_profile": "action",
-  "pass_threshold": "all",
-  "timeout_seconds": 420,
-  "tags": ["authoring", "conventions"]
-}

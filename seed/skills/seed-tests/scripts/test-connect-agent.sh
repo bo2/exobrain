@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
 # test-connect-agent.sh — tests for the connector + skills registry under the
-# scope-tree / opt-in model.
+# scope-tree / opt-in model. Seed-local (lives under seed-tests); it exercises the
+# framework scripts in <repo>/scripts/.
 #
-#   scripts/test-connect-agent.sh            # run all
-#   scripts/test-connect-agent.sh <pattern>  # run tests whose name matches <pattern>
+#   seed/skills/seed-tests/scripts/test-connect-agent.sh            # run all
+#   seed/skills/seed-tests/scripts/test-connect-agent.sh <pattern>  # filter by name
 #
 # Each test builds an isolated fake exobrain in a temp dir and renders the agent
 # surface side-effect-free (connect-agent.sh --render-specs-only with HOME /
@@ -14,9 +15,11 @@ set -uo pipefail
 
 TESTS_RUN=0; TESTS_PASSED=0; TESTS_FAILED=0; FAILURES=()
 FILTER="${1:-}"
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-# shellcheck source=skills-registry.sh
-source "$SCRIPT_DIR/skills-registry.sh"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"          # .../seed-tests/scripts
+REPO_DIR="$(cd "$SCRIPT_DIR/../../../.." && pwd)"     # <repo> — the seed
+SCRIPTS_DIR="$REPO_DIR/scripts"                       # framework scripts under test
+# shellcheck source=../../../../scripts/skills-registry.sh
+source "$SCRIPTS_DIR/skills-registry.sh"
 
 RED='\033[0;31m'; GREEN='\033[0;32m'; DIM='\033[0;90m'; RESET='\033[0m'
 
@@ -55,11 +58,11 @@ setup_fake_exobrain() {
     local repo="$TEST_DIR/exobrain"
     mkdir -p "$repo/scripts"
     git -C "$repo" init -q
-    cp "$SCRIPT_DIR/connect-agent.sh"         "$repo/scripts/"
-    cp "$SCRIPT_DIR/skills-registry.sh"       "$repo/scripts/"
-    cp "$SCRIPT_DIR/fetch-external-skills.sh"  "$repo/scripts/"
-    cp "$SCRIPT_DIR/skills-validate.sh"        "$repo/scripts/"
-    cp "$SCRIPT_DIR/../skills.schema.json"     "$repo/"
+    cp "$SCRIPTS_DIR/connect-agent.sh"         "$repo/scripts/"
+    cp "$SCRIPTS_DIR/skills-registry.sh"       "$repo/scripts/"
+    cp "$SCRIPTS_DIR/fetch-external-skills.sh"  "$repo/scripts/"
+    cp "$SCRIPTS_DIR/skills-validate.sh"        "$repo/scripts/"
+    cp "$REPO_DIR/skills.schema.json"          "$repo/"
     chmod +x "$repo/scripts/"*.sh
     printf '# Exobrain\n' > "$repo/AGENTS.md"
     printf '{"scopes":[{"type":"group","collection":"groups"},{"type":"person","collection":"people"},{"type":"host","collection":"hosts"}]}\n' > "$repo/scopes.json"
