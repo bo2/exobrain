@@ -1,0 +1,9 @@
+{
+  "name": "smoke",
+  "description": "Trivial read-only task; exercises the whole pipeline cheaply.",
+  "runs": 1,
+  "permission_profile": "read-only",
+  "pass_threshold": "all",
+  "timeout_seconds": 120,
+  "tags": ["infra"]
+}
