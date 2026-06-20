@@ -130,6 +130,15 @@ render() {
         "OPENCLAW_WORKSPACE=$TEST_DIR/ocw" bash scripts/connect-agent.sh "$agent" --render-specs-only)
 }
 
+# render_flags <repo> <agent> <flag...> — render with explicit identity flags, so
+# resolve_from_flags runs and writes .exobrain.json into the sandbox.
+render_flags() {
+    local repo="$1" agent="$2"; shift 2
+    mkdir -p "$TEST_DIR/home" "$TEST_DIR/codex" "$TEST_DIR/ocw"
+    (cd "$repo" && env "HOME=$TEST_DIR/home" "CODEX_HOME=$TEST_DIR/codex" \
+        "OPENCLAW_WORKSPACE=$TEST_DIR/ocw" bash scripts/connect-agent.sh "$agent" --render-specs-only "$@")
+}
+
 # resolve <repo> <leaf> — TSV of resolved skills (empty agent = no filtering).
 resolve() { skills_resolve "$1" "" "$2"; }
 # tier of <name> in resolved TSV, or "ABSENT".
@@ -368,6 +377,39 @@ test_external_resolve_plan() {
 }
 
 # ---------------------------------------------------------------------------
+# Tests — flag-driven (non-interactive) identity resolution
+# ---------------------------------------------------------------------------
+
+test_flags_connect_person_host() {
+    local r; r="$(setup_fake_exobrain)"
+    render_flags "$r" claude --handle alice --host h1 >/dev/null 2>&1 || return 1
+    assert_eq "alice" "$(jq -r '.person' "$r/.exobrain.json")" "person stored from --handle" || return 1
+    assert_eq "true" "$(jq '(.connected_scopes // []) | index("people/alice/hosts/h1") != null' "$r/.exobrain.json")" "host leaf connected" || return 1
+    assert_file "$r/people/alice/AGENTS.md" "person scope scaffolded at conventional location"
+}
+
+test_flags_guest() {
+    local r; r="$(setup_fake_exobrain)"
+    render_flags "$r" claude --guest >/dev/null 2>&1 || return 1
+    assert_eq "[]" "$(jq -c '.connected_scopes' "$r/.exobrain.json")" "guest connects nothing" || return 1
+    assert_eq "null" "$(jq -r '.person // "null"' "$r/.exobrain.json")" "guest stores no person"
+}
+
+test_flags_extra_scope() {
+    local r; r="$(setup_fake_exobrain)"; add_person "$r" people/alice
+    mkdir -p "$r/lab"; printf '# lab scope\n' > "$r/lab/AGENTS.md"
+    render_flags "$r" claude --handle alice --host h1 --scope lab >/dev/null 2>&1 || return 1
+    assert_eq "true" "$(jq '(.connected_scopes // []) | index("lab") != null' "$r/.exobrain.json")" "standalone --scope connected"
+}
+
+test_flags_name_match_nested() {
+    local r; r="$(setup_fake_exobrain)"; add_group "$r" acme; add_person "$r" groups/acme/people/alice
+    render_flags "$r" claude --handle alice --host h1 >/dev/null 2>&1 || return 1
+    assert_eq "true" "$(jq '(.connected_scopes // []) | index("groups/acme/people/alice/hosts/h1") != null' "$r/.exobrain.json")" "name-match found the nested person/host" || return 1
+    assert_no_file "$r/people/alice/AGENTS.md" "did not scaffold a duplicate top-level person"
+}
+
+# ---------------------------------------------------------------------------
 
 run_test "scope chain shallow->deep"          test_scope_chain_shallow_to_deep
 run_test "force reaches non-owner"             test_force_reaches_nonowner
@@ -390,6 +432,10 @@ run_test "validate clean"                      test_validate_clean
 run_test "validate dangling override"          test_validate_dangling_override
 run_test "fetcher accepts --leaves"            test_fetcher_accepts_leaves_no_external
 run_test "external resolve plan"               test_external_resolve_plan
+run_test "flags connect person+host"           test_flags_connect_person_host
+run_test "flags guest connects nothing"        test_flags_guest
+run_test "flags extra --scope"                 test_flags_extra_scope
+run_test "flags name-match nested"             test_flags_name_match_nested
 
 echo ""
 printf "Ran %d  ${GREEN}passed %d${RESET}  ${RED}failed %d${RESET}\n" "$TESTS_RUN" "$TESTS_PASSED" "$TESTS_FAILED"

@@ -42,9 +42,11 @@ Connecting a leaf implies its whole ancestor chain. The wiring algorithm:
 2. Union chains across leaves, dedup shared prefixes, sort **shallow → deep**.
 3. Resolve skills / specs / tools across that ordered list, **deepest wins**.
 
-The old fixed ladder (`global < team < person < host`) is just one chain shape. Solo, family, and org trees all flow through the same walk. Empty `connected` = guest mode (global only).
+The old fixed ladder (`global < team < person < host`) is just one chain shape. Solo, family, and org trees all flow through the same walk. Empty `connected_scopes` = guest mode (global only).
 
-A connected leaf can be **any** scope — any `AGENTS.md`-bearing dir — not only a person/host pinpoint scope or one on a single branch. Because chains are unioned, you may list several leaves on different branches and even a standalone top-level scope (e.g. a `seed/` scope) alongside your person/host chain; each joins resolution at its own depth, deepest still winning. The `connect-agent.sh` wizard only auto-derives the person/host leaves; to connect any other scope, add its path to `connected[]` directly — the resolver honors any leaf with an `AGENTS.md`.
+A connected leaf can be **any** scope — any `AGENTS.md`-bearing dir — not only a person/host pinpoint scope or one on a single branch. Because chains are unioned, you may list several leaves on different branches and even a standalone top-level scope (e.g. a `seed/` scope) alongside your person/host chain; each joins resolution at its own depth, deepest still winning.
+
+The connector resolves identity by **name-match** — your handle and hostname match a scope by its leaf name (the `people/`·`hosts/` parent is a tiebreaker, not a requirement), falling back to the conventional collection path when the scope doesn't exist yet. The interactive wizard then offers a checkbox menu of every connectable scope with person + host pre-checked, so connecting a standalone scope is a toggle, not a hand-edit. Non-interactive callers pass identity as flags — `--handle` / `--host` / `--scope` / `--guest`.
 
 ## What we explicitly do NOT scope
 
