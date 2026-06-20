@@ -50,7 +50,7 @@ The use-case glossary that onboarding maps goals against lives in [`tools/README
 
 ## State: `.exobrain.json`
 
-Gitignored, at the repo root. Holds an **identity** block (person `id`, `hostname`, connected scopes — written by the `connect-agent.sh` wizard) and, optionally, a **tools** block keyed by tool name with per-tool state (`wanted`, `env`, `verify`, `verified_at`). `connect-agent.sh` preserves the tools block when it rewrites identity, so a tool keeps its state even if its doc moves between scopes.
+Gitignored, at the repo root. Holds an **identity** block (person `id`, `hostname`, `connected_scopes` — written by the `connect-agent.sh` wizard) and, optionally, a **tools** block keyed by tool name with per-tool state (`wanted`, `env`, `verify`, `verified_at`). `connect-agent.sh` preserves the tools block when it rewrites identity, so a tool keeps its state even if its doc moves between scopes.
 
 ## Connecting a tool
 

@@ -18,7 +18,7 @@ CONFIG_FILE="$REPO_DIR/.exobrain.json"
 CONNECTED_LEAVES=()
 if [[ -f "$CONFIG_FILE" ]]; then
     while IFS= read -r l; do [[ -n "$l" ]] && CONNECTED_LEAVES+=("$l"); done \
-        < <(jq -r '(.connected // [])[]' "$CONFIG_FILE" 2>/dev/null)
+        < <(jq -r '(.connected_scopes // [])[]' "$CONFIG_FILE" 2>/dev/null)
 fi
 
 filter_tier="" ; filter_agent="" ; plain=false ; show_all=false

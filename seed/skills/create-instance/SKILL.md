@@ -110,7 +110,7 @@ publishes the feed, it doesn't adopt).
   one-line orientation (see `<domains-dir>/exobrain/authoring.md`).
 - `workspaces/README.md` — copy from `$SRC`.
 - Write `.exobrain.json` (gitignored) with the connected leaf and chosen agent(s):
-  `{ "connected": ["people/<handle>/hosts/<machine>"], "agents": [] }`.
+  `{ "connected_scopes": ["people/<handle>/hosts/<machine>"], "agents": [] }`.
 
 ## 5. If the user renamed the durable-content dir
 

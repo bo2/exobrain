@@ -4,7 +4,7 @@
 #   connect-agent.sh <claude|codex|openclaw> [--relink] [--configure] [--render-specs-only]
 #
 # A scope is any directory containing an AGENTS.md. Connecting a leaf scope
-# (recorded in .exobrain.json `connected`) wires in that leaf plus every
+# (recorded in .exobrain.json `connected_scopes`) wires in that leaf plus every
 # AGENTS.md-bearing ancestor up to the repo root — resolving skills, specs, and
 # the optional-skills index innermost-wins. See domains/exobrain/ for the model.
 #
@@ -136,13 +136,13 @@ CONNECTED_LEAVES=()
 load_config() {
     [[ -f "$CONFIG" ]] || return 1
     local arr
-    arr="$(jq -r '(.connected // []) | .[]' "$CONFIG" 2>/dev/null)" || return 1
+    arr="$(jq -r '(.connected_scopes // []) | .[]' "$CONFIG" 2>/dev/null)" || return 1
     CONNECTED_LEAVES=()
     while IFS= read -r l; do [[ -n "$l" ]] && CONNECTED_LEAVES+=("$l"); done <<< "$arr"
     return 0
 }
 
-# save_config — write connected[] + agents[], preserving any other keys (e.g. a
+# save_config — write connected_scopes[] + agents[], preserving any other keys (e.g. a
 # tools block owned by a setup skill).
 save_config() {
     local leaves_json agents_json existing="{}"
@@ -151,7 +151,7 @@ save_config() {
     agents_json="$(jq -r '(.agents // [])' <<< "$existing" 2>/dev/null || echo '[]')"
     agents_json="$(jq --arg a "$AGENT" '. as $cur | ($cur + [$a]) | unique' <<< "$agents_json")"
     jq -n --argjson e "$existing" --argjson c "$leaves_json" --argjson ag "$agents_json" \
-        '$e + {connected: $c, agents: $ag}' > "${CONFIG}.tmp" && mv "${CONFIG}.tmp" "$CONFIG"
+        '$e + {connected_scopes: $c, agents: $ag}' > "${CONFIG}.tmp" && mv "${CONFIG}.tmp" "$CONFIG"
     echo "  ✓ $CONFIG"
 }
 
