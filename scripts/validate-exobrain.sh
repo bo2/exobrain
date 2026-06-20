@@ -4,7 +4,8 @@
 # pre-push hook installed by connect-agent.sh and is also runnable manually.
 #
 # Catches:
-#   - AGENTS.md outside auto-loaded scopes (root, group/team, person, host).
+#   - AGENTS.md inside a content tree (domains/, workspaces/) — any other dir is
+#     a valid scope, so only content-tree placement is rejected.
 #   - Custom UPPERCASE.md filenames (allowed: standard open-source +
 #     AI/tool entry-point conventions).
 #   - JSON syntax errors in skills.json and scopes.json files.
@@ -45,10 +46,10 @@ find_repo() {
 }
 
 # ---------------------------------------------------------------------------
-# AGENTS.md placement — the scope flag. Allowed at the repo root and at any
-# identity-scope dir. Forbidden inside content trees (domains/, workspaces/),
-# where the entry point is README.md. Path segments may not contain the reserved
-# scope-suffix separator "__".
+# AGENTS.md placement — the scope flag. Any dir may carry one (it becomes a scope);
+# forbidden only inside content trees (domains/, workspaces/), where the entry point
+# is README.md. Path segments may not contain the reserved scope-suffix separator
+# "__".
 # ---------------------------------------------------------------------------
 
 while IFS= read -r f; do
