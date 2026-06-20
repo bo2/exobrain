@@ -20,7 +20,7 @@ Specs, skills, and docs are written so the same content works for every agent �
 
 ## Per-scope sidecars
 
-At any scope (global root, group, person, host), three sidecar filenames are recognized alongside `AGENTS.md`: `CLAUDE.md`, `CODEX.md`, `OPENCLAW.md`. Each loads *only* when `connect-agent.sh` runs for that agent. Use them for tooling-primitive names ("use Edit, not Bash sed"), MCP registration commands, and per-agent quirks. Content that applies under all agents goes in the universal `AGENTS.md` at the same scope — never duplicated into each sidecar.
+At any scope (the repo root, a group/person/host, or a standalone scope like `seed/`), three sidecar filenames are recognized alongside `AGENTS.md`: `CLAUDE.md`, `CODEX.md`, `OPENCLAW.md`. Each loads *only* when `connect-agent.sh` runs for that agent. Use them for tooling-primitive names ("use Edit, not Bash sed"), MCP registration commands, and per-agent quirks. Content that applies under all agents goes in the universal `AGENTS.md` at the same scope — never duplicated into each sidecar.
 
 ## Per-scope script suffix
 
