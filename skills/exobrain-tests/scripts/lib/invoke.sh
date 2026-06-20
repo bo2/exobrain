@@ -5,7 +5,10 @@
 #   agent:   claude | codex
 #   profile: read-only | action | build | static
 #     read-only    -> no writes (claude plan mode / codex read-only sandbox)
-#     action/build -> writable (claude acceptEdits+allowlist / codex workspace-write)
+#     action       -> writable, curated allowlist (claude acceptEdits+allowlist /
+#                     codex workspace-write) — the behavioral cases
+#     build        -> writable, no allowlist gate (claude bypassPermissions /
+#                     codex workspace-write) — the from-seed instance scaffold
 #     static       -> no agent call at all (caller checks state directly)
 #   Writes the transcript to <out_file> and stderr to <out_file>.err.
 #   Returns the engine's exit code (124 = timed out). Always 0 for `static`.
@@ -30,7 +33,17 @@ _invoke_claude() {
     case "$profile" in
         read-only)
             perm=(--permission-mode plan) ;;
-        action|build)
+        build)
+            # The from-seed build scaffolds a whole instance and runs the instance's
+            # own framework scripts (validate-exobrain.sh, connect-agent.sh, …) by
+            # whatever path the agent picks — usually absolute, since the Bash tool's
+            # cwd doesn't persist between calls. A curated relative-path allowlist
+            # can't match those, so it would stall the build on non-answerable
+            # approval prompts until timeout. The build is hermetic (throwaway tmp
+            # sandbox) and network-neutralized (NOPROXY), so bypass the permission
+            # gate; --settings still carries the deny guards (no push/network).
+            perm=(--permission-mode bypassPermissions --settings "$ALLOW_SETTINGS") ;;
+        action)
             perm=(--permission-mode "${EXOBRAIN_TEST_PERMISSION_MODE:-acceptEdits}"
                   --settings "$ALLOW_SETTINGS") ;;
         *)
