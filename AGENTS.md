@@ -13,7 +13,7 @@ Don't cite a workspace from anything that must stay current (domains, skills) �
 
 ## Scopes
 
-A **scope** is any directory containing an `AGENTS.md` — that file is the scope flag. The repo root is the `global` scope. Scopes nest by directory containment; you *connect* a leaf scope (recorded in `.exobrain.json`), and wiring resolves that leaf plus every `AGENTS.md`-bearing ancestor, innermost wins:
+A **scope** is any directory containing an `AGENTS.md` — that file is the scope flag. The repo root is the `global` scope. Scopes nest by directory containment; you *connect* one or more leaf scopes (recorded in `.exobrain.json`) — any `AGENTS.md` dir, not only a person/host or one branch — and wiring resolves each leaf plus its `AGENTS.md`-bearing ancestors, chains unioned, innermost wins:
 
 ```
 global  <  …ancestor scopes…  <  connected leaf
