@@ -410,6 +410,31 @@ test_flags_name_match_nested() {
 }
 
 # ---------------------------------------------------------------------------
+# Tests — the canonical seed's own seed/ scope auto-joins the chain
+# ---------------------------------------------------------------------------
+
+test_seed_scope_auto_joins_chain() {
+    local r; r="$(setup_fake_exobrain)"; add_person "$r" people/alice
+    mkdir -p "$r/seed"; printf '# seed scope\n' > "$r/seed/AGENTS.md"
+    local chain; chain="$(build_scope_chain "$r" people/alice/hosts/h1 | tr '\n' ' ')"
+    assert_eq "global seed people/alice people/alice/hosts/h1 " "$chain" "seed/ auto-joins the chain at depth 1"
+}
+
+test_no_seed_scope_without_seed_dir() {
+    local r; r="$(setup_fake_exobrain)"; add_person "$r" people/alice   # no seed/
+    local chain; chain="$(build_scope_chain "$r" people/alice/hosts/h1 | tr '\n' ' ')"
+    assert_not_contains "$chain" "seed" "no seed scope when seed/AGENTS.md is absent (rendered instance)"
+}
+
+test_seed_scope_in_manifest() {
+    local r; r="$(setup_fake_exobrain)"; add_person "$r" people/alice
+    mkdir -p "$r/seed"; printf '# seed scope\n' > "$r/seed/AGENTS.md"
+    write_config "$r" people/alice/hosts/h1
+    render "$r" claude >/dev/null 2>&1 || return 1
+    assert_contains "$(claude_manifest "$r")" "@../seed/AGENTS.md" "seed scope wired into the Claude manifest"
+}
+
+# ---------------------------------------------------------------------------
 
 run_test "scope chain shallow->deep"          test_scope_chain_shallow_to_deep
 run_test "force reaches non-owner"             test_force_reaches_nonowner
@@ -436,6 +461,9 @@ run_test "flags connect person+host"           test_flags_connect_person_host
 run_test "flags guest connects nothing"        test_flags_guest
 run_test "flags extra --scope"                 test_flags_extra_scope
 run_test "flags name-match nested"             test_flags_name_match_nested
+run_test "seed scope auto-joins chain"         test_seed_scope_auto_joins_chain
+run_test "no seed scope without seed/"         test_no_seed_scope_without_seed_dir
+run_test "seed scope in manifest"              test_seed_scope_in_manifest
 
 echo ""
 printf "Ran %d  ${GREEN}passed %d${RESET}  ${RED}failed %d${RESET}\n" "$TESTS_RUN" "$TESTS_PASSED" "$TESTS_FAILED"

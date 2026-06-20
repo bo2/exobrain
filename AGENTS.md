@@ -83,7 +83,7 @@ Every edit ripples. Before calling a change done, grep for what else names, regi
 
 ## Conventions
 
-- **`AGENTS.md` + sidecars exist only at auto-loaded scope roots** (repo root, group, person, host). Everywhere else, an entity's entry point is `README.md`.
+- **`AGENTS.md` is the scope flag — any directory carrying one is a scope** (repo root, group, person, host, and standalone scopes like `seed/`); agent sidecars sit beside it. It's forbidden only inside content trees (`domains/`, `workspaces/`), where the entry point is `README.md`. A scope's specs auto-load when it's in the connected chain.
 - **Other markdown is lowercase kebab-case.** UPPERCASE is reserved for recognized conventions — `README.md`, `AGENTS.md`, `CLAUDE.md`/`CODEX.md`/`OPENCLAW.md`, `SKILL.md`, `MEMORY.md`, `TIMELINE.md`, `CONTRIBUTING.md`, `LICENSE.md`, `CHANGELOG.md`. Don't invent custom UPPERCASE names; `_raw/` is exempt (keep source filenames).
 - **Keep auto-loaded specs tight.** `AGENTS.md` and sidecars cost tokens every session — state the rule, not the exposition; push depth to on-demand docs (`domains/exobrain/`, schemas).
 - **Write specs standalone, not as a delta** — describe the present world; avoid "now / still / no longer / since".

@@ -133,10 +133,14 @@ scopes_collection_for_type() {
 # For each connected leaf, walk its path segments from the root down; a segment
 # prefix is a scope iff that directory contains an AGENTS.md. Union across leaves,
 # dedup, sort shallow→deep (then by path for a stable order among equal depths).
+# The canonical seed's own `seed/` scope auto-joins the chain whenever it exists —
+# it's present only in the seed, never in a rendered instance, so seed-local skills
+# resolve there and nowhere else without any explicit connection.
 build_scope_chain() {
     local repo_dir="$1"; shift
     {
         printf '0\tglobal\n'
+        [[ -f "$repo_dir/seed/AGENTS.md" ]] && printf '1\tseed\n'
         local leaf
         for leaf in "$@"; do
             leaf="${leaf#/}"; leaf="${leaf%/}"
