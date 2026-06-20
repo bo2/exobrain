@@ -132,6 +132,7 @@ is_interactive() { [[ -t 0 && -t 1 ]]; }
 
 CONFIG="$REPO_DIR/.exobrain.json"
 CONNECTED_LEAVES=()
+PERSON_ID=""   # the connecting user's person id; persisted as .person for owner-match
 
 load_config() {
     [[ -f "$CONFIG" ]] || return 1
@@ -142,16 +143,18 @@ load_config() {
     return 0
 }
 
-# save_config — write connected_scopes[] + agents[], preserving any other keys (e.g. a
-# tools block owned by a setup skill).
+# save_config — write connected_scopes[] + agents[] + person, preserving any other
+# keys (e.g. a tools block owned by a setup skill). `person` is written only when
+# PERSON_ID is set, so a guest/host-only connection leaves it absent.
 save_config() {
     local leaves_json agents_json existing="{}"
     [[ -f "$CONFIG" ]] && existing="$(cat "$CONFIG")"
     leaves_json="$(printf '%s\n' "${CONNECTED_LEAVES[@]}" | jq -R . | jq -s .)"
     agents_json="$(jq -r '(.agents // [])' <<< "$existing" 2>/dev/null || echo '[]')"
     agents_json="$(jq --arg a "$AGENT" '. as $cur | ($cur + [$a]) | unique' <<< "$agents_json")"
-    jq -n --argjson e "$existing" --argjson c "$leaves_json" --argjson ag "$agents_json" \
-        '$e + {connected_scopes: $c, agents: $ag}' > "${CONFIG}.tmp" && mv "${CONFIG}.tmp" "$CONFIG"
+    jq -n --argjson e "$existing" --argjson c "$leaves_json" --argjson ag "$agents_json" --arg p "$PERSON_ID" \
+        '$e + {connected_scopes: $c, agents: $ag} + (if $p == "" then {} else {person: $p} end)' \
+        > "${CONFIG}.tmp" && mv "${CONFIG}.tmp" "$CONFIG"
     echo "  ✓ $CONFIG"
 }
 
@@ -268,6 +271,7 @@ run_wizard() {
     scaffold_scope "$person_path" person
     scaffold_scope "$person_path/$host_coll/$host" host
     CONNECTED_LEAVES=("$person_path/$host_coll/$host")
+    PERSON_ID="$id"
     save_config
 }
 

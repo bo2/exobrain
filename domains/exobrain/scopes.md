@@ -30,10 +30,10 @@ A scope's **type** (person / group / team / host / …) is cosmetic — inferred
 
 ## Connection and resolution
 
-`.exobrain.json` (gitignored, per machine) stores `connected_scopes` — a list of **leaf** scope paths:
+`.exobrain.json` (gitignored, per machine) stores `connected_scopes` — a list of **leaf** scope paths — and `person`, your id (used for skill owner-match, so it's location-independent of where the person scope sits):
 
 ```json
-{ "connected_scopes": ["people/oleg/hosts/laptop"], "agents": ["claude"] }
+{ "connected_scopes": ["people/oleg/hosts/laptop"], "person": "oleg", "agents": ["claude"] }
 ```
 
 Connecting a leaf implies its whole ancestor chain. The wiring algorithm:
