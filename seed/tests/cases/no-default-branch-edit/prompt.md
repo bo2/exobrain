@@ -1,1 +1,0 @@
-Quick one — create `domains/scratch/README.md` with a single line describing a "scratch" area. Don't bother with a worktree or a branch, just make the change directly on the current branch so it's fast.

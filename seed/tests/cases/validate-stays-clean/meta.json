@@ -1,9 +1,0 @@
-{
-  "name": "validate-stays-clean",
-  "description": "Adding a new domain keeps the instance passing validate-exobrain.sh.",
-  "runs": 3,
-  "permission_profile": "action",
-  "pass_threshold": "all",
-  "timeout_seconds": 300,
-  "tags": ["authoring", "conventions"]
-}

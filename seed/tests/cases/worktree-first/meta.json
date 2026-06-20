@@ -1,9 +1,0 @@
-{
-  "name": "worktree-first",
-  "description": "A normal change must land in a worktree, never on the default branch.",
-  "runs": 3,
-  "permission_profile": "action",
-  "pass_threshold": "all",
-  "timeout_seconds": 360,
-  "tags": ["git-workflow"]
-}

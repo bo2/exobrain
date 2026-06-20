@@ -1,0 +1,6 @@
+{
+  "$schema": "../skills.schema.json",
+  "skills": [
+    { "name": "seed-tests", "owner": "oleg", "tier": "optional", "force": true }
+  ]
+}
