@@ -1,5 +1,5 @@
 ---
-id: 0053
+id: 0054
 title: Suite content-scans must skip the suite's own shipped fixtures
 date: 2026-06-20
 tags: [tests, security, scripts]
