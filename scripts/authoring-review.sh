@@ -1,11 +1,13 @@
 #!/usr/bin/env bash
-# authoring-review.sh — on-demand LLM review of changed domain/spec files against
-# the exobrain authoring & convention rules. The judgment layer that complements
-# the deterministic checks in validate-exobrain.sh.
+# authoring-review.sh — LLM review of changed domain/spec files against the
+# exobrain authoring & convention rules. The judgment layer that complements the
+# deterministic checks in validate-exobrain.sh.
 #
-# Not a push gate: the pre-push hook runs only validate-exobrain.sh, since a
-# per-push model round-trip taxes every push for an occasional payoff. Run this by
-# hand before a substantial spec/domain edit:
+# Runs as a step in the exobrain-persist flow (after commit, before push), where a
+# deliberate land is the right moment for a model round-trip; also runnable by hand
+# before a substantial spec/domain edit. Not wired into the pre-push hook — that
+# gate stays fast and deterministic (validate-exobrain.sh only), so ordinary pushes
+# aren't taxed by a per-push model round-trip.
 #   scripts/authoring-review.sh [<base-ref>]   # default base: origin/main
 #
 # Engine: claude (headless, read-only) if installed, else codex; if neither is
