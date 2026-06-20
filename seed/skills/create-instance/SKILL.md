@@ -90,18 +90,19 @@ Create under `$DST`:
 ## 3. Copy the concept (the meta-domain)
 
 Copy `$SRC/domains/exobrain/` into `$DST/<domains-dir>/exobrain/` — entities,
-scopes, agents, skills, tools, authoring, propagation, and `feed/`. This is what
-makes the new exobrain self-documenting. Then create `<domains-dir>/exobrain/adopted-feed.md`
-as the provenance ledger: a header that records the **seed repository URL** this
-instance updates from (the address `exobrain-evolve` pulls `src/exobrain-seed/`
-from — `https://github.com/bo2/exobrain`, or the intermediate seed you built from),
-plus **one row per feed card currently in `$SRC/domains/exobrain/feed/`**, each
-marked adopted today ("built in at creation"). The instance starts current, so
-`exobrain-evolve` only ever processes cards published *after* this point (see
-`propagation.md`).
+scopes, agents, skills, tools, authoring, propagation. This is what makes the new
+exobrain self-documenting. The feed of cards is **not** part of the meta-domain: it
+lives under `$SRC/seed/`, which never ships into an instance, so there's nothing to
+copy — the instance reads the feed from the seed cache when it evolves.
 
-Do **not** copy `adopted-feed.md` from `$SRC` (the canonical repo has none — it
-publishes the feed, it doesn't adopt).
+Then create `adopted-feed.md` **at the instance root** (not in the meta-domain — the
+ledger is mutable instance state) as the provenance ledger: a header recording the
+**seed repository URL** this instance updates from (the address `exobrain-evolve`
+pulls `src/exobrain-seed/` from — `https://github.com/bo2/exobrain`, or the
+intermediate seed you built from), plus **one row per feed card currently in
+`$SRC/seed/feed/`**, each marked adopted today ("built in at creation"). The instance
+starts current, so `exobrain-evolve` only ever processes cards published *after* this
+point (see `propagation.md`).
 
 ## 4. Seed scopes and content
 

@@ -8,6 +8,7 @@ exclusion is one rule: `create-instance` never copies `seed/`.
 | Path | What it is |
 |------|-----------|
 | [`AGENTS.md`](AGENTS.md) | The `seed/` **scope flag** — marks this checkout as the canonical seed (the seed scope auto-joins the chain here, never in an instance). |
+| [`feed/`](feed/) | **The change feed** — dated pattern-cards, one per durable framework change, published for instances to adopt via `exobrain-evolve`. Public and generic; instances read it from the seed cache and never carry a copy. |
 | [`skills/create-instance/`](skills/create-instance/) | **The generator** — interviews the user and scaffolds a fresh instance. Invoked from an empty directory via the bootstrap prompt (it reads this `SKILL.md` directly), so it stays outside the skills registry. |
 | [`skills/seed-tests/`](skills/seed-tests/) | **The seed test driver** — builds an instance from the seed, verifies the bootstrap, runs the universal suite against it, and houses the deterministic connector harness (`test-connect-agent.sh`). Declared in `seed/skills.json`, owned by the seed scope. |
 

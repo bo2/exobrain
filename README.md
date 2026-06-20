@@ -53,9 +53,9 @@ Full model: [`domains/exobrain/`](domains/exobrain/).
 | Path | What it is |
 |------|-----------|
 | [`domains/exobrain/`](domains/exobrain/) | **The concept** — entities, scopes, agents, skills, tools, authoring, propagation, written for an agent to read |
-| [`seed/`](seed/) | **Seed-local** — the `create-instance` generator and the behavioral test harness. Operates on the seed itself; never copied into an instance |
+| [`seed/`](seed/) | **Seed-local** — the `create-instance` generator, the behavioral test harness, and the change feed (`seed/feed/`). Operates on the seed itself; never copied into an instance |
 | [`skills/exobrain-evolve/`](skills/exobrain-evolve/) | Bring an instance up to date — read this repo's feed, copy/rewire each change, record it. Copied into every instance. |
-| [`domains/exobrain/feed/`](domains/exobrain/feed/) | **The feed** — the changelog of dated pattern-cards `exobrain-evolve` reads to bring instances forward |
+| [`seed/feed/`](seed/feed/) | **The feed** — the changelog of dated pattern-cards `exobrain-evolve` reads (from the seed cache) to bring instances forward. Seed-only |
 | [`scripts/`](scripts/) | The framework `create-instance` copies into a new instance (`connect-agent`, `skills-registry`, validators) |
 | `AGENTS.md`, `scopes.json`, `skills.schema.json` | The spec and registries a new instance starts from |
 
