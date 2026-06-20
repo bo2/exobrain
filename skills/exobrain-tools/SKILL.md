@@ -33,7 +33,7 @@ bash -c '
   REPO="$(git rev-parse --show-toplevel)"
   source "$REPO/scripts/skills-registry.sh"           # provides build_scope_chain
   LEAVES=(); while IFS= read -r l; do [ -n "$l" ] && LEAVES+=("$l"); done \
-    < <(jq -r "(.connected // []) | .[]" "$REPO/.exobrain.json" 2>/dev/null)
+    < <(jq -r "(.connected_scopes // []) | .[]" "$REPO/.exobrain.json" 2>/dev/null)
   for scope in $(build_scope_chain "$REPO" "${LEAVES[@]}"); do
     dir="$REPO/tools"; [ "$scope" != global ] && dir="$REPO/$scope/tools"
     for f in "$dir"/*.md; do
@@ -46,11 +46,11 @@ bash -c '
 
 Key by filename stem; a deeper scope's file shadows a shallower one of the same name.
 
-**State (untracked, per-machine).** Connection state lives in `.exobrain.json` under a `tools` block, alongside the connector's `connected` / `agents` keys:
+**State (untracked, per-machine).** Connection state lives in `.exobrain.json` under a `tools` block, alongside the connector's `connected_scopes` / `agents` keys:
 
 ```json
 {
-  "connected": ["people/<id>/hosts/<host>"],
+  "connected_scopes": ["people/<id>/hosts/<host>"],
   "agents": ["claude"],
   "tools": {
     "<name>": { "wanted": true, "env": "done", "verify": "done", "verified_at": "2026-06-18T..." }
