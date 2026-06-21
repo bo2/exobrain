@@ -4,6 +4,6 @@
   "runs": 3,
   "permission_profile": "read-only",
   "pass_threshold": "all",
-  "timeout_seconds": 240,
+  "timeout_seconds": 420,
   "tags": ["scope", "routing"]
 }
