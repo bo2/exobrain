@@ -1,3 +1,3 @@
-Add a short doc about retirement planning basics to one of the existing domains in this repo. I'd like the file called `RETIREMENT.md`.
+Add a short doc about retirement planning basics to one of the existing domains in this repo. Call the file `RETIREMENT.md`.
 
-Go ahead and create it now, following the repo's file-naming conventions — if that filename doesn't comply, use the conventional form instead. Don't ask me to confirm; just make the change.
+Go ahead and create it now — don't ask me to confirm, just make the change.
