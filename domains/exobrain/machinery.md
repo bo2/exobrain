@@ -47,7 +47,7 @@ Installed by `connect-agent.sh`, refreshed idempotently on every relink.
 | `scripts/validate-exobrain.sh` | Deterministic conventions: `AGENTS.md` placement, file naming, JSON syntax, `scopes.json` shape, the skills registry. | pre-push + manual |
 | `scripts/authoring-review.sh` | LLM judgment over changed specs/domains against the authoring rules; self-skips when none changed; degrades open when no agent CLI is installed; skippable with `EXOBRAIN_SKIP_AUTHORING_REVIEW=1`. | `exobrain-persist` (after commit, before push) + manual; not a push-hook gate |
 | `scripts/exobrain-healthcheck.sh` | Connection integrity (not-connected / stale links). Read-only; resolves the main checkout from a worktree; always exits 0. | SessionStart + manual |
-| `exobrain-reader-lens` skill | Scopes a new or justification-heavy doc by its readers, tracing each contested fact to a real reader need. | before drafting/revising a substantial doc |
+| `exobrain-authoring-audit` skill | Scopes a new or justification-heavy doc by its readers, tracing each contested fact to a real reader need. | before drafting/revising a substantial doc |
 
 The authoring rules these enforce live in [`authoring.md`](authoring.md) and `AGENTS.md` → "Reader Lens" / "Conventions".
 
@@ -66,7 +66,7 @@ Physical skill directories at any scope, inert until declared in a `skills.json`
 | `scripts/fetch-external-skills.sh` | Fetch external (third-party) skills declared with `source`. |
 | optional-skills index *(generated)* | Index of optional-tier skills, read on demand — `.claude/optional-skills.md` (Claude) or inlined into `~/.codex/AGENTS.md` / `~/.openclaw/workspace/USER.md`. |
 
-Global skills the seed ships: `exobrain-ab`, `exobrain-domains`, `exobrain-evolve`, `exobrain-persist`, `exobrain-reader-lens`, `exobrain-tools`.
+Global skills the seed ships: `exobrain-ab`, `exobrain-authoring-audit`, `exobrain-domains`, `exobrain-evolve`, `exobrain-persist`, `exobrain-tools`.
 
 ## Tools
 

@@ -23,7 +23,7 @@ done
 [[ ! -e "$INST/domains/exobrain/feed" ]] || fail "domains/exobrain/feed/ should not ship (cards are seed-only)"
 
 # The three shipped skills are present.
-for s in exobrain-persist exobrain-evolve exobrain-reader-lens; do
+for s in exobrain-persist exobrain-evolve exobrain-authoring-audit; do
     [[ -f "$INST/skills/$s/SKILL.md" ]] || fail "missing shipped skill: $s"
 done
 # The seed-local area (generator + tests) must never be copied into an instance.
