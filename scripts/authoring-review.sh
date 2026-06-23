@@ -141,7 +141,7 @@ echo "" >&2
 echo "$output" >&2
 echo "" >&2
 echo "For a deeper reader-lens pass on new or justification-heavy docs, run the" >&2
-echo "exobrain-reader-lens skill." >&2
+echo "exobrain-authoring-audit skill." >&2
 echo "" >&2
 echo "Fix them and recheck with 'scripts/authoring-review.sh'." >&2
 exit 1

@@ -26,7 +26,7 @@ This is a procedure; follow it, keeping the user in control of what's adopted.
 
 The files that arrived in this instance as verbatim copies of the seed — the ones
 "copy" applies to: `scripts/*`, `skills.schema.json`, the framework skills
-(`skills/exobrain-evolve/`, `skills/exobrain-persist/`, `skills/exobrain-reader-lens/`,
+(`skills/exobrain-evolve/`, `skills/exobrain-persist/`, `skills/exobrain-authoring-audit/`,
 `skills/exobrain-domains/`, `skills/exobrain-ab/`), `tools/README.md`,
 `<domains-dir>/exobrain/*` (the concept), and the root spec (`AGENTS.md`, agent
 sidecars). Everything else (`people/*`, your domains, `scopes.json`, your per-tool
