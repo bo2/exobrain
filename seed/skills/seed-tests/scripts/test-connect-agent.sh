@@ -49,6 +49,7 @@ assert_symlink()      { [[ -L "$1" ]] || { echo "ASSERT_SYMLINK${2:+ ($2)}: $1 n
 claude_manifest() { cat "$1/.claude/connected-scopes.md"; }
 claude_index()    { cat "$1/.claude/optional-skills.md"; }
 claude_tools()    { cat "$1/.claude/tools-index.md"; }
+claude_domains()  { cat "$1/.claude/domains-index.md"; }
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -121,6 +122,15 @@ add_tool() {
     if [[ "$scope" == "global" ]]; then dir="$repo/tools"; else dir="$repo/$scope/tools"; fi
     mkdir -p "$dir"
     printf '# %s\n\n%s\n' "$name" "$summary" > "$dir/$name.md"
+}
+
+# add_domain <repo> <name> <summary> — domain README with frontmatter summary.
+# Domains are root-only and unscoped, so there's no scope arg.
+add_domain() {
+    local repo="$1" name="$2" summary="$3"
+    mkdir -p "$repo/domains/$name"
+    printf -- '---\nname: %s\ntype: reference\ncurator: alice\nsummary: %s\n---\n\n# %s\n' \
+        "$name" "$summary" "$name" > "$repo/domains/$name/README.md"
 }
 
 write_config() { printf '{"connected_scopes":["%s"],"agents":["%s"]}\n' "$2" "${3:-claude}" > "$1/.exobrain.json"; }
@@ -336,6 +346,33 @@ test_tools_index_empty_skip() {
 }
 
 # ---------------------------------------------------------------------------
+# Tests — domains index injection
+# ---------------------------------------------------------------------------
+
+test_domains_index_claude() {
+    local r; r="$(setup_fake_exobrain)"; add_person "$r" people/alice
+    add_domain "$r" health "Conditions, meds, providers, and insurance."
+    write_config "$r" people/alice/hosts/h1
+    render "$r" claude >/dev/null 2>&1 || return 1
+    assert_file "$r/.claude/domains-index.md" "domains-index.md generated" || return 1
+    local d; d="$(claude_domains "$r")"
+    assert_contains "$d" "health" "domain row present" || return 1
+    assert_contains "$d" "domains/health/README.md" "README path present" || return 1
+    assert_contains "$d" "Conditions, meds, providers, and insurance." "summary extracted from frontmatter" || return 1
+    local c; c="$(cat "$r/.claude/CLAUDE.md")"
+    assert_contains "$c" "@domains-index.md" "CLAUDE.md imports the domains index"
+}
+
+test_domains_index_empty_skip() {
+    local r; r="$(setup_fake_exobrain)"; add_person "$r" people/alice  # no domains/
+    write_config "$r" people/alice/hosts/h1
+    render "$r" claude >/dev/null 2>&1 || return 1
+    assert_no_file "$r/.claude/domains-index.md" "no domains-index.md when no domains/" || return 1
+    local c; c="$(cat "$r/.claude/CLAUDE.md")"
+    assert_not_contains "$c" "@domains-index.md" "CLAUDE.md does not import a missing domains index"
+}
+
+# ---------------------------------------------------------------------------
 # Tests — validator
 # ---------------------------------------------------------------------------
 
@@ -456,6 +493,8 @@ run_test "always linked, unlisted not"         test_always_skill_linked_unlisted
 run_test "codex inlines specs"                 test_codex_inlines_specs
 run_test "tools index (claude)"                test_tools_index_claude
 run_test "tools index empty -> skip"           test_tools_index_empty_skip
+run_test "domains index (claude)"              test_domains_index_claude
+run_test "domains index empty -> skip"         test_domains_index_empty_skip
 run_test "validate clean"                      test_validate_clean
 run_test "validate dangling override"          test_validate_dangling_override
 run_test "fetcher accepts --leaves"            test_fetcher_accepts_leaves_no_external

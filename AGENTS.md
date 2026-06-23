@@ -6,7 +6,7 @@ This repo is one **implementation** of the exobrain concept, not a fork kept in 
 
 ## Two kinds of content
 
-- **Domains** (`domains/`) — durable areas of what you know: health, finances, home, a project's facts. **Holds current truth; kept current.** Each domain's entry point is its `README.md`.
+- **Domains** (`domains/`) — durable areas of what you know: health, finances, home, a project's facts. **Holds current truth; kept current.** Each domain's entry point is its `README.md`, whose frontmatter carries a one-line `summary:`. A generated **domains index** (every domain + its summary) is auto-loaded so you know which areas exist — read a domain's `README.md` before reasoning about it.
 - **Workspaces** (`workspaces/`) — time-bound efforts: a trip, a renovation, a job search, an investigation. **Point-in-time records; outdate by design.** Durable findings get *promoted* into `domains/`, not linked from it.
 
 Don't cite a workspace from anything that must stay current (domains, skills) — those links go stale silently.
