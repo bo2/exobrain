@@ -18,7 +18,7 @@ Gather enough context to define boundaries before scaffolding — this prevents 
 
 Create the directory and all files:
 
-1. **`README.md`** — frontmatter (`name`, `type`, `curator`), TL;DR, status line (`Status: draft | Last synthesis: YYYY-MM-DD`), scope (in/out), and a file index linking every file with a one-line concern. Opt into `timeline: true` for multi-contributor or fast-moving domains.
+1. **`README.md`** — frontmatter (`name`, `type`, `curator`, `summary`), TL;DR, status line (`Status: draft | Last synthesis: YYYY-MM-DD`), scope (in/out), and a file index linking every file with a one-line concern. The `summary:` is the one-sentence scope from Phase 1 — it feeds the auto-loaded domains index, so write it now. Opt into `timeline: true` for multi-contributor or fast-moving domains.
 2. **`sources.json`** — search config for `update` mode (schema in [`update.md`](update.md)). Populate from the repos, tools, and channels found in Phase 1 — each source naming a tool registered in [`tools/`](../../tools/).
 3. **Profile files** — one per topic, each opening with its H1 only (`# <Domain> — <File Title>`). No checklist, no FAQ scaffolding. Filled in Phase 4.
 4. **`_meta/open-questions.md`** and **`_meta/sources.md`** — empty templates.
