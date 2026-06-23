@@ -110,8 +110,10 @@ point (see `propagation.md`).
   - person: `people/<handle>/AGENTS.md` — a short personal-preferences stub.
   - host: `people/<handle>/hosts/<machine>/AGENTS.md` — a machine-config stub.
   - (family/org) the group/team scope's `AGENTS.md` too.
-- For each starting domain: `<domains-dir>/<area>/README.md` with a
-  one-line orientation (see `<domains-dir>/exobrain/authoring.md`).
+- For each starting domain: `<domains-dir>/<area>/README.md` with frontmatter
+  (`name`, `type`, `curator`, and a one-line `summary:`) plus a short orientation
+  (see `<domains-dir>/exobrain/authoring.md`). The `summary:` feeds the auto-loaded
+  domains index `connect-agent.sh` generates in step 6, so write it now.
 - `workspaces/README.md` — copy from `$SRC`.
 
 Don't write `.exobrain.json` here — `connect-agent.sh` is the sole writer of

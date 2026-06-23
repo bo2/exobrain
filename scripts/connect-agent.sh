@@ -21,6 +21,7 @@
 # index, per-agent paths — so a shared file would let the last writer clobber it):
 #   claude   → .claude/CLAUDE.md @-imports .claude/connected-scopes.md (a manifest of
 #              live source specs) + .claude/optional-skills.md + .claude/tools-index.md
+#              + .claude/domains-index.md
 #   codex    → ~/.codex/AGENTS.md, marker-block injection; skills in repo-local .agents/skills/
 #   openclaw → ~/.openclaw/workspace/USER.md, marker-block injection
 #
@@ -601,6 +602,42 @@ else
 fi
 
 # --------------------------------------------------------------------------
+# Domains index — a flat catalog of the durable knowledge areas (domains/*)
+# --------------------------------------------------------------------------
+# Domains are root-only, unscoped content (no tiers, force, owner, or overlays), so
+# the index is a plain glob of domains/*/README.md — name + one-line summary from
+# each README's frontmatter. Auto-loaded like the tools index so the agent knows
+# which areas of *your* world it can draw on instead of answering cold; read the
+# domain's README before reasoning about it. A pure function of committed docs,
+# regenerated on every relink. (Empty in a checkout with no domains/.)
+echo ""; echo "Domains index:"
+DOMAINS_INDEX_FILE="$TARGET_DIR/domains-index.md"
+DOMAINS_TSV="$(domains_resolve "$REPO_DIR")"
+if [[ -n "$DOMAINS_TSV" ]]; then
+    {
+        cat <<'HEADER'
+# Domains
+
+The durable knowledge areas in this exobrain — what *you* know, kept current. Each row points at a domain's `README.md` entry point; **read it before reasoning about that area** so you draw on recorded truth instead of answering cold. (Domains hold current truth; time-bound efforts live in `workspaces/`.)
+
+| Domain | README | Summary |
+|--------|--------|---------|
+HEADER
+        while IFS= read -r _row; do
+            [[ -n "$_row" ]] || continue
+            name="${_row%%$'\t'*}"; path="${_row#*$'\t'}"
+            summary="$(frontmatter_field "$REPO_DIR/$path" summary)"
+            summary="${summary//|/\\|}"
+            printf '| %s | %s | %s |\n' "$name" "$path" "$summary"
+        done <<< "$DOMAINS_TSV"
+    } > "$DOMAINS_INDEX_FILE"
+    echo "  + $DOMAINS_INDEX_FILE"
+else
+    [[ -f "$DOMAINS_INDEX_FILE" ]] && rm "$DOMAINS_INDEX_FILE"
+    echo "  SKIP (no domains/ in this checkout)"
+fi
+
+# --------------------------------------------------------------------------
 # Per-agent injection of scope specs into the agent surface
 # --------------------------------------------------------------------------
 # compose_context emits the connected chain's deeper-scope specs — each scope's
@@ -623,6 +660,9 @@ compose_context() {
     fi
     if [[ -f "$TOOLS_INDEX_FILE" ]]; then
         echo "<!-- tools index -->"; echo ""; cat "$TOOLS_INDEX_FILE"; echo ""
+    fi
+    if [[ -f "$DOMAINS_INDEX_FILE" ]]; then
+        echo "<!-- domains index -->"; echo ""; cat "$DOMAINS_INDEX_FILE"; echo ""
     fi
 }
 
@@ -666,6 +706,7 @@ case "$AGENT" in
             # would return 1 and trip `set -e` at the `} > file` redirection.
             if [[ -f "$INDEX_FILE" ]]; then echo "@optional-skills.md"; fi
             if [[ -f "$TOOLS_INDEX_FILE" ]]; then echo "@tools-index.md"; fi
+            if [[ -f "$DOMAINS_INDEX_FILE" ]]; then echo "@domains-index.md"; fi
         } > "$TARGET_DIR/CLAUDE.md"
         echo "  ✓ .claude/CLAUDE.md"
         # Supersedes the earlier single inlined file; drop one an old connect left behind.

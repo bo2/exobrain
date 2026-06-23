@@ -368,3 +368,44 @@ tools_extract_summary() {
         { print; exit }
     ' "$file"
 }
+
+# frontmatter_field <md_file> <key> — the value of a top-level YAML frontmatter key
+# (the leading --- … --- block), or empty. Trims surrounding whitespace and a wrapping
+# pair of double quotes; reads only the first match, only inside the frontmatter.
+frontmatter_field() {
+    local file="$1" key="$2"
+    [[ -f "$file" ]] || { echo ""; return 0; }
+    awk -v key="$key" '
+        NR == 1 && /^---[[:space:]]*$/ { fm = 1; next }
+        fm && /^---[[:space:]]*$/      { exit }
+        fm && $0 ~ ("^" key "[[:space:]]*:") {
+            line = $0
+            sub("^" key "[[:space:]]*:[[:space:]]*", "", line)
+            sub(/[[:space:]]+$/, "", line)
+            if (line ~ /^".*"$/) line = substr(line, 2, length(line) - 2)
+            print line
+            exit
+        }
+    ' "$file"
+}
+
+# domains_resolve <repo_dir>
+# Resolve the domain catalog. Domains are root-only, unscoped content — unlike
+# skills/tools they don't overlay per scope — so this is a flat glob of
+# domains/*/README.md, no scope chain. Emits TSV: <name>\t<repo-relative-readme>,
+# sorted by name; <name> is the README frontmatter `name`, falling back to the dir.
+domains_resolve() {
+    local repo_dir="$1"
+    local d readme name rel
+    {
+        for d in "$repo_dir"/domains/*/; do
+            [[ -d "$d" ]] || continue          # guard the no-match literal glob
+            readme="${d%/}/README.md"
+            [[ -f "$readme" ]] || continue
+            name="$(frontmatter_field "$readme" name)"
+            [[ -n "$name" ]] || name="$(basename "${d%/}")"
+            rel="${readme#"$repo_dir"/}"
+            printf '%s\t%s\n' "$name" "$rel"
+        done
+    } | sort
+}
