@@ -41,13 +41,13 @@ The rule: **any agent-specific artifact must be invisible to other agents.** If 
 
 Each agent pulls auto-loaded specs into its prompt differently; the content is identical across agents.
 
-| Agent | Universal + sidecar injection | Optional-skills index |
+| Agent | Connected-scope specs | Generated indexes |
 |---|---|---|
-| **Claude Code** | Every connected scope's spec composes into one `.claude/AGENTS.override.md`, `@-imported` by the generated `.claude/CLAUDE.md` | Inlined in `AGENTS.override.md` |
+| **Claude Code** | `.claude/CLAUDE.md` `@-import`s `.claude/connected-scopes.md` — a manifest of `@-import`s to each connected scope's *live* source `AGENTS.md`/sidecar (by reference, not copied) | The same `CLAUDE.md` `@-import`s `.claude/optional-skills.md`, `.claude/tools-index.md`, `.claude/domains-index.md` |
 | **OpenClaw** | Inlined into `USER.md` via a marker block (`<!-- exobrain --> … <!-- END exobrain -->`) | Inlined in the same block |
 | **Codex** | Inlined into `AGENTS.md` via a marker block | Inlined in the same block |
 
-All three deliver the **same composition** — deeper-scope specs (shallow→deep) plus the index, with the global scope auto-loaded separately. Claude `@-imports` one composed file; OpenClaw and Codex inline it via a marker-block rewrite because they lack an import primitive.
+All three deliver the **same content** — each connected scope's specs (shallow→deep) plus the generated indexes, with the global scope auto-loaded separately. The difference is delivery: Claude `@-import`s a manifest pointing at the *live* source files, so a scope edit shows up without a recompose; OpenClaw and Codex inline a copy via a marker-block rewrite because they lack an import primitive.
 
 ## `connect-agent.sh` end-to-end
 
@@ -57,8 +57,8 @@ A single run:
 2. **Resolve the skills registry** — walk every `skills.json` in priority order into a plan.
 3. **Link always-tier skills** — symlink each into the agent's skills dir as `<name>.<scope-owner>/`. Most agents read it from their context surface (`.claude/skills`, `~/.openclaw/workspace/skills`); Codex scans a repo-local `.agents/skills`, so its skills link there — out of the global `~/.codex`, scoped to this repo.
 4. **Fetch external skills** — route to `skills/` (always) or `skills-optional/` (optional).
-5. **Generate `optional-skills.md`** from optional-tier entries.
-6. **Compose + inject** — concatenate each connected scope's `AGENTS.md` (+ agent sidecar, shallow→deep) and the optional-skills index into one context surface, then deliver it: Claude `@-imports` the composed `.claude/AGENTS.override.md`; OpenClaw/Codex inline it into a marker block.
+5. **Generate the indexes** — `optional-skills.md` (optional-tier skills), `tools-index.md` (visible tool docs), `domains-index.md` (domains + their summaries).
+6. **Compose + inject** — deliver each connected scope's `AGENTS.md` (+ agent sidecar, shallow→deep) and the generated indexes. Claude writes `.claude/connected-scopes.md` — a manifest of `@-import`s to the live source specs — and a `.claude/CLAUDE.md` that `@-import`s that manifest plus each index; OpenClaw/Codex inline the same specs and indexes into a marker block. The global scope loads separately: Claude via the checked-in root `CLAUDE.md`, Codex/OpenClaw by auto-loading the root `AGENTS.md` (their root sidecar is prepended into the block).
 7. **Install the post-merge hook** (first run) — re-links every marked agent after `git pull`.
 8. **Run scope hooks** — if a scope dir has an executable `scripts/connect-agent.sh`, run it.
 
