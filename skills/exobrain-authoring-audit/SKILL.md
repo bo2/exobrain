@@ -1,9 +1,9 @@
 ---
-name: exobrain-reader-lens
-description: "Scope and audit docs/specs by their readers. Use when creating a new doc, or writing/revising a substantial or justification-heavy one — models who will read it (predicting reader personas and needs blind to your draft), derives what it must contain, and traces each contested fact to a real reader need (verified in the exobrain, then with the human) before keeping. Cuts session-narrative and 'why we did X' justifications that serve the author, not any reader."
+name: exobrain-authoring-audit
+description: "Audit a doc/spec against its readers before it lands — the heavy reader-lens tool. Use when creating a new doc, or writing/revising a substantial or justification-heavy one: models who will read it (predicting reader personas and needs blind to your draft), derives what it must contain, and traces each contested fact to a real reader need (verified in the exobrain, then with the human) before keeping. Cuts session-narrative and 'why we did X' justifications that serve the author, not any reader."
 ---
 
-# exobrain-reader-lens
+# exobrain-authoring-audit
 
 Operationalizes the **Reader Lens** principle (root `AGENTS.md`) for substantial writing: scope a doc by *who reads it* before drafting, and audit a draft for facts no reader needs. The principle is the always-on lens; this skill is its heavy tool — model readers, derive scope, verify contested facts against real demand.
 

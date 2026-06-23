@@ -94,7 +94,7 @@ Every edit ripples. Before calling a change done, grep for what else names, regi
 
 ## Reader Lens
 
-Before writing anything — doc, commit, message — name who reads it and what they need; keep what serves them, cut the rest. A line that serves no nameable reader doesn't belong, however true — especially prose that explains or defends your own choices ("why we did X", "note that…"), which serves the author, not the reader. The `exobrain-reader-lens` skill scopes new or justification-heavy docs.
+Before writing anything — doc, commit, message — name who reads it and what they need; keep what serves them, cut the rest. A line that serves no nameable reader doesn't belong, however true — especially prose that explains or defends your own choices ("why we did X", "note that…"), which serves the author, not the reader. The `exobrain-authoring-audit` skill scopes new or justification-heavy docs.
 
 ## Validation
 

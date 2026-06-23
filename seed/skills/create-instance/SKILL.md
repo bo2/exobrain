@@ -72,12 +72,12 @@ Create under `$DST`:
 - `skills.schema.json` — copy `$SRC/skills.schema.json`.
 - `skills.json` — register the copied global skills. Each is a declaration with
   `force: true` (a global skill reaches everyone; there is **no `scope` field** — the
-  home scope is wherever the `skills.json` lives): `{ "$schema": "./skills.schema.json", "skills": [ { "name": "exobrain-reader-lens", "owner": "", "tier": "optional", "force": true }, { "name": "exobrain-evolve", "owner": "", "tier": "optional", "force": true }, { "name": "exobrain-persist", "owner": "", "tier": "optional", "force": true }, { "name": "exobrain-domains", "owner": "", "tier": "optional", "force": true }, { "name": "exobrain-ab", "owner": "", "tier": "optional", "force": true }, { "name": "exobrain-tools", "owner": "", "tier": "optional", "force": true }, { "name": "exobrain-tests", "owner": "", "tier": "optional", "force": true } ] }`.
+  home scope is wherever the `skills.json` lives): `{ "$schema": "./skills.schema.json", "skills": [ { "name": "exobrain-authoring-audit", "owner": "", "tier": "optional", "force": true }, { "name": "exobrain-evolve", "owner": "", "tier": "optional", "force": true }, { "name": "exobrain-persist", "owner": "", "tier": "optional", "force": true }, { "name": "exobrain-domains", "owner": "", "tier": "optional", "force": true }, { "name": "exobrain-ab", "owner": "", "tier": "optional", "force": true }, { "name": "exobrain-tools", "owner": "", "tier": "optional", "force": true }, { "name": "exobrain-tests", "owner": "", "tier": "optional", "force": true } ] }`.
 - `.gitignore`, `.env.example` — copy from `$SRC`.
 - `scripts/` — copy the whole `$SRC/scripts/` directory. These are the framework
   (`connect-agent.sh`, `skills-registry.sh`, `validate-exobrain.sh`,
   `skills-validate.sh`, `skills-status.sh`, `skills-promote.sh`, …). `chmod +x scripts/*.sh`.
-- `skills/` — copy each global skill dir from `$SRC/skills/`: `exobrain-reader-lens`,
+- `skills/` — copy each global skill dir from `$SRC/skills/`: `exobrain-authoring-audit`,
   `exobrain-evolve`, `exobrain-persist`, `exobrain-domains`, `exobrain-ab`,
   `exobrain-tools`, `exobrain-tests`. These ship *in* the instance — e.g.
   `exobrain-evolve` pulls future changes, and `exobrain-tests` lets the instance

@@ -1,12 +1,12 @@
 {
   "$schema": "./skills.schema.json",
   "skills": [
-    { "name": "exobrain-evolve",      "owner": "oleg", "tier": "optional", "force": true },
-    { "name": "exobrain-reader-lens", "owner": "oleg", "tier": "optional", "force": true },
-    { "name": "exobrain-persist",     "owner": "oleg", "tier": "optional", "force": true },
-    { "name": "exobrain-domains",     "owner": "oleg", "tier": "optional", "force": true },
-    { "name": "exobrain-ab",          "owner": "oleg", "tier": "optional", "force": true },
-    { "name": "exobrain-tools",       "owner": "oleg", "tier": "optional", "force": true },
-    { "name": "exobrain-tests",       "owner": "oleg", "tier": "optional", "force": true }
+    { "name": "exobrain-evolve",          "owner": "oleg", "tier": "optional", "force": true },
+    { "name": "exobrain-authoring-audit", "owner": "oleg", "tier": "optional", "force": true },
+    { "name": "exobrain-persist",         "owner": "oleg", "tier": "optional", "force": true },
+    { "name": "exobrain-domains",         "owner": "oleg", "tier": "optional", "force": true },
+    { "name": "exobrain-ab",              "owner": "oleg", "tier": "optional", "force": true },
+    { "name": "exobrain-tools",           "owner": "oleg", "tier": "optional", "force": true },
+    { "name": "exobrain-tests",           "owner": "oleg", "tier": "optional", "force": true }
   ]
 }
