@@ -5,11 +5,14 @@ set -uo pipefail
 source "$HARNESS_LIB/check-helpers.sh"
 INST="$1"; TRANSCRIPT="$2"
 
-# Where did the fact land? (search across instance + worktrees)
-fin="$(grep -rilE 'fidelity|brokerage' "$(run_dir "$INST")" --include='*.md' 2>/dev/null \
-        | grep -iE '/domains/finance' | grep -v '/src/' | head -1)"
-ws="$(grep -rilE 'fidelity|brokerage' "$(run_dir "$INST")" --include='*.md' 2>/dev/null \
-        | grep -iE '/workspaces/' | grep -v '/src/' | head -1)"
+# Where did the fact land? Scope to files the AGENT changed (vs the pinned base), not
+# all instance content: an instance can ship real domains/workspaces where 'fidelity'/
+# 'brokerage' already appear in unrelated prose, which a blanket grep would false-match.
+mapfile -t hits < <(changed_run "$INST" | grep -iE '\.md$' | while IFS= read -r f; do
+    grep -ilE 'fidelity|brokerage' "$f" 2>/dev/null
+done)
+fin="$(printf '%s\n' "${hits[@]}" | grep -iE '/domains/finance' | head -1)"
+ws="$(printf '%s\n' "${hits[@]}" | grep -iE '/workspaces/' | head -1)"
 
 [[ -z "$ws" ]] || fail "fact filed into a workspace ($ws) — workspaces outdate; durable facts go in domains/"
 [[ -n "$fin" ]] || fail "fact not found in a finance domain file (mis-routed or not recorded)"
