@@ -1,5 +1,5 @@
 ---
-id: 0016
+id: 0063
 title: Prune stale managed symlinks on relink, not just broken ones
 date: 2026-06-14
 tags: [connect-agent, scopes]

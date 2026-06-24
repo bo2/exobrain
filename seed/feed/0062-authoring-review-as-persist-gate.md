@@ -1,5 +1,5 @@
 ---
-id: 0043
+id: 0062
 title: Run the LLM authoring review at the persist gate, not on every push
 date: 2026-06-20
 tags: [scripts, validation, authoring, persist, hooks]
