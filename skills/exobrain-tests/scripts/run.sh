@@ -169,6 +169,12 @@ for agent in "${AGENTS[@]}"; do
         [[ -f "$cdir/setup.sh" ]] && { BASE_COMMIT_COUNT="$BASE_COMMITS" HARNESS_LIB="$TESTS_DIR/lib" \
             bash "$cdir/setup.sh" "$inst" >"$rdir/setup.log" 2>&1 || log "  run $i: setup.sh returned non-zero (continuing)"; }
 
+        # Pin a stable base ref (post-setup, pre-agent HEAD) so a check can diff the
+        # agent's own changes no matter where it landed them — a worktree branch, or
+        # committed/squash-merged onto trunk (which moves trunk). Shared across linked
+        # worktrees via the common ref store.
+        git -C "$inst" tag -f exobrain-base HEAD >/dev/null 2>&1 || true
+
         invoke_agent "$agent" "$inst" "$cdir/prompt.md" "$prof" "$tmo" "$model" "$ofmt" "$rdir/stdout.txt"
         ec=$?
 
