@@ -35,13 +35,38 @@ grep_run() {
 }
 
 # find_run <instance> <findargs...> — find across instance + worktrees, minus the
-# same three subtrees grep_run skips.
+# same three subtrees grep_run skips. Prunes by directory BASENAME (-name … -prune),
+# not by absolute-path substring: a '*/src/*' -path filter matches the FULL path, so
+# when the run dir itself lives under a `src` component (e.g. ~/src/exobrain) every
+# result matches the prune and the whole tree is dropped. -prune fires only on those
+# dir names met while descending under instance*, never on an ancestor.
 find_run() {
     local inst="$1"; shift
     local rundir; rundir="$(run_dir "$inst")"
     find "$rundir"/instance* \
-        -not -path '*/src/*' -not -path '*/.git/*' -not -path '*/exobrain-tests/*' \
-        "$@" 2>/dev/null
+        \( -name .git -o -name src -o -name exobrain-tests \) -prune -o \
+        \( "$@" -print \) 2>/dev/null
+}
+
+# changed_run <instance> — absolute paths of files the agent ADDED or MODIFIED,
+# across the main instance and any worktrees it created, relative to the base the
+# harness pinned just before the agent ran (`exobrain-base`, falling back to
+# `trunk`). Diffing the pinned ref — not `trunk` — survives the agent committing
+# or squash-merging onto trunk, which would otherwise move trunk to include the
+# change and leave nothing to diff. Lets a check scope to the agent's OWN output
+# instead of grepping pre-existing instance content (which can match generic
+# terms). Union of tracked changes vs base and untracked new files; deduped.
+changed_run() {
+    local inst="$1" rundir d base; rundir="$(run_dir "$inst")"
+    for d in "$rundir"/instance*; do
+        [[ -e "$d/.git" ]] || continue
+        base=exobrain-base
+        git -C "$d" rev-parse -q --verify "$base" >/dev/null 2>&1 || base=trunk
+        {
+            git -C "$d" diff --name-only "$base" 2>/dev/null
+            git -C "$d" ls-files --others --exclude-standard 2>/dev/null
+        } | sed "s#^#$d/#"
+    done | sort -u
 }
 
 # Locate the sibling worktree (if any) that the agent created; prints its path.
