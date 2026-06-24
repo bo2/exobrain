@@ -26,15 +26,17 @@ BASE="${1:-origin/main}"
 # ---------------------------------------------------------------------------
 # 1. In-scope files changed on this branch. Skip fast if none.
 # ---------------------------------------------------------------------------
-mapfile -t changed < <(git -C "$REPO_DIR" diff --name-only "$BASE...HEAD" -- '*.md' 2>/dev/null)
 files=()
-for f in "${changed[@]}"; do
+# Plain while-read instead of `mapfile` (a bash 4 builtin) so this runs under
+# macOS's stock bash 3.2. Reading straight into the loop also avoids expanding an
+# empty intermediate array under `set -u`, which errors on bash 3.2.
+while IFS= read -r f; do
     case "$f" in
         */_raw/*) continue ;;
         domains/*.md|AGENTS.md|*/AGENTS.md|*/AGENTS.*.md|CLAUDE.md|*/CLAUDE.md|CODEX.md|*/CODEX.md|OPENCLAW.md|*/OPENCLAW.md|*/SKILL.md)
             [[ -f "$REPO_DIR/$f" ]] && files+=("$f") ;;
     esac
-done
+done < <(git -C "$REPO_DIR" diff --name-only "$BASE...HEAD" -- '*.md' 2>/dev/null)
 [[ ${#files[@]} -eq 0 ]] && exit 0
 
 diff_text="$(git -C "$REPO_DIR" diff "$BASE...HEAD" -- "${files[@]}" 2>/dev/null)"
@@ -48,9 +50,14 @@ fi
 # ---------------------------------------------------------------------------
 # 2. Prompt — conservative, sentinel-delimited output. The rubric is a quoted
 # heredoc (no expansion); the diff is concatenated as plain data so nothing in
-# it is ever interpreted by the shell.
+# it is ever interpreted by the shell. The heredoc lives in a function rather
+# than directly inside `$(...)`: bash 3.2's command-substitution parser miscounts
+# apostrophes in a heredoc body nested in `$()` and aborts, so a bare heredoc in
+# a function (captured by a plain `$(emit_rubric)`) keeps this portable to
+# macOS's stock bash.
 # ---------------------------------------------------------------------------
-RUBRIC="$(cat <<'RUBRIC_EOF'
+emit_rubric() {
+    cat <<'RUBRIC_EOF'
 You are an authoring linter for the "exobrain" knowledge repository. Review the
 git diff below for CLEAR, high-confidence violations of the repo's authoring and
 convention rules. Output text only; do not modify any files.
@@ -88,8 +95,8 @@ Output:
 
 Diff under review:
 RUBRIC_EOF
-)"
-PROMPT="$RUBRIC"$'\n'"$diff_text"
+}
+PROMPT="$(emit_rubric)"$'\n'"$diff_text"
 
 # ---------------------------------------------------------------------------
 # 3. Run the review (claude → codex → degrade open). Time-bounded.
@@ -105,11 +112,23 @@ elif t="$(command -v gtimeout 2>/dev/null)"; then TIMEOUT=("$t" 240); fi
 # this is safe whether or not a proxy is set.
 NOPROXY=(env -u ALL_PROXY -u HTTPS_PROXY -u HTTP_PROXY -u all_proxy -u https_proxy -u http_proxy)
 
+# Build the command, appending TIMEOUT only when present — expanding an empty
+# array under `set -u` errors on bash 3.2, which is the default on macOS.
+run_engine() {
+    local -a cmd
+    cmd=("${NOPROXY[@]}")
+    if [[ ${#TIMEOUT[@]} -gt 0 ]]; then
+        cmd+=("${TIMEOUT[@]}")
+    fi
+    cmd+=("$@")
+    printf '%s' "$PROMPT" | "${cmd[@]}" 2>/dev/null
+}
+
 run_review() {
     if command -v claude >/dev/null 2>&1; then
-        printf '%s' "$PROMPT" | "${NOPROXY[@]}" "${TIMEOUT[@]}" claude -p --permission-mode plan 2>/dev/null
+        run_engine claude -p --permission-mode plan
     elif command -v codex >/dev/null 2>&1; then
-        printf '%s' "$PROMPT" | "${NOPROXY[@]}" "${TIMEOUT[@]}" codex exec -s read-only - 2>/dev/null
+        run_engine codex exec -s read-only -
     else
         return 3
     fi
