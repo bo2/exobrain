@@ -11,6 +11,8 @@
 #   - JSON syntax errors in skills.json and scopes.json files.
 #   - scopes.json shape (type + collection; reserved/kebab-case rules).
 #   - Skills registry integrity (delegated to skills-validate.sh).
+#   - Duplicate feed-card IDs (canonical seed only) — the NNNN filename prefix is
+#     a never-reused provenance key; concurrent PRs can collide on one.
 #
 # Tools need no schema check: a tool is a self-contained doc under tools/, and
 # its presence at a scope is its registration (see domains/exobrain/tools.md).
@@ -110,6 +112,26 @@ if [[ -f "$REPO_DIR/scopes.json" ]] && jq -e . "$REPO_DIR/scopes.json" >/dev/nul
             record "scopes.json: collection '$collection' is not a simple kebab-case segment"
         fi
     done < <(jq -r '(.scopes // [])[] | [(.type // ""), (.collection // "")] | @tsv' "$REPO_DIR/scopes.json" 2>/dev/null)
+fi
+
+# ---------------------------------------------------------------------------
+# Feed card IDs (canonical seed only) — the NNNN filename prefix is a never-reused
+# provenance key (see seed/feed/README.md); two cards sharing one breaks adoption
+# tracking. Concurrent PRs branched off the same trunk can each grab the next ID.
+# Self-skips in a rendered instance, which carries no seed/feed.
+# ---------------------------------------------------------------------------
+
+if [[ -d "$REPO_DIR/seed/feed" ]]; then
+    while IFS= read -r id; do
+        [[ -z "$id" ]] && continue
+        record "duplicate feed card id $id (seed/feed/$id-*.md): IDs are never-reused provenance keys"
+    done < <(
+        for f in "$REPO_DIR"/seed/feed/[0-9]*.md; do
+            [[ -e "$f" ]] || continue
+            base="$(basename "$f")"
+            printf '%s\n' "${base%%-*}"
+        done | sort | uniq -d
+    )
 fi
 
 # ---------------------------------------------------------------------------
