@@ -1,5 +1,5 @@
 ---
-id: 0060
+id: 0061
 title: Keep framework shell scripts portable to macOS's stock bash 3.2
 date: 2026-06-23
 tags: [scripts, portability, bash]
