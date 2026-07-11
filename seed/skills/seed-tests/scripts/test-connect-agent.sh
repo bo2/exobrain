@@ -68,7 +68,7 @@ setup_fake_exobrain() {
     printf '# Exobrain\n' > "$repo/AGENTS.md"
     printf '{"scopes":[{"type":"group","collection":"groups"},{"type":"person","collection":"people"},{"type":"host","collection":"hosts"}]}\n' > "$repo/scopes.json"
     printf '{"$schema":"./skills.schema.json","skills":[]}\n' > "$repo/skills.json"
-    printf '.claude/\n.codex\n.openclaw\n.exobrain.json\nsrc/\n' > "$repo/.gitignore"
+    printf '.claude/\n.codex\n.openclaw\nAGENTS.override.md\n.exobrain.json\nsrc/\n' > "$repo/.gitignore"
     echo "$repo"
 }
 
@@ -307,16 +307,21 @@ test_always_skill_linked_unlisted_not() {
 }
 
 # ---------------------------------------------------------------------------
-# Tests — Codex surface (inlined marker block)
+# Tests — Codex surface (in-repo AGENTS.override.md, read natively)
 # ---------------------------------------------------------------------------
 
 test_codex_inlines_specs() {
     local r; r="$(setup_fake_exobrain)"; add_person "$r" people/alice
     write_config "$r" people/alice/hosts/h1 codex
     render "$r" codex >/dev/null 2>&1 || return 1
-    local a; a="$(cat "$TEST_DIR/codex/AGENTS.md")"
-    assert_contains "$a" "<!-- BEGIN exobrain -->" "codex marker block" || return 1
-    assert_contains "$a" "person scope" "person spec inlined into marker block"
+    assert_file "$r/AGENTS.override.md" "codex override generated in-repo" || return 1
+    local a; a="$(cat "$r/AGENTS.override.md")"
+    # The override supersedes the bare AGENTS.md, so it must carry the root spec…
+    assert_contains "$a" "<!-- scope: global -->" "root spec inlined into override" || return 1
+    # …plus each deeper scope's spec.
+    assert_contains "$a" "person scope" "person spec inlined into override" || return 1
+    # Codex's surface is in-repo, not in CODEX_HOME.
+    assert_no_file "$TEST_DIR/codex/AGENTS.md" "no marker block left in ~/.codex/AGENTS.md"
 }
 
 # ---------------------------------------------------------------------------
