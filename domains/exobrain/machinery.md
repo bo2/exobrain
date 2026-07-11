@@ -45,7 +45,7 @@ Installed by `connect-agent.sh`, refreshed idempotently on every relink.
 
 | Gate | Checks | When |
 |---|---|---|
-| `scripts/validate-exobrain.sh` | Deterministic conventions: `AGENTS.md` placement, file naming, JSON syntax, `scopes.json` shape, the skills registry. | pre-push + manual |
+| `scripts/validate-exobrain.sh` | Deterministic conventions: `AGENTS.md` placement, file naming, JSON syntax, `scopes.json` shape, the skills registry, agent-neutral outgoing commit messages, and — when the gitignored `local/denylist.txt` exists — a leak scan of tracked content, outgoing commit messages, and the branch name. | pre-push + manual |
 | `scripts/authoring-review.sh` | LLM judgment over changed specs/domains against the authoring rules; self-skips when none changed; degrades open when no agent CLI is installed; skippable with `EXOBRAIN_SKIP_AUTHORING_REVIEW=1`. | `exobrain-persist` (after commit, before push) + manual; not a push-hook gate |
 | `scripts/exobrain-healthcheck.sh` | Connection integrity (not-connected / stale links). Read-only; resolves the main checkout from a worktree; always exits 0. | SessionStart + manual |
 | `exobrain-authoring-audit` skill | Scopes a new or justification-heavy doc by its readers, tracing each contested fact to a real reader need. | before drafting/revising a substantial doc |

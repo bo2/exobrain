@@ -13,6 +13,12 @@
 #   - Skills registry integrity (delegated to skills-validate.sh).
 #   - Duplicate feed-card IDs (canonical seed only) — the NNNN filename prefix is
 #     a never-reused provenance key; concurrent PRs can collide on one.
+#   - Agent attribution in outgoing commit messages (CLAUDE.md § Git history
+#     hygiene): "Co-Authored-By: Claude" trailers, "Generated with" footers.
+#   - Denylist leaks (optional): when the gitignored local/denylist.txt exists —
+#     in this checkout or, from a worktree, in the main checkout — its patterns
+#     must not appear in tracked content, outgoing commit messages, or the
+#     branch name. Absent file → check skipped (degrades open).
 #
 # Tools need no schema check: a tool is a self-contained doc under tools/, and
 # its presence at a scope is its registration (see domains/exobrain/tools.md).
@@ -132,6 +138,86 @@ if [[ -d "$REPO_DIR/seed/feed" ]]; then
             printf '%s\n' "${base%%-*}"
         done | sort | uniq -d
     )
+fi
+
+# ---------------------------------------------------------------------------
+# Outgoing-history hygiene — the checks below look only at commits not yet on
+# the remote default branch, so adopting them never flags history
+# retroactively. Both need a remote default branch to diff against; without
+# one (fresh clone, no remote) they're skipped. From a worktree, the main
+# checkout is resolved via the shared git common dir so the gitignored local/
+# scope (which worktrees don't carry) is still found.
+# ---------------------------------------------------------------------------
+
+common="$(git -C "$REPO_DIR" rev-parse --git-common-dir 2>/dev/null || true)"
+MAIN_ROOT="$REPO_DIR"
+if [[ -n "$common" ]]; then
+    case "$common" in /*) : ;; *) common="$REPO_DIR/$common" ;; esac
+    MAIN_ROOT="$(cd "$(dirname "$common")" 2>/dev/null && pwd || echo "$REPO_DIR")"
+fi
+
+default_ref="$(git -C "$REPO_DIR" symbolic-ref --quiet --short refs/remotes/origin/HEAD 2>/dev/null || true)"
+if [[ -z "$default_ref" ]]; then
+    for cand in origin/main origin/trunk origin/master; do
+        if git -C "$REPO_DIR" rev-parse --verify --quiet "$cand" >/dev/null 2>&1; then
+            default_ref="$cand"; break
+        fi
+    done
+fi
+
+# ---------------------------------------------------------------------------
+# Agent-neutral history (CLAUDE.md § Git history hygiene, feed card 0024) —
+# outgoing commit messages carry no agent attribution. Line-anchored so a rule
+# *describing* the forbidden footer inline doesn't false-positive.
+# ---------------------------------------------------------------------------
+
+if [[ -n "$default_ref" ]]; then
+    while IFS= read -r hit; do
+        [[ -z "$hit" ]] && continue
+        record "agent attribution in outgoing commit message: $hit"
+    done < <(git -C "$REPO_DIR" log --format='%s%n%b' "$default_ref..HEAD" 2>/dev/null \
+             | grep -i -E '^(co-authored-by:[[:space:]]*claude|🤖?[[:space:]]*generated with)' | head -10)
+fi
+
+# ---------------------------------------------------------------------------
+# Denylist leak gate — private term list. Each non-comment line of
+# local/denylist.txt (this checkout first, else the main checkout) is a
+# case-insensitive ERE that must not appear in tracked content, outgoing
+# commit messages, or the branch name. The list itself lives in the gitignored
+# local/ scope so it never ships; absent file → skipped (degrades open).
+# ---------------------------------------------------------------------------
+
+denylist=""
+for cand in "$REPO_DIR/local/denylist.txt" "$MAIN_ROOT/local/denylist.txt"; do
+    [[ -f "$cand" ]] && { denylist="$cand"; break; }
+done
+
+if [[ -n "$denylist" ]]; then
+    pat_file="$(mktemp "${TMPDIR:-/tmp}/exobrain-denylist.XXXXXX")"
+    grep -v -e '^[[:space:]]*#' -e '^[[:space:]]*$' "$denylist" > "$pat_file" || true
+    if [[ -s "$pat_file" ]]; then
+        # 1. Tracked file content (working-tree versions; untracked never scanned).
+        while IFS= read -r hit; do
+            [[ -z "$hit" ]] && continue
+            record "denylist match in tracked content: $hit"
+        done < <(git -C "$REPO_DIR" grep -I -i -n -E -f "$pat_file" -- . 2>/dev/null | head -20)
+
+        # 2. Outgoing commit messages.
+        if [[ -n "$default_ref" ]]; then
+            while IFS= read -r hit; do
+                [[ -z "$hit" ]] && continue
+                record "denylist match in outgoing commit message: $hit"
+            done < <(git -C "$REPO_DIR" log --format='%h %s%n%b' "$default_ref..HEAD" 2>/dev/null \
+                     | grep -i -E -f "$pat_file" | head -10)
+        fi
+
+        # 3. Branch name.
+        branch="$(git -C "$REPO_DIR" symbolic-ref --quiet --short HEAD 2>/dev/null || true)"
+        if [[ -n "$branch" ]] && printf '%s\n' "$branch" | grep -q -i -E -f "$pat_file"; then
+            record "denylist match in branch name: $branch"
+        fi
+    fi
+    rm -f "$pat_file"
 fi
 
 # ---------------------------------------------------------------------------

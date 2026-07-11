@@ -99,7 +99,7 @@ Before writing anything — doc, commit, message — name who reads it and what 
 
 ## Validation
 
-- `scripts/validate-exobrain.sh` — deterministic checks (naming, JSON syntax, `scopes.json` shape, the skills registry). Fast; run before committing structural changes.
+- `scripts/validate-exobrain.sh` — deterministic checks (naming, JSON syntax, `scopes.json` shape, the skills registry, agent-neutral outgoing commit messages; plus, when a gitignored `local/denylist.txt` exists, a leak scan of tracked content, outgoing commit messages, and the branch name). Fast; run before committing structural changes.
 - `scripts/authoring-review.sh` — an LLM judgment layer that reviews changed specs and domain files against the authoring rules. The `exobrain-persist` flow runs it automatically (after commit, before push); you can also run it by hand before a substantial spec or domain edit. It self-skips when no spec/domain file changed, degrades open when no agent CLI is installed, and is skippable with `EXOBRAIN_SKIP_AUTHORING_REVIEW=1`. The pre-push hook runs only the deterministic validator above.
 
 ## How exobrain works — depth
