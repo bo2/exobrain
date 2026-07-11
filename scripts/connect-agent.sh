@@ -803,12 +803,15 @@ if $RENDER_ONLY; then
 fi
 
 # --------------------------------------------------------------------------
-# Marker + hooks (first run only)
+# Marker (first run only) + hooks (every run, so template fixes reach
+# already-connected checkouts — the post-merge relink refreshes them after a
+# pull; see machinery.md § Git hooks). The tmp-then-mv write is atomic, so a
+# hook may safely rewrite itself mid-run.
 # --------------------------------------------------------------------------
 
 if ! $RELINK; then
     if $MARKER_IS_DIR; then mkdir -p "$MARKER"; else touch "$MARKER"; fi
-    install_hook
 fi
+install_hook
 
 echo ""; echo "✓ Connected $AGENT."
