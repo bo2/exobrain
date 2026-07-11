@@ -15,10 +15,13 @@
 #     a never-reused provenance key; concurrent PRs can collide on one.
 #   - Agent attribution in outgoing commit messages (CLAUDE.md § Git history
 #     hygiene): "Co-Authored-By: Claude" trailers, "Generated with" footers.
-#   - Denylist leaks (optional): when the gitignored local/denylist.txt exists —
-#     in this checkout or, from a worktree, in the main checkout — its patterns
-#     must not appear in tracked content, outgoing commit messages, or the
-#     branch name. Absent file → check skipped (degrades open).
+#   - Scope validator hooks: every connected scope (plus ancestors and the
+#     auto-joined seed scope) may carry a same-named hook at
+#     <scope>/scripts/validate-exobrain.sh; each runs with the checkout under
+#     validation as $1, and a non-zero exit records its output as violations.
+#     Gitignored scopes (local/) exist only in the main checkout, so hooks
+#     resolve there when a worktree doesn't carry them. No config or no hooks
+#     → skipped (degrades open).
 #
 # Tools need no schema check: a tool is a self-contained doc under tools/, and
 # its presence at a scope is its registration (see domains/exobrain/tools.md).
@@ -180,44 +183,57 @@ if [[ -n "$default_ref" ]]; then
 fi
 
 # ---------------------------------------------------------------------------
-# Denylist leak gate — private term list. Each non-comment line of
-# local/denylist.txt (this checkout first, else the main checkout) is a
-# case-insensitive ERE that must not appear in tracked content, outgoing
-# commit messages, or the branch name. The list itself lives in the gitignored
-# local/ scope so it never ships; absent file → skipped (degrades open).
+# Scope validator hooks — a connected scope extends validation by carrying a
+# same-named hook at <scope>/scripts/validate-exobrain.sh. The chain is the
+# connected leaves (.exobrain.json) plus their AGENTS.md-bearing ancestors and
+# the auto-joined seed scope, resolved by the registry's build_scope_chain;
+# the global scope is this script itself and is skipped. Each hook runs with
+# the checkout under validation as $1; a non-zero exit records its output as
+# violations. Gitignored scopes (local/) exist only in the main checkout —
+# a worktree carries neither their AGENTS.md (so the chain is the union of
+# both roots' chains) nor their hook (so hook paths fall back to the main
+# checkout). No registry, no config, or no hooks → nothing runs (degrades
+# open).
 # ---------------------------------------------------------------------------
 
-denylist=""
-for cand in "$REPO_DIR/local/denylist.txt" "$MAIN_ROOT/local/denylist.txt"; do
-    [[ -f "$cand" ]] && { denylist="$cand"; break; }
-done
+if [[ -f "$REPO_DIR/scripts/skills-registry.sh" ]]; then
+    # shellcheck source=skills-registry.sh
+    source "$REPO_DIR/scripts/skills-registry.sh"
 
-if [[ -n "$denylist" ]]; then
-    pat_file="$(mktemp "${TMPDIR:-/tmp}/exobrain-denylist.XXXXXX")"
-    grep -v -e '^[[:space:]]*#' -e '^[[:space:]]*$' "$denylist" > "$pat_file" || true
-    if [[ -s "$pat_file" ]]; then
-        # 1. Tracked file content (working-tree versions; untracked never scanned).
-        while IFS= read -r hit; do
-            [[ -z "$hit" ]] && continue
-            record "denylist match in tracked content: $hit"
-        done < <(git -C "$REPO_DIR" grep -I -i -n -E -f "$pat_file" -- . 2>/dev/null | head -20)
-
-        # 2. Outgoing commit messages.
-        if [[ -n "$default_ref" ]]; then
-            while IFS= read -r hit; do
-                [[ -z "$hit" ]] && continue
-                record "denylist match in outgoing commit message: $hit"
-            done < <(git -C "$REPO_DIR" log --format='%h %s%n%b' "$default_ref..HEAD" 2>/dev/null \
-                     | grep -i -E -f "$pat_file" | head -10)
+    leaves=()
+    for cfg in "$REPO_DIR/.exobrain.json" "$MAIN_ROOT/.exobrain.json"; do
+        if [[ -f "$cfg" ]]; then
+            while IFS= read -r l; do
+                [[ -n "$l" ]] && leaves+=("$l")
+            done < <(jq -r '(.connected_scopes // []) | .[]' "$cfg" 2>/dev/null)
+            break
         fi
+    done
 
-        # 3. Branch name.
-        branch="$(git -C "$REPO_DIR" symbolic-ref --quiet --short HEAD 2>/dev/null || true)"
-        if [[ -n "$branch" ]] && printf '%s\n' "$branch" | grep -q -i -E -f "$pat_file"; then
-            record "denylist match in branch name: $branch"
+    while IFS= read -r scope; do
+        [[ -z "$scope" || "$scope" == "global" ]] && continue
+        hook=""
+        for cand in "$REPO_DIR/$scope/scripts/validate-exobrain.sh" \
+                    "$MAIN_ROOT/$scope/scripts/validate-exobrain.sh"; do
+            [[ -x "$cand" ]] && { hook="$cand"; break; }
+        done
+        [[ -z "$hook" ]] && continue
+        hook_output="$("$hook" "$REPO_DIR" 2>&1)"
+        hook_status=$?
+        if [[ $hook_status -ne 0 ]]; then
+            record "scope hook ($scope) reported:"
+            while IFS= read -r line; do
+                [[ -n "$line" ]] && record "  $line"
+            done <<<"$hook_output"
         fi
-    fi
-    rm -f "$pat_file"
+    done < <(
+        {
+            build_scope_chain "$REPO_DIR" ${leaves[@]+"${leaves[@]}"}
+            if [[ "$MAIN_ROOT" != "$REPO_DIR" ]]; then
+                build_scope_chain "$MAIN_ROOT" ${leaves[@]+"${leaves[@]}"}
+            fi
+        } | sort -u
+    )
 fi
 
 # ---------------------------------------------------------------------------
