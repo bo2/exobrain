@@ -57,7 +57,7 @@ For multi-participant or long-running efforts, add `timeline: true` to the works
 
 | Date | Author | Summary |
 |------|--------|---------|
-| 2026-06-08 | oleg | Created workspace, initial scope |
+| 2026-06-08 | alex | Created workspace, initial scope |
 ```
 
 The timeline is **append-only** — never edit or remove past rows; newest go at the bottom. It's the audit trail of who did what and when, kept out of the `README.md` itself.

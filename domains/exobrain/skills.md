@@ -44,7 +44,7 @@ Schema: [`/skills.schema.json`](../../skills.schema.json).
 {
   "$schema": "../../skills.schema.json",
   "skills": [
-    { "name": "review-pr", "owner": "oleg", "tier": "optional" },
+    { "name": "review-pr", "owner": "alex", "tier": "optional" },
     { "name": "tidy", "owner": "acme", "tier": "always", "force": true },
     { "name": "review-pr", "from": "global", "tier": "always" },
     { "name": "skill-creator", "owner": "anthropic", "tier": "optional",

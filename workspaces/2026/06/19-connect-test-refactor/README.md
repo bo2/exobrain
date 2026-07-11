@@ -1,7 +1,7 @@
 ---
 status: resolved
 created: 2026-06-19
-owner: oleg
+owner: maintainer
 related:
   - domains/exobrain/scopes.md
   - domains/exobrain/agents.md
@@ -27,7 +27,7 @@ connection model:
    wrapper (`seed-tests`). `seed/` becomes a real scope.
 
 Readers: the implementing agent (needs the target state, the surface area, and a
-shippable sequence) and oleg (reviewing the decisions before build).
+shippable sequence) and the maintainer (reviewing the decisions before build).
 
 ## Decisions (settled)
 
@@ -102,8 +102,8 @@ shippable sequence) and oleg (reviewing the decisions before build).
 `.exobrain.json` (per machine, gitignored):
 
 ```json
-{ "connected_scopes": ["people/oleg", "people/oleg/hosts/2mac"],
-  "person": "oleg",
+{ "connected_scopes": ["people/alex", "people/alex/hosts/laptop"],
+  "person": "alex",
   "agents": ["claude"] }
 ```
 
