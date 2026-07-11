@@ -44,10 +44,10 @@ Each agent pulls auto-loaded specs into its prompt differently; the content is i
 | Agent | Connected-scope specs | Generated indexes |
 |---|---|---|
 | **Claude Code** | `.claude/CLAUDE.md` `@-import`s `.claude/connected-scopes.md` — a manifest of `@-import`s to each connected scope's *live* source `AGENTS.md`/sidecar (by reference, not copied) | The same `CLAUDE.md` `@-import`s `.claude/optional-skills.md`, `.claude/tools-index.md`, `.claude/domains-index.md` |
-| **OpenClaw** | Inlined into `USER.md` via a marker block (`<!-- exobrain --> … <!-- END exobrain -->`) | Inlined in the same block |
-| **Codex** | Inlined into `AGENTS.md` via a marker block | Inlined in the same block |
+| **Codex** | The whole composition is written to an in-repo, gitignored `AGENTS.override.md`, read natively — it outranks `AGENTS.md` at the same directory level | Inlined in `AGENTS.override.md` |
+| **OpenClaw** | Inlined into `USER.md` via a marker block (`<!-- BEGIN exobrain --> … <!-- END exobrain -->`) | Inlined in the same block |
 
-All three deliver the **same content** — each connected scope's specs (shallow→deep) plus the generated indexes, with the global scope auto-loaded separately. The difference is delivery: Claude `@-import`s a manifest pointing at the *live* source files, so a scope edit shows up without a recompose; OpenClaw and Codex inline a copy via a marker-block rewrite because they lack an import primitive.
+All three deliver the **same content** — each connected scope's specs (shallow→deep) plus the generated indexes — differing in delivery and in how the global scope (root `AGENTS.md`) arrives. Claude `@-import`s a manifest pointing at the *live* source files, so a scope edit shows up without a recompose, and lets the checked-in root `CLAUDE.md` load the global scope; OpenClaw inlines a copy via a marker-block rewrite and relies on its native pickup of the root `AGENTS.md`. Codex is the exception: its `AGENTS.override.md` *replaces* `AGENTS.md`, so the file must be self-contained — the connector inlines the global scope into it rather than leaving it to be auto-loaded.
 
 ## `connect-agent.sh` end-to-end
 
@@ -58,7 +58,7 @@ A single run:
 3. **Link always-tier skills** — symlink each into the agent's skills dir as `<name>.<scope-owner>/`. Most agents read it from their context surface (`.claude/skills`, `~/.openclaw/workspace/skills`); Codex scans a repo-local `.agents/skills`, so its skills link there — out of the global `~/.codex`, scoped to this repo.
 4. **Fetch external skills** — route to `skills/` (always) or `skills-optional/` (optional).
 5. **Generate the indexes** — `optional-skills.md` (optional-tier skills), `tools-index.md` (visible tool docs), `domains-index.md` (domains + their summaries).
-6. **Compose + inject** — deliver each connected scope's `AGENTS.md` (+ agent sidecar, shallow→deep) and the generated indexes. Claude writes `.claude/connected-scopes.md` — a manifest of `@-import`s to the live source specs — and a `.claude/CLAUDE.md` that `@-import`s that manifest plus each index; OpenClaw/Codex inline the same specs and indexes into a marker block. The global scope loads separately: Claude via the checked-in root `CLAUDE.md`, Codex/OpenClaw by auto-loading the root `AGENTS.md` (their root sidecar is prepended into the block).
+6. **Compose + inject** — deliver each connected scope's `AGENTS.md` (+ agent sidecar, shallow→deep) and the generated indexes. Claude writes `.claude/connected-scopes.md` — a manifest of `@-import`s to the live source specs — and a `.claude/CLAUDE.md` that `@-import`s that manifest plus each index; Codex writes the self-contained in-repo `AGENTS.override.md` (root scope and root sidecar inlined, since it replaces `AGENTS.md`); OpenClaw inlines the same specs and indexes into a `USER.md` marker block, with its root sidecar prepended (the root `AGENTS.md` itself loads natively).
 7. **Install the post-merge hook** (first run) — re-links every marked agent after `git pull`.
 8. **Run scope hooks** — if a scope dir has an executable `scripts/connect-agent.sh`, run it.
 

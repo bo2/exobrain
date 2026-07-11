@@ -14,15 +14,16 @@ The `connect-agent.sh` ecosystem wires repo content into each agent's context �
 | `.claude/CLAUDE.md` *(generated)* | Claude's generated entry point — `@-import`s `.claude/connected-scopes.md` + `.claude/optional-skills.md`. (The handcrafted root `CLAUDE.md` is separate and loads the global scope via `@AGENTS.md`.) |
 | `.claude/connected-scopes.md` *(generated)* | A manifest of `@-import`s to each connected deeper scope's source `AGENTS.md`/`CLAUDE.md`, shallow→deep — referenced by relative path, not copied, so scope edits show up without a recompose. |
 | `.claude/optional-skills.md` *(generated)* | The Claude-filtered optional-skills index. |
-| `~/.codex/AGENTS.md` · `~/.openclaw/workspace/USER.md` *(generated)* | Codex / OpenClaw surfaces — the same composed context (root sidecar + deeper-scope specs + index) inlined between markers, since neither has an `@-import` primitive. |
+| `AGENTS.override.md` *(generated, Codex)* | Codex surface — the full composition (root `AGENTS.md` + root sidecar + deeper-scope specs + index) written to an in-repo, gitignored `AGENTS.override.md`, which Codex reads natively and which outranks `AGENTS.md` at the same directory level (so it must carry the root spec too). |
+| `~/.openclaw/workspace/USER.md` *(generated)* | OpenClaw surface — the same composed context inlined between markers, since OpenClaw has no `@-import` primitive. |
 | `.claude/` · `.codex` · `.openclaw` | Per-agent markers — which agents this checkout connects. `--relink` silently skips agents without a marker. |
 | `.exobrain.json` *(gitignored)* | Saved config: `connected` scope leaves, `agents`, per-tool state. |
 | `.agents/skills/` *(generated, Codex)* | Repo-local Codex skills dir (real dir, symlinked children) — keeps exobrain skills out of the global `~/.codex/skills`. |
 | `scripts/skills-registry.sh` · `scripts/fetch-external-skills.sh` | Sourced/invoked by the connector — see § Skills system. |
-| `seed/skills/seed-tests/scripts/test-connect-agent.sh` | Deterministic connector/registry harness (seed-local, under the `seed-tests` skill) — builds isolated fake exobrains in temp dirs and asserts scope-chain resolution, opt-in skill tiers, flag-driven identity (name-match / guest / extra scope / stored person), the Claude manifest / Codex inline surfaces, the tools index, and validator/fetcher plumbing. |
+| `seed/skills/seed-tests/scripts/test-connect-agent.sh` | Deterministic connector/registry harness (seed-local, under the `seed-tests` skill) — builds isolated fake exobrains in temp dirs and asserts scope-chain resolution, opt-in skill tiers, flag-driven identity (name-match / guest / extra scope / stored person), the Claude manifest / Codex override surfaces, the tools index, and validator/fetcher plumbing. |
 | `skills/exobrain-tests/` · `seed/skills/seed-tests/` | The **behavioral** suite (agent-driven): `exobrain-tests` (global, runs on any instance) + `seed-tests` (seed-only — builds an instance from the seed, then runs the suite against it). See § Skills system. |
 
-**Verifying a connector/wiring change** (`connect-agent.sh`, `skills-registry.sh`, `fetch-external-skills.sh`, the injection): first run `seed/skills/seed-tests/scripts/test-connect-agent.sh` for the fixture-level logic. Then render a real checkout side-effect-free with `connect-agent.sh <agent> --render-specs-only` (point `CODEX_HOME` / `OPENCLAW_WORKSPACE` at a throwaway dir to render those agents without touching your home config), and spot-check the agent's surface — for Claude that `.claude/connected-scopes.md` + `.claude/optional-skills.md` exist and every manifest `@-import` resolves to a real file; for Codex/OpenClaw that the marker block in `AGENTS.md` / `USER.md` holds the expected scopes — plus the `.claude/` and `.agents/skills/` dirs. Finally run `scripts/validate-exobrain.sh` for conventions.
+**Verifying a connector/wiring change** (`connect-agent.sh`, `skills-registry.sh`, `fetch-external-skills.sh`, the injection): first run `seed/skills/seed-tests/scripts/test-connect-agent.sh` for the fixture-level logic. Then render a real checkout side-effect-free with `connect-agent.sh <agent> --render-specs-only` (point `CODEX_HOME` / `OPENCLAW_WORKSPACE` at a throwaway dir to render those agents without touching your home config), and spot-check the agent's surface — for Claude that `.claude/connected-scopes.md` + `.claude/optional-skills.md` exist and every manifest `@-import` resolves to a real file; for Codex that the generated in-repo `AGENTS.override.md` holds the expected scopes, for OpenClaw that the marker block in `USER.md` does — plus the `.claude/` and `.agents/skills/` dirs. Finally run `scripts/validate-exobrain.sh` for conventions.
 
 ## Git hooks
 
@@ -64,7 +65,7 @@ Physical skill directories at any scope, inert until declared in a `skills.json`
 | `scripts/skills-validate.sh` | Verify declarations have directories and overrides reference real declarations. |
 | `scripts/skills-promote.sh` | Opt a skill in/out (override) or `--force` a declaration, without hand-editing JSON. |
 | `scripts/fetch-external-skills.sh` | Fetch external (third-party) skills declared with `source`. |
-| optional-skills index *(generated)* | Index of optional-tier skills, read on demand — `.claude/optional-skills.md` (Claude) or inlined into `~/.codex/AGENTS.md` / `~/.openclaw/workspace/USER.md`. |
+| optional-skills index *(generated)* | Index of optional-tier skills, read on demand — `.claude/optional-skills.md` (Claude), or inlined into `AGENTS.override.md` (Codex) / `~/.openclaw/workspace/USER.md` (OpenClaw). |
 
 Global skills the seed ships: `exobrain-ab`, `exobrain-authoring-audit`, `exobrain-domains`, `exobrain-evolve`, `exobrain-persist`, `exobrain-tools`.
 
@@ -76,7 +77,7 @@ The per-tool catalog of external data sources — see [`tools.md`](tools.md).
 |---|---|
 | `tools/*.md` | The catalog: one self-contained doc per tool (its presence at a scope *is* its registration). The seed ships `tools/README.md` + `tools/example-tool.md` (a template); add a doc per tool you connect, with group/person/host overlays as needed. |
 | `.exobrain.json` *(gitignored)* | Per-machine, per-tool connection state (the `tools` block). |
-| tools index *(generated)* | Flat catalog of every visible tool doc (name + path + first-line purpose), composed into each agent's surface like the optional-skills index — `.claude/tools-index.md` (Claude) or inlined into `~/.codex/AGENTS.md` / `~/.openclaw/workspace/USER.md`. Visibility only; connection stays per-machine in `.exobrain.json`. |
+| tools index *(generated)* | Flat catalog of every visible tool doc (name + path + first-line purpose), composed into each agent's surface like the optional-skills index — `.claude/tools-index.md` (Claude), or inlined into `AGENTS.override.md` (Codex) / `~/.openclaw/workspace/USER.md` (OpenClaw). Visibility only; connection stays per-machine in `.exobrain.json`. |
 | `exobrain-tools` skill | Drives the catalog: `onboard` / `status` / `add` / `refresh` / `doctor` over the connected scope chain. |
 
 Each tool doc carries its own Setup → Verify procedure; run it by hand, or let the `exobrain-tools` skill drive it (it never reads or stores a secret value).
@@ -88,7 +89,7 @@ The durable knowledge areas — see [`domains.md`](domains.md).
 | Artifact | Role |
 |---|---|
 | `domains/*/README.md` | Each domain's entry point — frontmatter (`name`, `type`, `curator`, `summary`) + TL;DR + file index. The one-line `summary:` is pulled verbatim into the domains index. |
-| domains index *(generated)* | Flat catalog of every domain (name + README path + `summary:`), composed into each agent's surface like the tools index — `.claude/domains-index.md` (Claude) or inlined into `~/.codex/AGENTS.md` / `~/.openclaw/workspace/USER.md`. Root-only and unscoped (no tiers/overlays); a pure function of the committed READMEs, regenerated on relink. |
+| domains index *(generated)* | Flat catalog of every domain (name + README path + `summary:`), composed into each agent's surface like the tools index — `.claude/domains-index.md` (Claude), or inlined into `AGENTS.override.md` (Codex) / `~/.openclaw/workspace/USER.md` (OpenClaw). Root-only and unscoped (no tiers/overlays); a pure function of the committed READMEs, regenerated on relink. |
 | `exobrain-domains` skill | Builds and maintains domains (`create` / `distill` / `curate` / `update`), including setting and refreshing each README's `summary:`. |
 
 ## Git workflow
@@ -109,7 +110,7 @@ How one body of content serves Claude, Codex, and OpenClaw without bleed — see
 |---|---|
 | Per-scope sidecars `CLAUDE.md` / `CODEX.md` / `OPENCLAW.md` | Agent-specific content at any scope; composed only for the matching agent. |
 | `<name>.<agent>.sh` script suffix | Agent-specific script variant; invokers pick the right one. |
-| Per-agent surface | Each agent owns its surface and no two write the same file: Claude `@-import`s `.claude/connected-scopes.md` + `.claude/optional-skills.md`; Codex / OpenClaw get the same context inlined into `~/.codex/AGENTS.md` / `USER.md` via marker block. |
+| Per-agent surface | Each agent owns its surface and no two write the same file: Claude `@-import`s `.claude/connected-scopes.md` + `.claude/optional-skills.md`; Codex reads a generated in-repo `AGENTS.override.md`; OpenClaw gets the same context inlined into `USER.md` via marker block. |
 | Non-interference | The linker and fetcher filter by `agent` / `skipAgents`, so one agent's artifacts never enter another's context. |
 
 ## Propagation

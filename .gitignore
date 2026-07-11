@@ -9,6 +9,7 @@ __pycache__/
 !.claude/settings.json
 .codex
 .agents/
+AGENTS.override.md
 
 # Per-machine instance config and secrets
 .exobrain.json
