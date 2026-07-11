@@ -24,6 +24,7 @@ Common scope types — collection dirs declared in `scopes.json`, extend freely:
 - **person** — you: `people/<id>/`. A solo exobrain has one.
 - **host** — one machine: `people/<id>/hosts/<hostname>/`. Machine-specific paths, tunnels, local config.
 - **group** / **team** — a shared scope for several people: `groups/<name>/`, holding its own `people/`. Optional — add when family or collaborators appear.
+- **local** — `local/` at the repo root, **gitignored**: private context that must never land in the repo (org names, internal hostnames, anything unpublishable). A standalone scope, not a collection; connect it like any other leaf. Every tracked scope — person and group included — is visible to anyone with repo access.
 
 A person needs no group — `people/<id>/` sits at the top level. To add a scope, make a directory with an `AGENTS.md` (even a one-line stub). Within any scope, an agent-specific sidecar (`CLAUDE.md` / `CODEX.md` / `OPENCLAW.md`) sits beside `AGENTS.md` for content that applies under only one agent.
 
