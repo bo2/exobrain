@@ -35,7 +35,7 @@
 # than assuming a fixed ladder.
 #
 #   home = "global"            → <repo>/skills/<name>/                 (owner free metadata)
-#   home = "<path>"            → <repo>/<path>/skills/<name>/          (e.g. people/oleg, groups/acme)
+#   home = "<path>"            → <repo>/<path>/skills/<name>/          (e.g. people/alex, groups/acme)
 #   home = "external"          → fetched into the agent's skills dir as <name>.<owner>/
 #
 # tier values: always | optional | unlisted | off
@@ -77,7 +77,7 @@
 
 # sanitize_suffix <path> — filename-safe scope suffix. "/" → "__" (a separator
 # that can't be confused with a hyphen in an id), everything else lowercased and
-# non-[a-z0-9._-] replaced with "-". people/oleg → people__oleg.
+# non-[a-z0-9._-] replaced with "-". people/alex → people__alex.
 sanitize_suffix() {
     local p="$1"
     p="${p//\//__}"
@@ -250,7 +250,7 @@ skills_dir_for() {
 
 # Suffix in the symlink filename: <name>.<suffix>. Global skills get no suffix;
 # external skills key on the author; everything else on the sanitized home-scope
-# path (so people/oleg and groups/acme/people/oleg never collide).
+# path (so people/alex and groups/acme/people/alex never collide).
 skills_link_suffix() {
     local scope="$1" owner="$2"
     case "$scope" in
