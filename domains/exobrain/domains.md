@@ -77,7 +77,7 @@ A domain with multiple contributors or fast-moving content (WIP domains especial
 
 | Date | Author | Summary |
 |------|--------|---------|
-| 2026-06-11 | oleg | Scaffolded the systems/ section from the June walkthrough |
+| 2026-06-11 | alex | Scaffolded the systems/ section from the June walkthrough |
 ```
 
 One row per persist pass — a narrative summary of the pass, not a per-edit log. The file is **append-only**: never edit or remove past rows; newest at the bottom. Unlike profile files, `TIMELINE.md` is a change record, not current truth — it's exempt from the current-state-only rule.

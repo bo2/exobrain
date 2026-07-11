@@ -15,8 +15,8 @@ This matches the convention that every scope already carries an `AGENTS.md`; it 
 Scopes nest by **literal directory containment**. A scope dir may contain more scope dirs; the path expresses the tree:
 
 ```
-people/oleg/hosts/laptop/            # person → host          (no group)
-groups/acme/teams/ads/people/oleg/   # group → team → person  (deep org)
+people/alex/hosts/laptop/            # person → host          (no group)
+groups/acme/teams/ads/people/alex/   # group → team → person  (deep org)
 ```
 
 A scope's **type** (person / group / team / host / …) is cosmetic — inferred from its parent collection dir, with optional nicer labels in `scopes.json`:
@@ -37,7 +37,7 @@ A scope's **type** (person / group / team / host / …) is cosmetic — inferred
 `.exobrain.json` (gitignored, per machine) stores `connected_scopes` — a list of **leaf** scope paths — and `person`, your id (used for skill owner-match, so it's location-independent of where the person scope sits):
 
 ```json
-{ "connected_scopes": ["people/oleg/hosts/laptop"], "person": "oleg", "agents": ["claude"] }
+{ "connected_scopes": ["people/alex/hosts/laptop"], "person": "alex", "agents": ["claude"] }
 ```
 
 Connecting a leaf implies its whole ancestor chain. The wiring algorithm:
@@ -67,7 +67,7 @@ The connector resolves identity by **name-match** — your handle and hostname m
 | **Sidecar specs** | Each scope's `AGENTS.md` + agent sidecar, linked side by side; the agent reads all | `scripts/connect-agent.sh` |
 | **Tools catalog** | Per-tool docs `tools/<name>.md` + group/person/host overlays (by tool name) | globbed by scope; deeper scope wins |
 
-Skills are the only resolver that uses `off` to actively shadow a shallower scope; sidecars and tool overlays merge additively. The `scope` value of a skill entry is the scope's repo-relative path (or `global` / `external`), so the same skill name at two scopes never collides — they link with distinct path-derived suffixes (`name.people__oleg`).
+Skills are the only resolver that uses `off` to actively shadow a shallower scope; sidecars and tool overlays merge additively. The `scope` value of a skill entry is the scope's repo-relative path (or `global` / `external`), so the same skill name at two scopes never collides — they link with distinct path-derived suffixes (`name.people__alex`).
 
 ## How to override
 

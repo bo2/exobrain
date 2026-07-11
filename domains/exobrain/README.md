@@ -1,7 +1,7 @@
 ---
 name: exobrain
 type: system
-curator: oleg
+curator: maintainer
 summary: How this exobrain is structured and how its mechanisms (scopes, skills, tools, propagation) work — the meta-domain, written for an agent.
 ---
 
