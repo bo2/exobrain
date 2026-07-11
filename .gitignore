@@ -14,10 +14,9 @@ __pycache__/
 .exobrain.json
 .env
 
-# Personal scope dirs — person/group scopes are instance-specific, like .exobrain.json.
-# A private personal exobrain that syncs across machines can un-ignore these.
-people/
-groups/
+# Private local scope — context that must never land in the repo (person/group
+# scopes are committed like any other content).
+/local/
 
 # Generated / throwaway output and worktrees
 tmp/

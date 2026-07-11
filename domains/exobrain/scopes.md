@@ -28,6 +28,10 @@ A scope's **type** (person / group / team / host / …) is cosmetic — inferred
 
 "Any other type when needed" = make a directory with an `AGENTS.md`. `scopes.json` is metadata, never identification.
 
+## The local scope
+
+`local/` at the repo root is a standalone **gitignored** scope for private context that must never land in the repo — org identifiers, internal hostnames, anything unpublishable. Every *tracked* scope (person and group included) is visible to anyone with repo access; `local/` is the one layer that stays on the machine. It is an ordinary scope in every other way — an `AGENTS.md` dir, connected as a leaf, resolved through the same walk. Because it is not a person-type scope, a setup that connects only `local/` carries no person id in its chain — set `person` in `.exobrain.json` so skill owner-match still works.
+
 ## Connection and resolution
 
 `.exobrain.json` (gitignored, per machine) stores `connected_scopes` — a list of **leaf** scope paths — and `person`, your id (used for skill owner-match, so it's location-independent of where the person scope sits):
