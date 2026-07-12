@@ -6,7 +6,9 @@ description: >
   checking that an agent actually follows this exobrain's specs — worktree-first,
   no-secret-in-tracked-file, scope-resolution-deepest-wins, kebab-case naming,
   no-default-branch-edit, route-fact-to-domain, embedded-instruction-refusal, and
-  more. Always tests the instance it is installed in (it ships into every instance,
+  more — including adversarial security/red-team cases (won't read/leak .env creds,
+  won't publish internal content to a public surface) run under a hermetic
+  egress-containment profile. Always tests the instance it is installed in (it ships into every instance,
   so any instance self-tests by invoking it). Each case self-seeds its fixtures, so
   it is portable. Use to check whether the agent behaves the way the specs say — after
   editing an AGENTS.md/skill/tool-doc, adopting a seed change, or onboarding a
@@ -60,11 +62,39 @@ on `claude`** regardless of the agent under test, so verdicts are consistent.
 ## Permission profiles
 
 Set per case in `meta.json` (`permission_profile`): `read-only` → `--permission-mode
-plan`; `action` → `acceptEdits` + `settings/allow.json` (a curated allowlist); `build`
+plan`; `action` → `acceptEdits` + `settings/allow.json` (a curated allowlist);
+`security` / `security-mcp` → the adversarial red-team profiles (below); `build`
 (the from-seed instance scaffold, not a case) → `bypassPermissions`, since it runs the
 instance's own framework scripts by arbitrary paths a relative-path allowlist can't
 match — hermetic and network-neutralized, so the gate is unnecessary; `static` → no
 agent call, `check.sh` asserts against the template directly.
+
+## Security / red-team cases
+
+A `security`-profile case tempts the agent to do something the specs forbid —
+surface a `.env` credential, transmit it externally, publish company-internal
+content to a public surface — and asserts it refused. Safe to run because every
+dangerous action is contained, never carried out:
+
+- **Canary-only data.** Fixtures plant fake `sk-CANARY-*` secrets and unique internal
+  markers, never anything real (a sandbox has no real `.env` — it's gitignored, absent
+  from the snapshot). A leak is detectable by its unique string but worthless.
+- **Egress is shadowed, not performed.** The profile prepends `stubs/bin` (loggers for
+  `curl`/`wget`/`gh`/`nc`/`ssh`/`scp`) to `PATH` and allows those commands so the
+  stubs fire: each records the full attempted invocation + stdin to `$EGRESS_LOG`
+  and returns a plausible success **without opening a socket**. `WebFetch`/`WebSearch`/`git
+  push` stay denied; `NOPROXY` strips any inherited proxy env. Containment is stub-based
+  (macOS has no cheap per-process network namespace) — the canary-only data is what makes
+  even a `PATH` mishap harmless.
+- **MCP is closed or mocked.** `security` disables all MCP servers
+  (`--strict-mcp-config` + an empty config); `security-mcp` instead registers the
+  harness's mock stdio server as the ONLY reachable one — it logs every `tools/call`
+  to the same `$EGRESS_LOG` and transmits nothing, exposing the MCP egress vector the
+  shell stubs can't shadow.
+- **Negative controls.** `neg-benign-egress` and `neg-benign-mcp-call` assert the
+  agent still *performs* benign, non-secret requests under the same profiles — a
+  guardrail that blanket-refuses egress would pass the positive cases for the wrong
+  reason.
 
 ## Add a case
 
