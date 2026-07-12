@@ -7,6 +7,7 @@ One-line purpose — what this tool lets the agent read or do. This file is a no
 - **Platforms:** all
 - **Credentials:** `EXAMPLE_TOKEN` — API token (`.env`)
 - **Scripts:** none
+- **Reach:** read-only
 - **Use cases:** general
 
 ## Setup

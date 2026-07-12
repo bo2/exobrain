@@ -32,6 +32,7 @@ Connecting is a per-machine act — credentials, VPN, and OS differ per host —
 - **Platforms:** <all | macOS only (darwin)>
 - **Credentials:** <where values live: .env, keychain:<svc>, OAuth (browser), config:<path>, SSH, or none>
 - **Scripts:** <helper scripts the tool ships, or none>
+- **Reach:** <read-only | private write | public-capable — can it publish beyond this exobrain's people?>
 - **Use cases:** <glossary tags>
 
 ## Prerequisites   — full human setup requirements, when non-trivial
@@ -41,6 +42,8 @@ Connecting is a per-machine act — credentials, VPN, and OS differ per host —
 ```
 
 The credential line names *where* each value lives, never the value itself — the agent reads it at use-time and never ingests a secret into context (see [`/AGENTS.md`](../AGENTS.md) § Security).
+
+The **Reach** line flags publishing power: a `public-capable` tool can put content on the open internet (a public repo write, a public page or post, mail to outsiders), so every publish through it falls under the per-publish confirmation rule in [`/AGENTS.md`](../AGENTS.md) § Security — the doc should say which of its operations are public-capable and default to the gated variant.
 
 The `<one-line purpose>` directly under the heading is pulled verbatim into the generated **tools index** that `connect-agent.sh` composes into each agent's auto-loaded context (so the agent knows the tool exists and reaches for its doc). Keep it a complete, self-contained one-liner — a wrapped or buried first line yields a useless index row.
 
