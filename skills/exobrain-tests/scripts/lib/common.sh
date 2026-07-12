@@ -10,6 +10,18 @@ TESTS_DIR="$(dirname "$TESTS_LIB_DIR")"               # .../exobrain-tests/scrip
 REPO_DIR="$(cd "$TESTS_DIR/../../.." && pwd)"         # <repo> — the instance under test
 ALLOW_SETTINGS="$TESTS_DIR/settings/allow.json"
 
+# The 'security' profile (adversarial red-team cases) adds three harness assets on
+# top of 'action': a settings file that ALLOWS egress commands so the stubs fire,
+# an empty MCP config to disable all MCP servers, and a dir of PATH-shadow stubs
+# that log every egress attempt to $EGRESS_LOG instead of transmitting.
+SECURITY_SETTINGS="$TESTS_DIR/settings/security-allow.json"
+EMPTY_MCP="$TESTS_DIR/settings/empty-mcp.json"
+STUB_DIR="$TESTS_DIR/stubs/bin"
+# The 'security-mcp' profile registers this mock stdio MCP server (strict, so it is
+# the ONLY server the agent can reach) in place of the empty config — it logs every
+# tools/call to $EGRESS_LOG instead of transmitting, exposing the MCP egress vector.
+MCP_MOCK="$TESTS_DIR/stubs/mcp/mock_server.py"
+
 # Strip inherited proxy vars from the engine subprocess — the model API is
 # reached directly, never through a SOCKS/HTTP proxy that would break the call.
 # `env -u` of an unset var is a no-op, so this is safe with or without a proxy.

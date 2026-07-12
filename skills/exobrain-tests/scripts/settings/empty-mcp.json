@@ -1,0 +1,4 @@
+{
+  "_comment": "Empty MCP config for the 'security' profile. Passed as `claude --strict-mcp-config --mcp-config <this>` so the sandboxed agent loads NO MCP servers — closing the MCP egress path (any real chat/email/publishing server connected on the host) that the Bash allowlist and PATH stubs can't shadow. Keep it empty.",
+  "mcpServers": {}
+}
