@@ -425,12 +425,27 @@ test_external_resolve_plan() {
 # Tests — flag-driven (non-interactive) identity resolution
 # ---------------------------------------------------------------------------
 
-test_flags_connect_person_host() {
-    local r; r="$(setup_fake_exobrain)"
+test_flags_connect_existing_host() {
+    local r; r="$(setup_fake_exobrain)"; add_person "$r" people/alice
     render_flags "$r" claude --handle alice --host h1 >/dev/null 2>&1 || return 1
     assert_eq "alice" "$(jq -r '.person' "$r/.exobrain.json")" "person stored from --handle" || return 1
-    assert_eq "true" "$(jq '(.connected_scopes // []) | index("people/alice/hosts/h1") != null' "$r/.exobrain.json")" "host leaf connected" || return 1
-    assert_file "$r/people/alice/AGENTS.md" "person scope scaffolded at conventional location"
+    assert_eq "true" "$(jq '(.connected_scopes // []) | index("people/alice/hosts/h1") != null' "$r/.exobrain.json")" "existing host leaf connected"
+}
+
+test_flags_person_only_when_host_missing() {
+    local r; r="$(setup_fake_exobrain)"
+    mkdir -p "$r/people/carol"; printf '# person scope\n' > "$r/people/carol/AGENTS.md"
+    render_flags "$r" claude --handle carol --host h9 >/dev/null 2>&1 || return 1
+    assert_eq "true" "$(jq '(.connected_scopes // []) | index("people/carol") != null' "$r/.exobrain.json")" "falls back to the person scope" || return 1
+    assert_no_file "$r/people/carol/hosts/h9/AGENTS.md" "missing host dir not scaffolded"
+}
+
+test_flags_no_scaffold_unknown_handle() {
+    local r; r="$(setup_fake_exobrain)"
+    render_flags "$r" claude --handle bob --host h9 >/dev/null 2>&1 || return 1
+    assert_eq "[]" "$(jq -c '.connected_scopes' "$r/.exobrain.json")" "unknown handle connects nothing" || return 1
+    assert_eq "null" "$(jq -r '.person // "null"' "$r/.exobrain.json")" "no person stored without a scope" || return 1
+    assert_no_file "$r/people/bob/AGENTS.md" "flags never scaffold"
 }
 
 test_flags_guest() {
@@ -504,7 +519,9 @@ run_test "validate clean"                      test_validate_clean
 run_test "validate dangling override"          test_validate_dangling_override
 run_test "fetcher accepts --leaves"            test_fetcher_accepts_leaves_no_external
 run_test "external resolve plan"               test_external_resolve_plan
-run_test "flags connect person+host"           test_flags_connect_person_host
+run_test "flags connect existing host"         test_flags_connect_existing_host
+run_test "flags person-only when host missing" test_flags_person_only_when_host_missing
+run_test "flags never scaffold"                test_flags_no_scaffold_unknown_handle
 run_test "flags guest connects nothing"        test_flags_guest
 run_test "flags extra --scope"                 test_flags_extra_scope
 run_test "flags name-match nested"             test_flags_name_match_nested
