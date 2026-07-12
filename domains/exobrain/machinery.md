@@ -102,6 +102,13 @@ See `AGENTS.md` → "Git workflow" and the `exobrain-persist` skill.
 | `src/<repo>/` *(gitignored)* | Clones of external code; `src/exobrain-seed/` is the one fixed name — the seed's update cache for `exobrain-evolve`. |
 | `exobrain-persist` skill | The worktree → commit → push → PR → squash-merge → update main → cleanup procedure (a skill + standing authorization, not a script). |
 
+## Periodic jobs
+
+| Artifact | Role |
+|---|---|
+| `scripts/scheduler.py` | One entry point for the repo's periodic jobs. Jobs declared in per-scope `schedule.json` registries (repo root + any scope dir, the gitignored `local/` included); period-based ticks (`every` = minimum period between run starts); per-job flock so runs never overlap; modes `tick` (cron), `loop` (tmux; re-reads registries each tick), `run <job>`, `status`. State and logs under gitignored `tmp/scheduler/`. |
+| `schedule.json` *(per scope, optional)* | `{"jobs": [{"name", "every", "command" (argv, `{ROOT}` expands to the repo root), "timeout", "enabled"}]}` — job names unique across all registries. |
+
 ## Agent-agnostic mechanism
 
 How one body of content serves Claude, Codex, and OpenClaw without bleed — see [`agents.md`](agents.md).
