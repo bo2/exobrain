@@ -50,7 +50,7 @@ The old fixed ladder (`global < team < person < host`) is just one chain shape. 
 
 A connected leaf can be **any** scope — any `AGENTS.md`-bearing dir — not only a person/host pinpoint scope or one on a single branch. Because chains are unioned, you may list several leaves on different branches and even a standalone top-level scope (e.g. a `seed/` scope) alongside your person/host chain; each joins resolution at its own depth, deepest still winning.
 
-The connector resolves identity by **name-match** — your handle and hostname match a scope by its leaf name (the `people/`·`hosts/` parent is a tiebreaker, not a requirement), falling back to the conventional collection path when the scope doesn't exist yet. The interactive wizard then offers a checkbox menu of every connectable scope with person + host pre-checked, so connecting a standalone scope is a toggle, not a hand-edit. Non-interactive callers pass identity as flags — `--handle` / `--host` / `--scope` / `--guest`.
+The connector resolves identity by **name-match** — your handle and hostname match a scope by its leaf name (the `people/`·`hosts/` parent is a tiebreaker, not a requirement). The interactive wizard scaffolds the person/host pair when absent, then offers a checkbox menu of every connectable scope with person + host pre-checked, so connecting a standalone scope is a toggle, not a hand-edit. Non-interactive callers pass identity as flags — `--handle` / `--host` / `--scope` / `--guest` — and flags **never scaffold**: they connect the deepest existing scope for the handle (host leaf, else person), or nothing but `--scope`, with a notice. Scripted setups (`create-instance`, CI) create their scope dirs first, then connect.
 
 ## What we explicitly do NOT scope
 

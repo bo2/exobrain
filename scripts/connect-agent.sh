@@ -12,8 +12,9 @@
 # Identity is resolved from one of four sources, in precedence order:
 #   explicit flags (--handle/--host/--scope/--guest)  >  existing/parent config  >
 #   interactive prompts (first-time setup)             >  guest (global only).
-# --handle/--host name-match a person/host scope (scaffolding the conventional
-# location if absent); --scope adds any standalone scope; --guest connects nothing.
+# --handle/--host name-match a person/host scope and connect the deepest EXISTING
+# one (host leaf, else person) — flags never scaffold; only the interactive wizard
+# does. --scope adds any standalone scope; --guest connects nothing.
 # The connecting person's id is stored as `person` for skill owner-match.
 #
 # Agent surfaces — each agent gets its OWN surface; no two agents ever write the
@@ -316,8 +317,12 @@ run_wizard() {
 
 # resolve_from_flags — non-interactive identity from explicit flags. Used by
 # create-instance and the bootstrap test (which gather the answers themselves) and
-# any scripted setup. --guest connects nothing; --handle (+ --host) resolves and
-# scaffolds the person/host pair; --scope adds standalone scope paths verbatim.
+# any scripted setup. --guest connects nothing; --handle (+ --host) connects the
+# deepest EXISTING scope for the handle — the host leaf if that dir exists, else
+# the person scope — and never scaffolds: flags are the scripted path
+# (create-instance and CI pre-create their scope dirs; the interactive wizard is
+# the scaffolding path). With no existing scope it connects nothing beyond
+# --scope, with a notice. --scope adds standalone scope paths verbatim.
 resolve_from_flags() {
     CONNECTED_LEAVES=(); PERSON_ID=""
     if ! $FLAG_GUEST && [[ -n "$FLAG_HANDLE" ]]; then
@@ -325,9 +330,15 @@ resolve_from_flags() {
         handle="$(sanitize_id "$FLAG_HANDLE")"
         host="$(sanitize_id "${FLAG_HOST:-$(hostname -s 2>/dev/null || echo localhost)}")"
         resolve_identity "$handle" "$host"
-        scaffold_scope "$PERSON_PATH" person
-        scaffold_scope "$HOST_PATH" host
-        CONNECTED_LEAVES+=("$PERSON_PATH" "$HOST_PATH")
+        if [[ -f "$REPO_DIR/$HOST_PATH/AGENTS.md" ]]; then
+            CONNECTED_LEAVES+=("$HOST_PATH")
+        elif [[ -f "$REPO_DIR/$PERSON_PATH/AGENTS.md" ]]; then
+            CONNECTED_LEAVES+=("$PERSON_PATH")
+        else
+            echo "  ! no existing scope for '$handle' — connecting without a person scope" >&2
+            echo "    (run the interactive wizard, or create $PERSON_PATH/AGENTS.md, then reconnect)" >&2
+            PERSON_ID=""
+        fi
     fi
     local s
     for s in ${FLAG_SCOPES[@]+"${FLAG_SCOPES[@]}"}; do
