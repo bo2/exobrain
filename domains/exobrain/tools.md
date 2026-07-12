@@ -25,7 +25,7 @@ Each tool is a single self-contained markdown file, `<name>.md`, where the filen
 
 | Part | Holds |
 |---|---|
-| **At a glance** | `Prerequisites` (upstream tool names), `Platforms` (`all` or e.g. `darwin`), `Credentials` (where each value lives), `Scripts` (helpers the tool ships), `Use cases` (goal tags) |
+| **At a glance** | `Prerequisites` (upstream tool names), `Platforms` (`all` or e.g. `darwin`), `Credentials` (where each value lives), `Scripts` (helpers the tool ships), `Reach` (read-only / private write / public-capable — publishing power, see `AGENTS.md` § Security), `Use cases` (goal tags) |
 | **Prerequisites** | full human setup requirements — accounts, VPN, installs — when non-trivial |
 | **Setup** | the steps a human walks through |
 | **Verify** | a command (and pass criteria) that proves the tool works; omitted for credential-only tools |
