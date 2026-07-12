@@ -39,7 +39,7 @@ Links the right scopes into the agent's space and installs a post-merge hook to 
 ## Setup and relink safety
 
 - `scripts/connect-agent.sh` writes outside the tracked tree — git hooks, and (for codex/openclaw) per-agent config under your home dir. Don't run it during routine work; run it only when the user explicitly asks to set up, reconnect, or refresh links, and state that write surface first.
-- A Claude `SessionStart` hook runs `scripts/exobrain-healthcheck.sh` (read-only, advisory). When it warns that the agent isn't connected or its links are stale, relay its suggested command — `scripts/connect-agent.sh <agent>` to connect, `--relink` to refresh — and let the human run it.
+- A Claude `SessionStart` hook runs `scripts/exobrain-healthcheck.sh` (read-only, advisory). When it warns that the agent isn't connected or its links are stale, relay its suggested command — `scripts/connect-agent.sh <agent>` to connect, `--relink` to refresh — and let the human run it. When it warns the trunk is behind, `git pull --ff-only` in the main checkout is the fix.
 
 ## Skills
 

@@ -1,11 +1,12 @@
 #!/usr/bin/env bash
-# exobrain-healthcheck.sh — read-only check that exobrain is connected for the
-# running agent in this checkout. It detects two failure modes and SUGGESTS the
-# fix; it never writes and never runs connect-agent.sh itself (see AGENTS.md →
-# "Setup and relink safety" — relink is human-driven):
+# exobrain-healthcheck.sh — read-only check that this checkout is wired and
+# current for the running agent. It detects three issues and SUGGESTS the fix;
+# it never writes, never runs connect-agent.sh, and never pulls (see AGENTS.md →
+# "Setup and relink safety" — relink and pull are human-driven):
 #
 #   - not connected  → suggest: scripts/connect-agent.sh <agent>
 #   - links stale    → suggest: scripts/connect-agent.sh <agent> --relink
+#   - trunk behind   → suggest: git pull --ff-only (in the main checkout)
 #
 # The agent connection (the generated CLAUDE.md and skill symlinks) lives in the
 # MAIN checkout, so this resolves to it via the shared git dir and reports its
@@ -97,12 +98,45 @@ for a in "${agents[@]}"; do
     fi
 done
 
+# 4. Trunk freshness (advisory): is the MAIN checkout behind its upstream?
+# Inform only — never pull. The fetch is throttled (skipped if origin was
+# fetched in the last 5 min) and bounded by a watchdog that kills it after 6s,
+# so a slow or absent network degrades to silence instead of blocking startup.
+fresh=""
+branch="$(git -C "$MAIN" symbolic-ref --quiet --short HEAD 2>/dev/null || true)"
+upstream="$(git -C "$MAIN" rev-parse --abbrev-ref --symbolic-full-name '@{upstream}' 2>/dev/null || true)"
+if [[ -n "$branch" && -n "$upstream" ]]; then
+    now="$(date +%s)"; [[ "$now" =~ ^[0-9]+$ ]] || now=0
+    last=0
+    if [[ -f "$common/FETCH_HEAD" ]]; then
+        last="$(stat -f %m "$common/FETCH_HEAD" 2>/dev/null || stat -c %Y "$common/FETCH_HEAD" 2>/dev/null || echo 0)"
+    fi
+    [[ "$last" =~ ^[0-9]+$ ]] || last=0
+    if (( now - last > 300 )); then
+        git -C "$MAIN" fetch --quiet origin >/dev/null 2>&1 &
+        fpid=$!
+        { sleep 6; kill "$fpid"; } >/dev/null 2>&1 &
+        wpid=$!
+        wait "$fpid" 2>/dev/null || true
+        kill "$wpid" 2>/dev/null || true
+        wait "$wpid" 2>/dev/null || true
+    fi
+    behind="$(git -C "$MAIN" rev-list --count "HEAD..$upstream" 2>/dev/null || echo 0)"
+    [[ "$behind" =~ ^[0-9]+$ ]] || behind=0
+    (( behind > 0 )) && fresh="$branch is $behind commit(s) behind $upstream — run: git pull --ff-only (in the main checkout)"
+fi
+
+# Output — connection problems and the freshness advisory are independent;
+# print whichever fired, else (verbose) the all-clear.
 if [[ ${#problems[@]} -gt 0 ]]; then
     echo "⚠ exobrain connection needs attention:"
     for p in "${problems[@]}"; do echo "  - $p"; done
     echo "  Suggestions only — connect-agent.sh is run by you, the human, not the agent."
-    exit 0
 fi
 
-$VERBOSE && echo "✓ exobrain: ${agents[*]} connected and linked ($MAIN)."
+[[ -n "$fresh" ]] && echo "⚠ $fresh"
+
+if [[ ${#problems[@]} -eq 0 && -z "$fresh" ]]; then
+    $VERBOSE && echo "✓ exobrain: ${agents[*]} connected and linked, trunk current ($MAIN)."
+fi
 exit 0

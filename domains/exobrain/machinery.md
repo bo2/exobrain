@@ -47,7 +47,7 @@ Installed by `connect-agent.sh`, refreshed idempotently on every relink.
 |---|---|---|
 | `scripts/validate-exobrain.sh` | Deterministic conventions: `AGENTS.md` placement, file naming, JSON syntax, `scopes.json` shape, the skills registry, agent-neutral outgoing commit messages — plus every connected scope's validator hook (`<scope>/scripts/validate-exobrain.sh`, run with the checkout under validation as `$1`; non-zero exit → its output becomes violations; the gitignored `local/` scope's hook is the private leak scan). | pre-push + manual |
 | `scripts/authoring-review.sh` | LLM judgment over changed specs/domains against the authoring rules; self-skips when none changed; degrades open when no agent CLI is installed; skippable with `EXOBRAIN_SKIP_AUTHORING_REVIEW=1`. | `exobrain-persist` (after commit, before push) + manual; not a push-hook gate |
-| `scripts/exobrain-healthcheck.sh` | Connection integrity (not-connected / stale links). Read-only; resolves the main checkout from a worktree; always exits 0. | SessionStart + manual |
+| `scripts/exobrain-healthcheck.sh` | Connection integrity (not-connected / stale links) + trunk freshness (main checkout behind upstream → suggests `git pull --ff-only`; the fetch is throttled and time-boxed, and it never pulls). Read-only; resolves the main checkout from a worktree; always exits 0. | SessionStart + manual |
 | `exobrain-authoring-audit` skill | Scopes a new or justification-heavy doc by its readers, tracing each contested fact to a real reader need. | before drafting/revising a substantial doc |
 
 The authoring rules these enforce live in [`authoring.md`](authoring.md) and `AGENTS.md` → "Reader Lens" / "Conventions".
