@@ -1,0 +1,7 @@
+{
+  "name": "clone-and-connect",
+  "description": "Fresh-machine onboarding: clone the instance's origin and assert the connect cascade (probe), or a no-context headless agent walking the onboarding steps (agent).",
+  "requirements": ["docker", "origin-https"],
+  "requirements_agent": ["oauth-token"],
+  "modes": ["probe", "agent"]
+}
