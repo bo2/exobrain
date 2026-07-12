@@ -1,0 +1,9 @@
+{
+  "name": "update-routes-to-pull",
+  "description": "\"update exobrain\" resolves to updating the local checkout (git pull --ff-only), not the exobrain-evolve seed-adoption flow. Routing is model-dependent; tracked per-agent, not gated.",
+  "runs": 3,
+  "permission_profile": "read-only",
+  "pass_threshold": "informational",
+  "timeout_seconds": 300,
+  "tags": ["routing"]
+}

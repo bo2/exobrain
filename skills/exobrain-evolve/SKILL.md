@@ -1,12 +1,14 @@
 ---
 name: exobrain-evolve
 description: >
-  Bring this exobrain instance up to date with the canonical seed
-  (github.com/bo2/exobrain). Use when the user wants to update their exobrain,
-  pull the latest framework or fixes, sync with upstream, check what's new, or
-  borrow a recent improvement. Reads the seed's feed (its changelog), decides
-  which changes apply here (permissive), copies what's needed and rewires what
-  diverged, then records what was adopted.
+  Evolve this exobrain by adopting framework improvements from the canonical
+  seed (github.com/bo2/exobrain). Use when the user wants to adopt or borrow
+  from the seed specifically — sync this exobrain's framework with the seed,
+  take the seed's latest framework cards or fixes, see what's new in the seed,
+  or pull a recent seed improvement. Not for refreshing this repo's own
+  checkout (that's a plain git pull). Reads the seed's feed (its changelog),
+  decides which changes apply here (permissive), copies what's needed and
+  rewires what diverged, then records what was adopted.
 ---
 
 # exobrain-evolve
