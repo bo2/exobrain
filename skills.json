@@ -7,7 +7,6 @@
     { "name": "exobrain-domains",         "owner": "maintainer", "tier": "optional", "force": true },
     { "name": "exobrain-ab",              "owner": "maintainer", "tier": "optional", "force": true },
     { "name": "exobrain-tools",           "owner": "maintainer", "tier": "optional", "force": true },
-    { "name": "exobrain-tests",           "owner": "maintainer", "tier": "optional", "force": true },
-    { "name": "instance-tests",           "owner": "maintainer", "tier": "optional", "force": true }
+    { "name": "exobrain-tests",           "owner": "maintainer", "tier": "optional", "force": true }
   ]
 }

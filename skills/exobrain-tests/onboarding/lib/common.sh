@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
-# Shared helpers for the instance-tests suite: logging, requirement checks.
+# Shared helpers for the onboarding suite: logging, requirement checks.
 # Requirement checkers return 0 when satisfied. They never print secret values.
 
 BOLD=$'\033[1m'; RED=$'\033[0;31m'; GREEN=$'\033[0;32m'; YELLOW=$'\033[0;33m'; DIM=$'\033[0;90m'; RESET=$'\033[0m'
 
-log()  { echo "${DIM}[instance-tests]${RESET} $*"; }
-err()  { echo "${RED}[instance-tests] $*${RESET}" >&2; }
+log()  { echo "${DIM}[onboarding-tests]${RESET} $*"; }
+err()  { echo "${RED}[onboarding-tests] $*${RESET}" >&2; }
 
 # require_<name> <instance_dir> — 0 if the requirement is met on this machine.
 require_docker() { command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1; }

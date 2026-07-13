@@ -2,11 +2,11 @@
 # common.sh — shared helpers for the exobrain behavioral test harness.
 # Sourced by run.sh and the other lib/*.sh files; not run directly.
 
-# Resolve paths: this suite lives at <repo>/skills/exobrain-tests/scripts/lib/.
-# TESTS_DIR is the harness root (the scripts/ dir); REPO_DIR is the instance the
+# Resolve paths: this suite lives at <repo>/skills/exobrain-tests/behavior/lib/.
+# TESTS_DIR is the harness root (the behavior/ dir); REPO_DIR is the instance the
 # suite runs in and tests (three levels up).
 TESTS_LIB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-TESTS_DIR="$(dirname "$TESTS_LIB_DIR")"               # .../exobrain-tests/scripts
+TESTS_DIR="$(dirname "$TESTS_LIB_DIR")"               # .../exobrain-tests/behavior
 REPO_DIR="$(cd "$TESTS_DIR/../../.." && pwd)"         # <repo> — the instance under test
 ALLOW_SETTINGS="$TESTS_DIR/settings/allow.json"
 
