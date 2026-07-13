@@ -21,8 +21,7 @@ The `connect-agent.sh` ecosystem wires repo content into each agent's context �
 | `.agents/skills/` *(generated, Codex)* | Repo-local Codex skills dir (real dir, symlinked children) — keeps exobrain skills out of the global `~/.codex/skills`. |
 | `scripts/skills-registry.sh` · `scripts/fetch-external-skills.sh` | Sourced/invoked by the connector — see § Skills system. |
 | `seed/skills/seed-tests/scripts/test-connect-agent.sh` | Deterministic connector/registry harness (seed-local, under the `seed-tests` skill) — builds isolated fake exobrains in temp dirs and asserts scope-chain resolution, opt-in skill tiers, flag-driven identity (name-match / guest / extra scope / stored person), the Claude manifest / Codex override surfaces, the tools index, and validator/fetcher plumbing. |
-| `skills/exobrain-tests/` · `seed/skills/seed-tests/` | The **behavioral** suite (agent-driven): `exobrain-tests` (global, runs on any instance) + `seed-tests` (seed-only — builds an instance from the seed, then runs the suite against it). See § Skills system. |
-| `skills/instance-tests/` | The **real-environment** suite (non-hermetic): fresh Docker machine → clone the instance's origin → connect → healthcheck/validator; optional headless-agent onboarding e2e. Requirements per case; skips when unmet. |
+| `skills/exobrain-tests/` · `seed/skills/seed-tests/` | The instance self-test skill, two sub-suites: `behavior/` (hermetic, agent-driven — runs concrete tasks against a snapshot copy) and `onboarding/` (non-hermetic — fresh Docker machine → clone the instance's origin → connect → healthcheck/validator; optional headless-agent e2e; per-case requirements skip when unmet). `seed-tests` is seed-only — builds an instance from the seed, then runs its behavior suite against it. See § Skills system. |
 
 **Verifying a connector/wiring change** (`connect-agent.sh`, `skills-registry.sh`, `fetch-external-skills.sh`, the injection): first run `seed/skills/seed-tests/scripts/test-connect-agent.sh` for the fixture-level logic. Then render a real checkout side-effect-free with `connect-agent.sh <agent> --render-specs-only` (point `CODEX_HOME` / `OPENCLAW_WORKSPACE` at a throwaway dir to render those agents without touching your home config), and spot-check the agent's surface — for Claude that `.claude/connected-scopes.md` + `.claude/optional-skills.md` exist and every manifest `@-import` resolves to a real file; for Codex that the generated in-repo `AGENTS.override.md` holds the expected scopes, for OpenClaw that the marker block in `USER.md` does — plus the `.claude/` and `.agents/skills/` dirs. Finally run `scripts/validate-exobrain.sh` for conventions.
 
@@ -68,7 +67,7 @@ Physical skill directories at any scope, inert until declared in a `skills.json`
 | `scripts/fetch-external-skills.sh` | Fetch external (third-party) skills declared with `source`. |
 | optional-skills index *(generated)* | Index of optional-tier skills, read on demand — `.claude/optional-skills.md` (Claude), or inlined into `AGENTS.override.md` (Codex) / `~/.openclaw/workspace/USER.md` (OpenClaw). |
 
-Global skills the seed ships: `exobrain-ab`, `exobrain-authoring-audit`, `exobrain-domains`, `exobrain-evolve`, `exobrain-persist`, `exobrain-tests`, `exobrain-tools`, `instance-tests`.
+Global skills the seed ships: `exobrain-ab`, `exobrain-authoring-audit`, `exobrain-domains`, `exobrain-evolve`, `exobrain-persist`, `exobrain-tests`, `exobrain-tools`.
 
 ## Tools
 

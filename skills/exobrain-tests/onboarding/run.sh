@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# instance-tests — real-environment end-to-end tests of this exobrain instance.
+# onboarding suite — real-environment end-to-end tests of this exobrain instance.
 #
 #   run.sh --list                       # list cases + requirements
 #   run.sh                              # all cases, default mode (probe)
@@ -13,7 +13,7 @@
 set -uo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-INSTANCE_DIR="$(cd "$SCRIPT_DIR/../../.." && pwd)"   # repo root: scripts→instance-tests→skills→root
+INSTANCE_DIR="$(cd "$SCRIPT_DIR/../../.." && pwd)"   # repo root: onboarding→exobrain-tests→skills→root
 CASES_DIR="$SCRIPT_DIR/cases"
 # shellcheck source=lib/common.sh
 source "$SCRIPT_DIR/lib/common.sh"
