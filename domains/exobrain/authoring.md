@@ -30,7 +30,23 @@ Translate findings into implications; fold related findings into one coherent st
 
 ## Don't transcribe what the source already holds
 
-Synthesis has a sharp lower bound: anything a reader could reconstruct by opening the file or running one obvious grep does not belong in a domain doc. File-and-line citations, code blocks that mirror a function's body, exhaustive enum or config listings — these rot the instant the source moves, producing *drift* rather than knowledge. Keep the implication, the gotcha, the rationale a reader couldn't recover on their own; point at the source for the literal contents.
+Synthesis has a sharp lower bound — the **cut line**: anything a reader could reconstruct by opening the file or running one obvious grep does not belong in a domain doc. Below the line it rots the instant the source moves, producing *drift* rather than knowledge.
+
+**Cut on sight:**
+
+- File:line citations (`internal/foo.go:144`, `class-bar.php:L23-45`) — they rot the moment code moves. Cite the *file*, not the line; the validator rejects `file.ext:NNN` in a profile.
+- Code blocks that mirror a function's body, struct shape, or request/response JSON — the code is the source of truth; transcribing it produces drift, not knowledge.
+- Class- or function-by-function walks ("`FooBar` owns X, Y, Z…").
+- Enum or config-key listings that just restate a constant.
+- Hardcoded tuning constants in any format — table or prose (see "Order-of-magnitude" below).
+
+**Survives the cut** (what a profile is actually for):
+
+- **Design rationale** — why the current state is what it is, where the reasoning is durable.
+- **Cross-system invariants** — which component is authoritative, what fails open vs. closed, where the source of truth lives.
+- **Gotchas the code mis-signals** — a name or layout that misleads a reader, corrected.
+- **Operational patterns** — recurring failure shapes and runbook gestures (the durable lesson, not the incident narrative).
+- **Migration scars still in the code** — shims kept for compatibility, dual-running paths during a transition.
 
 **Self-check before keeping a passage:** *if I deleted this, what would a reader miss that they couldn't recover from the source in one step?* If the honest answer is "nothing," cut it.
 
@@ -45,7 +61,7 @@ Values that drift — balances, rates, counts, limits, metrics, percentages — 
 
 When the exact value genuinely matters, cite where it lives rather than embedding it.
 
-**Watch-for phrasing.** Anything that reads like "N attempts", "X-second timeout", "Z% growth", "$N balance", or "K-item limit" is a value that drifts — a tuning knob or a point-in-time figure. Reframe it as the durable shape, or describe how to measure it and cite where the live value lives.
+**Watch-for phrasing.** Anything that reads like "N attempts", "X-second timeout", "Z% growth", "$N balance", or "K-item limit" is a value that drifts — a tuning knob or a point-in-time figure. Reframe it as the durable shape, or describe how to measure it and cite where the live value lives. The same holds for point-in-time business or product metrics — a revenue share, fill rate, headcount, or partner count — which drift exactly like a tuning knob: describe *how to measure* the figure and cite its canonical source, never the frozen value.
 
 ## Citations
 
