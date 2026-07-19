@@ -8,14 +8,19 @@
 # there is none; the suite always tests its own instance. (The seed tests an
 # instance by building one and running *that* instance's copy of this suite.)
 #
-#   run.sh                              # all cases, all available agents
+#   run.sh                              # all cases, all available agents (HEAD)
+#   run.sh --working-tree              # test uncommitted local changes (pre-persist)
 #   run.sh --agents claude             # claude only
 #   run.sh --smoke                     # the trivial 'smoke' case, N=1
 #   run.sh --cases a,b --runs 3        # selected cases, override N
 #   run.sh --build-only                # provision + validate the template, stop
 #   run.sh --list                      # list cases
 #
-# Flags: --agents <a1,a2>  --cases <c1,c2>  --runs <N>  --smoke  --keep
+# By default the suite snapshots HEAD (committed state). Pass --working-tree to snapshot
+# the current working tree instead — committed + uncommitted (new, modified, deleted),
+# honoring .gitignore — so you can verify a change before persisting it.
+#
+# Flags: --agents <a1,a2>  --cases <c1,c2>  --runs <N>  --smoke  --working-tree  --keep
 #        --build-only  --list  -h|--help
 #
 # An agent whose CLI is missing or not runnable is skipped with a notice. The
@@ -36,7 +41,7 @@ CASES_DIR="$TESTS_DIR/cases"
 
 # ---- args -----------------------------------------------------------------
 AGENTS_SEL="claude,codex"
-SEL_CASES=""; RUNS_OVERRIDE=""; SMOKE=0; KEEP=0; BUILD_ONLY=0; LIST=0
+SEL_CASES=""; RUNS_OVERRIDE=""; SMOKE=0; KEEP=0; BUILD_ONLY=0; LIST=0; WORKTREE=0
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --agents)       AGENTS_SEL="$2"; shift 2 ;;
@@ -46,6 +51,7 @@ while [[ $# -gt 0 ]]; do
         --runs)         RUNS_OVERRIDE="$2"; shift 2 ;;
         --runs=*)       RUNS_OVERRIDE="${1#*=}"; shift ;;
         --smoke)        SMOKE=1; shift ;;
+        --working-tree|--dirty) WORKTREE=1; shift ;;
         --keep)         KEEP=1; shift ;;
         --build-only)   BUILD_ONLY=1; shift ;;
         --list)         LIST=1; shift ;;
@@ -117,7 +123,13 @@ log ""
 
 # ---- provision the template (once) ----------------------------------------
 TEMPLATE="$RUN_ROOT/template"
-provision_self "$TEMPLATE" || { err "provisioning from the current instance failed"; exit 2; }
+if [[ $WORKTREE -eq 1 ]]; then
+    log "source: working tree (uncommitted local changes included)"
+    provision_working_tree "$TEMPLATE" || { err "provisioning the working tree failed"; exit 2; }
+else
+    log "source: HEAD (committed state)"
+    provision_self "$TEMPLATE" || { err "provisioning from the current instance failed"; exit 2; }
+fi
 finalize_template "$TEMPLATE" || { err "template did not finalize (validate / safety)"; exit 2; }
 TPL_BASE_COMMITS="$(git -C "$TEMPLATE" rev-list --count HEAD 2>/dev/null || echo 0)"
 if [[ $BUILD_ONLY -eq 1 ]]; then

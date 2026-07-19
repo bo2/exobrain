@@ -56,17 +56,20 @@ $SUITE/run.sh --list                        # list cases
 ```
 
 Flags: `--agents <a1,a2>` (default `claude,codex`), `--cases <c1,c2>`, `--runs <N>`,
-`--smoke`, `--keep` (retain instance copies), `--build-only`, `--list`. Requires `jq`
+`--smoke`, `--working-tree` (snapshot uncommitted local changes, not HEAD), `--keep`
+(retain instance copies), `--build-only`, `--list`. Requires `jq`
 and at least one requested agent CLI on PATH and runnable, logged in. Exit: `0` all
 met threshold, `1` some below, `2` harness/setup error.
 
 ### How it works
 
 1. **Provision a template** (`lib/provision.sh`): snapshot the current instance's
-   tracked files at HEAD (`git archive`, no `.git`/`src`/`tmp` bloat). The template
-   is then validated, committed onto a `main` base branch (so worktree cases have a
-   base), hook-neutralized, and asserted free of any github origin. Behavior cases
-   run against cheap `cp -r` copies of it.
+   tracked files at HEAD (`git archive`, no `.git`/`src`/`tmp` bloat) — or, with
+   `--working-tree`, snapshot the live working tree (committed + uncommitted, via a
+   temporary git index that never touches your real staging area) so you can test a
+   change *before* persisting it. The template is then validated, committed onto a
+   `main` base branch (so worktree cases have a base), hook-neutralized, and asserted
+   free of any github origin. Behavior cases run against cheap `cp -r` copies of it.
 2. **Run each case** (`run.sh`): for each agent, copy the template, run optional
    `setup.sh` (which **self-seeds the case's fixtures** — scopes, domains), invoke the
    agent (`lib/invoke.sh`) with the case's permission profile, capture the transcript,

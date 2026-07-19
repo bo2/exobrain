@@ -2,10 +2,11 @@
 # provision.sh — provision a throwaway template instance for the suite. Sourced.
 #
 # The suite always tests a COPY of the instance it is installed in, never the live
-# tree. provision_self snapshots REPO_DIR's tracked files at HEAD; finalize_template
-# then validates it, neutralizes hooks, commits a `main` base branch for worktree
-# cases, and refuses any github origin (a scratch instance must never point at a
-# real remote).
+# tree. provision_self snapshots REPO_DIR at HEAD (committed state); provision_working_tree
+# snapshots the current working tree (uncommitted local changes) so a change can be tested
+# before it lands. finalize_template then validates the snapshot, neutralizes hooks,
+# commits a `main` base branch for worktree cases, and refuses any github origin (a scratch
+# instance must never point at a real remote).
 
 # provision_self <dest> — tracked files of REPO_DIR at HEAD, no .git/src/tmp bloat.
 provision_self() {
@@ -13,6 +14,26 @@ provision_self() {
     mkdir -p "$dest"
     git -C "$REPO_DIR" archive HEAD | tar -x -C "$dest" \
         || { err "[provision] git archive of the current instance failed"; return 1; }
+}
+
+# provision_working_tree <dest> — snapshot the CURRENT working tree (committed +
+# uncommitted: new, modified, deleted, renamed), honoring .gitignore (so src/, tmp/,
+# .claude, .exobrain.json are excluded). Lets you test local changes before persisting
+# them. Built by staging the working tree into a TEMPORARY index (GIT_INDEX_FILE), so
+# the user's real staging area is never touched, then archiving that tree.
+provision_working_tree() {
+    local dest="$1"
+    mkdir -p "$dest"
+    local tmp_index; tmp_index="$(mktemp)"; rm -f "$tmp_index"   # a non-existent path → git inits a fresh index
+    local tree
+    if ! GIT_INDEX_FILE="$tmp_index" git -C "$REPO_DIR" add -A 2>/dev/null \
+       || ! tree="$(GIT_INDEX_FILE="$tmp_index" git -C "$REPO_DIR" write-tree 2>/dev/null)"; then
+        rm -f "$tmp_index"
+        err "[provision] could not snapshot the working tree"; return 1
+    fi
+    rm -f "$tmp_index"
+    git -C "$REPO_DIR" archive "$tree" | tar -x -C "$dest" \
+        || { err "[provision] git archive of the working-tree snapshot failed"; return 1; }
 }
 
 # finalize_template <dir> — make a provisioned copy safe and ready to test.
