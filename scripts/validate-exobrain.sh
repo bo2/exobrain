@@ -10,6 +10,9 @@
 #     AI/tool entry-point conventions).
 #   - JSON syntax errors in skills.json and scopes.json files.
 #   - scopes.json shape (type + collection; reserved/kebab-case rules).
+#   - Domain-profile authoring (deterministic subset of authoring.md): file:line
+#     citations in profiles; "(verified <date>)" temporal markers. Excludes _raw/
+#     and the exobrain meta-domain.
 #   - Skills registry integrity (delegated to skills-validate.sh).
 #   - Duplicate feed-card IDs (canonical seed only) — the NNNN filename prefix is
 #     a never-reused provenance key; concurrent PRs can collide on one.
@@ -122,6 +125,30 @@ if [[ -f "$REPO_DIR/scopes.json" ]] && jq -e . "$REPO_DIR/scopes.json" >/dev/nul
         fi
     done < <(jq -r '(.scopes // [])[] | [(.type // ""), (.collection // "")] | @tsv' "$REPO_DIR/scopes.json" 2>/dev/null)
 fi
+
+# ---------------------------------------------------------------------------
+# Domain-profile authoring (deterministic subset of authoring.md) — code-
+# discoverable transcription rots when the code moves. Excludes _raw/ (source
+# captures keep their original form) and the exobrain meta-domain (it documents
+# these rules with illustrative examples).
+# ---------------------------------------------------------------------------
+
+# file:line citations — cite the file, not the line (authoring.md § cut line).
+while IFS= read -r hit; do
+    [[ -z "$hit" ]] && continue
+    record "file:line citation in a domain profile — cite the file, not the line (authoring.md): ${hit#"$REPO_DIR"/}"
+done < <(grep -rnE '[A-Za-z0-9_./-]+\.(go|php|ts|tsx|js|jsx|py|rb|rs|java|sql):[0-9]' \
+    "$REPO_DIR/domains" --include='*.md' 2>/dev/null \
+    | grep -v '/_raw/' | grep -v '/domains/exobrain/')
+
+# "(verified <date>)" temporal markers — a citation records provenance, not a
+# freshness stamp; specs are written standalone, not as deltas (authoring.md).
+while IFS= read -r hit; do
+    [[ -z "$hit" ]] && continue
+    record "temporal '(verified …)' marker — specs are standalone, not deltas (authoring.md): ${hit#"$REPO_DIR"/}"
+done < <(grep -rnE '\(verified [0-9]{4}-[0-9]{2}-[0-9]{2}' \
+    "$REPO_DIR/domains" "$REPO_DIR/AGENTS.md" --include='*.md' 2>/dev/null \
+    | grep -v '/_raw/')
 
 # ---------------------------------------------------------------------------
 # Feed card IDs (canonical seed only) — the NNNN filename prefix is a never-reused
