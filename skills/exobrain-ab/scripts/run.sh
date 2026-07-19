@@ -128,7 +128,11 @@ for entry in "${TASKS[@]}"; do
   in_filter "$set" "$id" || continue
   cc=$(grep -c ',correct,' "$OUTDIR/${AGENT}-${MODEL}-${id}-control.csv" 2>/dev/null); cc=${cc:-0}
   tc=$(grep -c ',correct,' "$OUTDIR/${AGENT}-${MODEL}-${id}-treatment.csv" 2>/dev/null); tc=${tc:-0}
-  note=""; [ "$grade" = no_tool ] && note="(neg: correct = no over-trigger)"
+  note=""
+  case "$grade" in
+    no_tool)       note="(neg: correct = no over-trigger)" ;;
+    output_absent) note="(neg: correct = banned pattern absent)" ;;
+  esac
   printf '%-18s %-8s %-18s %-18s %s\n' "$id" "$set" "$cc/$N" "$tc/$N" "$note"
 done
 echo "Results: $OUTDIR"

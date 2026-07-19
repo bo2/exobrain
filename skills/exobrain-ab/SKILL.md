@@ -20,6 +20,10 @@ model are added. Measure, don't guess.
 - **Measure the decision, not the outcome.** Real tools hit live systems; you can't and
   shouldn't run them. Measure *which tool/command the agent reaches for* — captured by
   PATH-shadow stubs that log the invocation and return canned output.
+- **Two gradable signals.** Grade the *tool decision* (which command the agent reached for
+  — the default) or the agent's *authored output* (its own stdout, via the `output` /
+  `output_absent` grade modes). Output grading A/Bs any content behavior — a required
+  phrasing, a banned claim, a structural convention — not just which tool fires.
 - **Faithful auto-load = the agent's own headless mode** (`claude -p`, `codex exec`) in a
   copied repo dir whose context surface was wired by *the copy's own* connector
   (`connect-agent.sh <agent> --render-specs-only` — `REPO_DIR` resolves to the copy, so it
@@ -59,8 +63,8 @@ this harness doesn't set up — test those by hand or extend the harness.
    trunk + this diff. (An empty diff / `-` / `/dev/null` is an A/A noise-floor run.)
 2. **Design tasks** per the rules above — discriminating positives + negatives, split
    dev/held-out — in a tasks file (`scripts/tasks.example.sh` is the template). Prompts
-   must **not** name the target tool; graders are deterministic regexes on the stub log
-   (or "no stub fired" for negatives).
+   must **not** name the target tool; graders are deterministic regexes on the stub log,
+   on the agent's stdout (`output` modes), or "no stub fired" for negatives.
 3. **Add stubs** for every tool a task measures: a one-line shadow in `scripts/stubs/`
    (copy `scripts/stubs/example-tool`) that appends its invocation to `$STUB_LOG`. The
    stub's name must be the bare command the agent would type.
@@ -79,8 +83,8 @@ this harness doesn't set up — test those by hand or extend the harness.
 
 - `scripts/run.sh` — builds control/treatment sandboxes, renders each via its own
   `--render-specs-only`, runs the task matrix, prints the summary.
-- `scripts/run_one.sh` — one graded run (PATH-shadow stubs → stublog → verdict); spawned
-  in parallel by `run.sh`.
+- `scripts/run_one.sh` — one graded run; grades the stublog (tool choice) or the agent's
+  stdout (`output` modes) into a verdict, spawned in parallel by `run.sh`.
 - `scripts/stubs/` — PATH-shadow tool stubs (ship `example-tool`; add one per measured tool).
 - `scripts/tasks.example.sh` — the `TASKS=()` format and discriminator constraint.
 
