@@ -11,6 +11,8 @@ This repo is one **implementation** of the exobrain concept, not a fork kept in 
 
 Don't cite a workspace from anything that must stay current (domains, skills) — those links go stale silently.
 
+Two working habits: **create a workspace for any non-trivial work session** (scripts, queries, analysis, charts — keep the artifacts there, not scattered), and **default to saving** it at session end unless it's clearly throwaway — institutional memory is cheap, redoing lost work is expensive.
+
 ## Scopes
 
 A **scope** is any directory containing an `AGENTS.md` — that file is the scope flag. The repo root is the `global` scope. Scopes nest by directory containment; you *connect* one or more leaf scopes (recorded in `.exobrain.json`) — any `AGENTS.md` dir, not only a person/host or one branch — and wiring resolves each leaf plus its `AGENTS.md`-bearing ancestors, chains unioned, innermost wins:
