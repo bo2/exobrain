@@ -5,10 +5,11 @@ description: >
   seed, never in a rendered instance. Builds a fresh instance from the seed via
   create-instance (a builder agent), verifies the bootstrap with the create-valid
   static checks, then runs the universal exobrain-tests behavioral suite against
-  the built instance. Also houses the deterministic connector/registry harness
-  (test-connect-agent.sh) — hermetic unit tests for connect-agent.sh and the
-  skills registry, no agents involved. Use to test the seed's bootstrap and
-  framework after changing create-instance, the connector, or the registry.
+  the built instance. Also houses deterministic hermetic unit tests (no agents):
+  test-connect-agent.sh (connect-agent.sh + the skills registry) and
+  test-authoring-review.sh (authoring-review.sh's engine call). Use to test the
+  seed's bootstrap and framework after changing create-instance, the connector,
+  the registry, or authoring-review.sh.
 ---
 
 # seed-tests — test the canonical seed
@@ -34,14 +35,19 @@ instance's own** [`exobrain-tests`](../../../skills/exobrain-tests/) for the
 behavioral cases — exactly as any instance self-tests. Consumes real agent usage;
 never auto-runs.
 
-## Connector / registry harness (deterministic)
+## Deterministic harnesses
+
+Hermetic unit tests — fake exobrains in temp dirs, no agent CLIs, no usage. Run the
+relevant one when changing the script it covers.
 
 ```bash
-seed/skills/seed-tests/scripts/test-connect-agent.sh            # all
-seed/skills/seed-tests/scripts/test-connect-agent.sh <pattern>  # filter by name
+seed/skills/seed-tests/scripts/test-connect-agent.sh       # connector + registry
+seed/skills/seed-tests/scripts/test-authoring-review.sh    # authoring-review.sh engine call
+# each takes an optional <pattern> to filter tests by name
 ```
 
-Hermetic: builds fake exobrains in temp dirs and asserts scope-chain resolution,
-opt-in skill tiers, flag-driven identity, the per-agent surfaces, the tools index,
-and validator/fetcher plumbing — exercising the framework scripts in `<repo>/scripts/`.
-No agent CLIs, no usage; run it first when changing the connector or the registry.
+`test-connect-agent.sh` asserts scope-chain resolution, opt-in skill tiers,
+flag-driven identity, the per-agent surfaces, the tools index, and validator/fetcher
+plumbing. `test-authoring-review.sh` asserts the review's engine call strips inherited
+proxy env (else a proxied push silently skips the review) and that a reported
+violation exits non-zero. Both exercise the framework scripts in `<repo>/scripts/`.

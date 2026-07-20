@@ -10,8 +10,9 @@
 #   run.sh --agents claude       # pass-through to the behavior suite (agents/cases/runs/…)
 #   run.sh --list                # list the behavioral cases (delegates)
 #
-# Separately, the deterministic connector harness lives beside this script:
-#   ./test-connect-agent.sh      # hermetic registry/connector unit tests (no agents)
+# Separately, deterministic unit-test harnesses live beside this script (no agents):
+#   ./test-connect-agent.sh      # connector + skills-registry
+#   ./test-authoring-review.sh   # authoring-review.sh's engine call (proxy-strip, verdict)
 #
 # Exit: 0 build+bootstrap+suite all pass | 1 a check failed | 2 harness/setup error.
 
