@@ -58,6 +58,16 @@ target_dir() {
     esac
 }
 
+# Where connect-agent.sh links skills — Codex uses repo-local .agents/skills; the
+# others use <target_dir>/skills. (Codex resolves skills at the repo root, so the
+# stale-link scan must look there, not under ~/.codex.)
+skills_dir() {
+    case "$1" in
+        codex) printf '%s' "$MAIN/.agents/skills" ;;
+        *)     printf '%s' "$(target_dir "$1")/skills" ;;
+    esac
+}
+
 problems=()
 
 # 1. Configured at all?
@@ -92,7 +102,7 @@ for a in "${agents[@]}"; do
     td="$(target_dir "$a")"
     # Dangling symlinks among the linked skills/sidecars = stale links (a
     # skills.json change without a relink, a moved source, a partial relink).
-    broken="$(find -L "$td/skills" "$td" -maxdepth 1 -type l 2>/dev/null | wc -l | tr -d ' ')"
+    broken="$(find -L "$(skills_dir "$a")" "$td" -maxdepth 1 -type l 2>/dev/null | wc -l | tr -d ' ')"
     if [[ "${broken:-0}" -gt 0 ]]; then
         problems+=("$a: $broken stale link(s) under $td — run: scripts/connect-agent.sh $a --relink")
     fi
