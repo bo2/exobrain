@@ -71,6 +71,12 @@ For each card you're taking:
 - **Rewire where diverged:** if you've locally modified those files, or the card is
   a structural/pattern change that doesn't map 1:1, re-synthesize it into your setup
   per the card's Pattern + Adapt notes. Don't clobber local changes — reconcile them.
+- **Verify before skipping as already-present:** a card may already be satisfied here.
+  "Already present" is a verdict, not a default — back it by reading the files the card
+  `touches` and confirming none *contradicts* the card (a partial concept match isn't
+  enough; check the specifics, including the card's Adapt-notes caveats). A contradiction
+  is **not** adoption — it's a latent bug wearing an adopted label: fix it and record the
+  card as rewired.
 - **Preserve invariants exactly** for `touches_invariant: true` cards (security,
   scope-resolution order, validation semantics).
 
@@ -92,8 +98,10 @@ Fix anything that breaks before recording.
 
 ## 7. Record
 
-Append each adopted card to `adopted-feed.md` (repo root): id, title,
-today's date, and how you applied it (copied / rewired). That ledger is your
+Append each adopted card to `adopted-feed.md` (repo root): id, title, today's date,
+and how you applied it (copied / rewired / already-present). An "already-present" row
+must cite the concrete artifact it was verified against (a file, a helper, a behavior)
+— a vague citation is a smell that the check was shallow. That ledger is your
 provenance — it's how the next update knows where you left off.
 
 ## Notes
