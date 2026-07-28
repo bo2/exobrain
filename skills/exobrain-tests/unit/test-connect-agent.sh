@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 # test-connect-agent.sh — tests for the connector + skills registry under the
-# scope-tree / opt-in model. Seed-local (lives under seed-tests); it exercises the
-# framework scripts in <repo>/scripts/.
+# scope-tree / opt-in model. Exercises the framework scripts in <repo>/scripts/ of
+# whichever instance this suite is installed in.
 #
-#   seed/skills/seed-tests/scripts/test-connect-agent.sh            # run all
-#   seed/skills/seed-tests/scripts/test-connect-agent.sh <pattern>  # filter by name
+#   skills/exobrain-tests/unit/test-connect-agent.sh            # run all
+#   skills/exobrain-tests/unit/test-connect-agent.sh <pattern>  # filter by name
 #
 # Each test builds an isolated fake exobrain in a temp dir and renders the agent
 # surface side-effect-free (connect-agent.sh --render-specs-only with HOME /
@@ -15,10 +15,10 @@ set -uo pipefail
 
 TESTS_RUN=0; TESTS_PASSED=0; TESTS_FAILED=0; FAILURES=()
 FILTER="${1:-}"
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"          # .../seed-tests/scripts
-REPO_DIR="$(cd "$SCRIPT_DIR/../../../.." && pwd)"     # <repo> — the seed
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"          # .../exobrain-tests/unit
+REPO_DIR="$(cd "$SCRIPT_DIR/../../.." && pwd)"        # repo root: unit→exobrain-tests→skills→root
 SCRIPTS_DIR="$REPO_DIR/scripts"                       # framework scripts under test
-# shellcheck source=../../../../scripts/skills-registry.sh
+# shellcheck source=../../../scripts/skills-registry.sh
 source "$SCRIPTS_DIR/skills-registry.sh"
 
 RED='\033[0;31m'; GREEN='\033[0;32m'; DIM='\033[0;90m'; RESET='\033[0m'

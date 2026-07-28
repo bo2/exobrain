@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 # test-authoring-review.sh — tests for authoring-review.sh, focused on the LLM
-# engine call. Seed-local (lives under seed-tests); it exercises the framework
-# script in <repo>/scripts/.
+# engine call. Exercises the framework script in <repo>/scripts/ of whichever
+# instance this suite is installed in.
 #
-#   seed/skills/seed-tests/scripts/test-authoring-review.sh            # run all
-#   seed/skills/seed-tests/scripts/test-authoring-review.sh <pattern>  # filter by name
+#   skills/exobrain-tests/unit/test-authoring-review.sh            # run all
+#   skills/exobrain-tests/unit/test-authoring-review.sh <pattern>  # filter by name
 #
 # A fake engine on PATH records its own environment, so we can assert that an
 # inherited SOCKS/HTTP proxy (some networks route git through one) is stripped
@@ -16,8 +16,8 @@ set -uo pipefail
 
 TESTS_RUN=0; TESTS_PASSED=0; TESTS_FAILED=0; FAILURES=()
 FILTER="${1:-}"
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"          # .../seed-tests/scripts
-REPO_DIR="$(cd "$SCRIPT_DIR/../../../.." && pwd)"     # <repo> — the seed
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"          # .../exobrain-tests/unit
+REPO_DIR="$(cd "$SCRIPT_DIR/../../.." && pwd)"        # repo root: unit→exobrain-tests→skills→root
 SCRIPTS_DIR="$REPO_DIR/scripts"                       # framework scripts under test
 
 RED='\033[0;31m'; GREEN='\033[0;32m'; DIM='\033[0;90m'; BOLD='\033[1m'; RESET='\033[0m'

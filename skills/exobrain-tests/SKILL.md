@@ -1,7 +1,9 @@
 ---
 name: exobrain-tests
 description: >
-  The exobrain self-test skill — two sub-suites under one roof. behavior/ is the
+  The exobrain self-test skill — three sub-suites under one roof. unit/ holds
+  deterministic harnesses for the framework scripts under scripts/; no agent, no
+  network, no usage, so run it on any machinery change. behavior/ is the
   universal hermetic suite: it runs concrete agent tasks against a throwaway copy
   of the instance and reports a k/N pass rate per agent+case, checking that an
   agent actually follows this exobrain's specs — worktree-first,
@@ -24,20 +26,55 @@ description: >
 
 # exobrain-tests — the instance self-test skill
 
-Two sub-suites, split by hermeticity — each with its own runner, cases, and
+Three sub-suites, split by what's under test — each with its own runner, cases, and
 requirements. There is deliberately no combined "run everything" entry point: the
-behavior suite must stay runnable with no network and no credentials, so the
-non-hermetic suite is always an explicit, separate invocation.
+`unit` and `behavior` suites must stay runnable with no network and no credentials,
+so the non-hermetic suite is always an explicit, separate invocation.
 
-- **`behavior/`** — hermetic. Does an agent dropped into this instance behave the
+- **`unit/`** — the machinery. Do this instance's framework scripts resolve, wire,
+  and gate correctly? Fake exobrains in temp dirs, no agent, no usage.
+- **`behavior/`** — the agent. Does an agent dropped into this instance behave the
   way the specs say? Snapshot copy, local agent CLI, no network.
-- **`onboarding/`** — real environment. Can a fresh machine clone this instance's
+- **`onboarding/`** — the environment. Can a fresh machine clone this instance's
   origin, connect, and come up healthy? Docker, real network, per-case requirements.
 
-Both always test *this* instance — the skill ships into every instance, so any
-instance self-tests by invoking it. Neither knows anything about the seed: to test
-the seed itself (build an instance from it, then test that), use the seed-only
+All three always test *this* instance — the skill ships into every instance, so any
+instance self-tests by invoking it. None knows anything about the seed: to test the
+seed itself (build an instance from it, then test that), use the seed-only
 `seed-tests` skill, which invokes the *built instance's* copy of this suite.
+
+## unit/ — the deterministic machinery suite
+
+Hermetic tests of the framework scripts this instance carries under `scripts/`. Each
+harness builds isolated fake exobrains in temp dirs and calls the script under test
+directly — no agent CLI, no network, no credentials, nothing touching the real repo
+or `~/`. Free to run, so it is the suite to reach for on any machinery change.
+
+```bash
+SUITE=skills/exobrain-tests/unit
+$SUITE/run.sh                                    # every harness
+$SUITE/run.sh --list                             # harnesses + what each covers
+$SUITE/run.sh --harnesses connect-agent          # selected harnesses
+$SUITE/run.sh --harnesses connect-agent --filter seed_scope   # name filter, passed through
+```
+
+Exit: `0` all passed · `1` some failed · `2` harness error (including an unknown
+`--harnesses` name, so a typo never reads as a clean run).
+
+- **`test-connect-agent.sh`** — `connect-agent.sh` + `skills-registry.sh`: scope-chain
+  resolution, opt-in skill tiers, flag-driven identity, the per-agent surfaces, the
+  generated indexes, and validator/fetcher plumbing.
+- **`test-authoring-review.sh`** — `authoring-review.sh`'s engine call: inherited proxy
+  env is stripped (else a proxied push silently skips the review), and a reported
+  violation exits non-zero.
+
+### Add a unit harness
+
+Drop a `test-<script>.sh` beside the others and add a row to `run.sh`'s `HARNESSES`
+table (`name|script|what it covers`). A harness takes an optional name filter as `$1`
+and exits non-zero on failure. Keep it hermetic and seed-agnostic: build fixtures in
+a temp dir rather than reading the real tree, so the harness is portable to any
+instance — a case needing a `seed/` scope creates a fake one.
 
 ## behavior/ — the universal behavioral suite
 

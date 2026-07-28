@@ -36,7 +36,7 @@ The canonical seed has two seed-local skills under `seed/skills/`, both **seed-o
 - **`create-instance`** (the generator) stays *outside* the registry — it bootstraps from an empty dir before any `skills.json` exists, so it carries no declaration; invoke it by reading its `SKILL.md` directly (the bootstrap prompt points a fresh agent there).
 - **`seed-tests`** (the seed test driver) *is* declared, in `seed/skills.json`, owned by the `seed/` scope — so it resolves only here, where that scope joins the chain (it never appears in an instance, which has no `seed/`).
 
-`skills-validate` excludes `seed/` from its declaration and orphan scans, so the undeclared `create-instance` isn't flagged (`validate-exobrain` still JSON-checks `seed/skills.json`). The **universal** behavioral suite is *not* seed-local — it's the global `exobrain-tests` skill, which ships into instances so any instance can self-test; `seed-tests` invokes it against the seed's built instance.
+`skills-validate` excludes `seed/` from its declaration and orphan scans, so the undeclared `create-instance` isn't flagged (`validate-exobrain` still JSON-checks `seed/skills.json`). The **universal** self-test suites are *not* seed-local — they're the global `exobrain-tests` skill, which ships into instances so any instance can self-test; `seed-tests` invokes it against the seed's built instance. A harness for a framework script under `scripts/` belongs there too (`exobrain-tests/unit/`), not in `seed-tests`: the script is inherited by every instance, so its test travels with it.
 
 ## Registry shape
 

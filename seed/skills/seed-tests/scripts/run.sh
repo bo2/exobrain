@@ -2,17 +2,18 @@
 # run.sh — seed-tests: test the canonical seed end to end.
 #
 # Builds a fresh instance from the seed via create-instance (a builder agent),
-# verifies the bootstrap (the create-valid static checks), then runs the universal
-# exobrain-tests behavior suite against the built instance.
+# verifies the bootstrap (the create-valid static checks), then runs the built
+# instance's own exobrain-tests sub-suites against it: unit (free) then behavior.
 #
 #   run.sh                       # build via claude, verify, run all behavioral cases
 #   run.sh --builder codex       # build via a different agent
 #   run.sh --agents claude       # pass-through to the behavior suite (agents/cases/runs/…)
 #   run.sh --list                # list the behavioral cases (delegates)
 #
-# Separately, deterministic unit-test harnesses live beside this script (no agents):
-#   ./test-connect-agent.sh      # connector + skills-registry
-#   ./test-authoring-review.sh   # authoring-review.sh's engine call (proxy-strip, verdict)
+# The framework scripts (connect-agent, skills-registry, authoring-review) are
+# inherited by every instance, so their deterministic harnesses ship with them —
+# run them against this checkout directly, no instance build needed:
+#   skills/exobrain-tests/unit/run.sh
 #
 # Exit: 0 build+bootstrap+suite all pass | 1 a check failed | 2 harness/setup error.
 
@@ -69,7 +70,16 @@ git -C "$BUILD" add -A
 git -C "$BUILD" -c user.email=harness@exobrain.test -c user.name='exobrain harness' \
     commit -q -m "harness: initial instance snapshot" || true
 
-# 4. Run the built instance's OWN behavior suite, exactly as any instance self-tests.
+# 4. Run the built instance's OWN unit suite. Free and deterministic, so it runs
+#    before the agent-driven suite: it proves the framework scripts work in a
+#    *rendered* instance (not just in the seed), and a failure here explains a
+#    behavioral failure that would otherwise look like an agent problem.
+INST_UNIT="$BUILD/skills/exobrain-tests/unit/run.sh"
+[[ -f "$INST_UNIT" ]] || { err "built instance has no exobrain-tests unit suite at $INST_UNIT"; exit 2; }
+log "[seed-tests] running the built instance's own unit suite…"
+"$INST_UNIT" || { err "[seed-tests] unit suite failed on the built instance"; exit 1; }
+
+# 5. Run the built instance's OWN behavior suite, exactly as any instance self-tests.
 INST_SUITE="$BUILD/skills/exobrain-tests/behavior/run.sh"
 [[ -f "$INST_SUITE" ]] || { err "built instance has no exobrain-tests behavior suite at $INST_SUITE"; exit 2; }
 log "[seed-tests] running the built instance's own behavior suite…"
