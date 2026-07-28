@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
 # authoring-review.sh — LLM review of changed domain/spec files against the
 # exobrain authoring & convention rules. The judgment layer that complements the
-# deterministic checks in validate-exobrain.sh.
+# deterministic checks in validate-exobrain.sh. It also carries one deterministic
+# gate of its own — the new-shared-skill proof gate in section 0 — because that one
+# belongs at the deliberate land, not on every push.
 #
 # Runs as a step in the exobrain-persist flow (after commit, before push), where a
 # deliberate land is the right moment for a model round-trip; also runnable by hand
@@ -13,7 +15,8 @@
 # Engine: claude (headless, read-only) if installed, else codex; if neither is
 # available — or the checker errors/times out — it DEGRADES OPEN (exit 0), so a
 # missing or flaky checker never reports a false violation. It exits 1 only when
-# the model reports clear violations.
+# the model reports clear violations, and 2 when the deterministic new-shared-skill
+# gate below blocks (that one needs no model).
 #
 # Opt out:  EXOBRAIN_SKIP_AUTHORING_REVIEW=1
 
@@ -22,6 +25,117 @@ set -uo pipefail
 
 REPO_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 BASE="${1:-origin/main}"
+
+# ---------------------------------------------------------------------------
+# 0. New-shared-skill proof gate — deterministic, runs before the model pass.
+#
+# A skill declared at a shared scope loads for everyone whose chain includes that
+# scope, so a newly declared one must carry committed proof it earns that reach:
+# registration as a periodic job in a schedule.json, or a test/eval/ab artifact inside
+# the skill dir. Absent either, the skill belongs under a person scope, which imposes
+# on no one. Proof must live WITH the skill — a skill may not cite the workspace it
+# came from (AGENTS.md: links from anything that must stay current go stale silently).
+#
+# Exempt: person and host scopes (per scopes.json), external skills (`source`) and
+# overrides (`from`). Skills already declared at BASE are grandfathered, so adopting
+# this gate never flags an existing corpus. Skipped when BASE doesn't resolve —
+# degrading open like the rest of this script.
+# ---------------------------------------------------------------------------
+
+# Scope collections that are personal rather than shared. Read from scopes.json so
+# an instance that renames its collections still resolves; falls back to the defaults.
+personal_collections="people hosts"
+if [[ -f "$REPO_DIR/scopes.json" ]]; then
+    _pc="$(jq -r '[(.scopes // [])[] | select(.type == "person" or .type == "host") | .collection] | join(" ")' \
+           "$REPO_DIR/scopes.json" 2>/dev/null)"
+    [[ -n "$_pc" ]] && personal_collections="$_pc"
+fi
+
+is_personal_path() {   # $1 = repo-relative path
+    local seg
+    for seg in $personal_collections; do
+        case "/$1" in */"$seg"/*) return 0 ;; esac
+    done
+    return 1
+}
+
+skill_proof_signal() {   # $1 = skill dir (abs), $2 = skill name — 0 if proof exists
+    local dir="$1" name="$2" sched
+    while IFS= read -r sched; do
+        [[ -n "$sched" ]] || continue
+        grep -qF -- "$name" "$REPO_DIR/$sched" 2>/dev/null && return 0
+    done < <(git -C "$REPO_DIR" ls-files 'schedule.json' '*/schedule.json' 2>/dev/null)
+    [[ -n "$(find "$dir" -type d -iname 'evals' 2>/dev/null | head -1)" ]] && return 0
+    [[ -n "$(find "$dir" -type f \( -iname '*test*' -o -name 'ab-results.json' \
+             -o -iname '*.eval.json' \) 2>/dev/null | head -1)" ]] && return 0
+    return 1
+}
+
+unproven=()
+_seen_skills=" "
+check_new_skill() {   # $1 = name, $2 = scope label, $3 = skill dir (abs)
+    case "$_seen_skills" in *" $1 "*) return ;; esac
+    _seen_skills="$_seen_skills$1 "
+    [[ -d "$3" ]] || return
+    skill_proof_signal "$3" "$1" || unproven+=("$1 ($2)")
+}
+
+if git -C "$REPO_DIR" rev-parse --verify --quiet "$BASE" >/dev/null 2>&1; then
+    _decls='.skills[] | select((has("from") | not) and (has("source") | not)) | .name'
+
+    # (i) Declarations present at HEAD but not at BASE — the authoritative signal:
+    # a skill becomes shared the moment a shared scope's registry names it.
+    while IFS= read -r sj; do
+        [[ -n "$sj" ]] || continue
+        is_personal_path "$sj" && continue
+        scope_dir="$(dirname "$sj")"
+        if [[ "$scope_dir" == "." ]]; then
+            scope_lbl="global"; skills_dir="$REPO_DIR/skills"
+        else
+            scope_lbl="$scope_dir"; skills_dir="$REPO_DIR/$scope_dir/skills"
+        fi
+        head_decls="$(jq -r "$_decls" "$REPO_DIR/$sj" 2>/dev/null)"
+        base_decls="$(git -C "$REPO_DIR" show "$BASE:$sj" 2>/dev/null | jq -r "$_decls" 2>/dev/null)"
+        while IFS= read -r nm; do
+            [[ -n "$nm" ]] || continue
+            printf '%s\n' "$base_decls" | grep -qxF -- "$nm" && continue
+            check_new_skill "$nm" "$scope_lbl" "$skills_dir/$nm"
+        done <<< "$head_decls"
+    done < <(git -C "$REPO_DIR" ls-files 'skills.json' '*/skills.json' 2>/dev/null)
+
+    # (ii) Newly added SKILL.md files — belt-and-suspenders for a skill dropped in a
+    # shared scope's skills/ whose declaration lands in a later commit.
+    while IFS= read -r f; do
+        [[ -n "$f" ]] || continue
+        is_personal_path "$f" && continue
+        case "$f" in
+            skills/*/SKILL.md)
+                nm="${f#skills/}"; nm="${nm%/SKILL.md}"
+                check_new_skill "$nm" "global" "$REPO_DIR/skills/$nm" ;;
+            */skills/*/SKILL.md)
+                sd="${f%/skills/*}"; nm="${f#*/skills/}"; nm="${nm%/SKILL.md}"
+                check_new_skill "$nm" "$sd" "$REPO_DIR/$sd/skills/$nm" ;;
+        esac
+    done < <(git -C "$REPO_DIR" diff --name-only --diff-filter=A "$BASE...HEAD" 2>/dev/null \
+             | grep 'SKILL\.md$')
+fi
+
+if [[ ${#unproven[@]} -gt 0 ]]; then
+    {
+        echo ""
+        echo "NEW SHARED SKILL — newly declared at a shared scope with no committed proof it"
+        echo "earns that reach: no schedule.json registration, and no test/eval/ab artifact in"
+        echo "the skill dir. A shared skill loads for everyone whose chain includes its scope."
+        echo "For each, either PROVE it — commit the test run, eval, or exobrain-ab result into"
+        echo "the skill's own directory, so the proof travels with the skill — or RELOCATE it"
+        echo "under a person scope's skills/, which imposes on no one and is exempt:"
+        printf '  - %s\n' "${unproven[@]}"
+        echo ""
+        echo "Then re-run scripts/authoring-review.sh."
+        echo ""
+    } >&2
+    exit 2
+fi
 
 # ---------------------------------------------------------------------------
 # 1. In-scope files changed on this branch. Skip fast if none.
@@ -83,6 +197,24 @@ specs tight") -- read them if useful. The ones to check:
   genre. Flag author-serving prose -- "why we did X" justifications, narrative
   about the change itself, asides defending the author's choices -- that no
   reader of the doc needs. (Cut test only; what's *missing* is out of scope.)
+
+For any changed */SKILL.md, ALSO evaluate the skill against the skill-authoring
+rubric:
+- Type: Utility (ships scripts, endpoints, or a real procedure), Behavior-shaping
+  (mostly prose nudging the agent's own reasoning), or Hybrid. A helper script's
+  mere presence does not make a prose-heavy skill a Utility.
+- Leverage: does it let the agent do something it cannot already do from
+  auto-loaded context? Flag a skill that mostly restates AGENTS.md, a sidecar, or
+  another skill (redundant, and it will drift), or that is a generic
+  best-practices checklist with no exobrain-specific leverage.
+- Proof (shared-scope skills must be proven): a Utility by a committed run, test,
+  or scheduler registration; a Behavior-shaping skill by an exobrain-ab result
+  showing it moves behavior. Flag an unproven shared skill (the deterministic
+  block is section 0 of this script).
+- Reach: flag force:true or tier:always that is disproportionate to the
+  demonstrated value (e.g. `always` for content only needed on demand).
+Recommend one of KEEP / TRIM (cut the redundant or generic prose) / PROVE /
+DEMOTE (to a person scope's skills/) / MERGE.
 
 Be conservative: flag only what a careful reviewer would clearly call a
 violation. If unsure, do not flag. Ignore style and wording preferences.

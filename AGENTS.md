@@ -103,8 +103,9 @@ Before writing anything — doc, commit, message — name who reads it and what 
 
 ## Validation
 
-- `scripts/validate-exobrain.sh` — deterministic checks (naming, JSON syntax, `scopes.json` shape, the skills registry, agent-neutral outgoing commit messages), plus each connected scope's own validator hook: a scope carrying `scripts/validate-exobrain.sh` extends the gate with its own checks (e.g. the gitignored `local/` scope's private leak scan). Fast; run before committing structural changes.
+- `scripts/validate-exobrain.sh` — deterministic checks (naming, JSON syntax, `scopes.json` shape, the skills registry, agent-neutral outgoing commit messages, machine-specific paths in changed files outside host scope), plus each connected scope's own validator hook: a scope carrying `scripts/validate-exobrain.sh` extends the gate with its own checks (e.g. the gitignored `local/` scope's private leak scan). Fast; run before committing structural changes.
 - `scripts/authoring-review.sh` — an LLM judgment layer that reviews changed specs and domain files against the authoring rules. The `exobrain-persist` flow runs it automatically (after commit, before push); you can also run it by hand before a substantial spec or domain edit. It self-skips when no spec/domain file changed, degrades open when no agent CLI is installed, and is skippable with `EXOBRAIN_SKIP_AUTHORING_REVIEW=1`. The pre-push hook runs only the deterministic validator above.
+- **A skill newly declared at a shared scope must carry committed proof it earns that reach** — otherwise it belongs under a person scope's `skills/`, where it imposes on no one. `authoring-review.sh` blocks the land and names what counts as proof; the criteria live in `domains/exobrain/skills.md`.
 
 ## How exobrain works — depth
 
