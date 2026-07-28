@@ -536,8 +536,47 @@ fi
 # Optional-skills index
 # --------------------------------------------------------------------------
 
+# The three indexes below are build inputs for compose_context, not deliverables:
+# every agent receives them through its own composed surface. Generate them into
+# temp files and let each agent's branch decide what to persist — only Claude keeps
+# durable copies, because its @-import manifest names them as real files on disk.
+# An index that has nothing to list is expressed by removing its temp file, so the
+# `[[ -f … ]]` guards downstream read as "was anything generated?".
+INDEX_FILE="$(mktemp)"; TOOLS_INDEX_FILE="$(mktemp)"; DOMAINS_INDEX_FILE="$(mktemp)"
+trap 'rm -f "$INDEX_FILE" "$TOOLS_INDEX_FILE" "$DOMAINS_INDEX_FILE"' EXIT
+
+# install_index <tmp> <dest> <label> — persist a generated index onto a surface that
+# reads it from disk. No temp means nothing was generated this run: clear whatever an
+# earlier relink left at the destination so the surface never imports a stale index.
+install_index() {
+    local tmp="$1" dest="$2" label="$3"
+    if [[ -f "$tmp" ]]; then
+        cp "$tmp" "$dest"; echo "  ✓ $label"
+    elif [[ -f "$dest" ]]; then
+        rm -f "$dest"; echo "  - removed stale $label"
+    fi
+}
+
+# prune_home_indexes — migrate off the pre-override delivery model, which wrote these
+# indexes into the agent's home config dir back when that dir was the transport. The
+# composed surface now carries them inlined, so home-dir copies are read by nothing:
+# a shared dir where two checkouts overwrite each other and every copy goes stale at
+# the next relink elsewhere. Removes only a file this connector wrote — matched on the
+# generated heading — so a same-named file of the human's own is left alone.
+prune_home_indexes() {
+    local file heading
+    while IFS='|' read -r file heading; do
+        [[ -f "$TARGET_DIR/$file" ]] || continue
+        [[ "$(head -n 1 "$TARGET_DIR/$file")" == "$heading" ]] || continue
+        rm -f "$TARGET_DIR/$file"; echo "  - removed dead index copy $TARGET_DIR/$file"
+    done <<'LEGACY'
+optional-skills.md|# Optional skills
+tools-index.md|# Tools
+domains-index.md|# Domains
+LEGACY
+}
+
 echo ""; echo "Optional skills index:"
-INDEX_FILE="$TARGET_DIR/optional-skills.md"
 if $REGISTRY_ACTIVE; then
     {
         cat <<'HEADER'
@@ -573,9 +612,9 @@ HEADER
             printf '| %s | %s | %s |\n' "$name" "$local_path/SKILL.md" "$summary"
         done <<< "$RESOLVED_TSV" | sort
     } > "$INDEX_FILE"
-    echo "  + $INDEX_FILE"
+    echo "  ✓ generated"
 else
-    [[ -f "$INDEX_FILE" ]] && rm "$INDEX_FILE"
+    rm -f "$INDEX_FILE"
     echo "  SKIP (no registry in any connected scope)"
 fi
 
@@ -587,7 +626,6 @@ fi
 # has set up) lives separately in .exobrain.json; the index is a pure catalog, so
 # it stays a function of committed docs and regenerates on the same relink triggers.
 echo ""; echo "Tools index:"
-TOOLS_INDEX_FILE="$TARGET_DIR/tools-index.md"
 TOOLS_TSV="$(tools_resolve "$REPO_DIR" "${CONNECTED_LEAVES[@]:-}")"
 if [[ -n "$TOOLS_TSV" ]]; then
     {
@@ -609,9 +647,9 @@ HEADER
             printf '| %s | %s | %s |\n' "$name" "$path" "$summary"
         done <<< "$TOOLS_TSV"
     } > "$TOOLS_INDEX_FILE"
-    echo "  + $TOOLS_INDEX_FILE"
+    echo "  ✓ generated"
 else
-    [[ -f "$TOOLS_INDEX_FILE" ]] && rm "$TOOLS_INDEX_FILE"
+    rm -f "$TOOLS_INDEX_FILE"
     echo "  SKIP (no tool docs in any connected scope)"
 fi
 
@@ -625,7 +663,6 @@ fi
 # domain's README before reasoning about it. A pure function of committed docs,
 # regenerated on every relink. (Empty in a checkout with no domains/.)
 echo ""; echo "Domains index:"
-DOMAINS_INDEX_FILE="$TARGET_DIR/domains-index.md"
 DOMAINS_TSV="$(domains_resolve "$REPO_DIR")"
 if [[ -n "$DOMAINS_TSV" ]]; then
     {
@@ -645,9 +682,9 @@ HEADER
             printf '| %s | %s | %s |\n' "$name" "$path" "$summary"
         done <<< "$DOMAINS_TSV"
     } > "$DOMAINS_INDEX_FILE"
-    echo "  + $DOMAINS_INDEX_FILE"
+    echo "  ✓ generated"
 else
-    [[ -f "$DOMAINS_INDEX_FILE" ]] && rm "$DOMAINS_INDEX_FILE"
+    rm -f "$DOMAINS_INDEX_FILE"
     echo "  SKIP (no domains/ in this checkout)"
 fi
 
@@ -714,6 +751,12 @@ case "$AGENT" in
         echo ""; echo "Composing Claude context surface …"
         compose_scope_manifest > "$TARGET_DIR/connected-scopes.md"
         echo "  ✓ .claude/connected-scopes.md (manifest of source specs)"
+        # Claude is the one surface that reads the indexes as files: the manifest
+        # @-imports them by name, so they need durable copies in the in-repo
+        # (gitignored) .claude/ that travels with the checkout.
+        install_index "$INDEX_FILE"         "$TARGET_DIR/optional-skills.md" ".claude/optional-skills.md"
+        install_index "$TOOLS_INDEX_FILE"   "$TARGET_DIR/tools-index.md"     ".claude/tools-index.md"
+        install_index "$DOMAINS_INDEX_FILE" "$TARGET_DIR/domains-index.md"   ".claude/domains-index.md"
         {
             echo "@connected-scopes.md"
             # `if`, not `&& printf`: when an index is absent the trailing conditional
@@ -767,6 +810,7 @@ case "$AGENT" in
                 "$TARGET_DIR/AGENTS.md" > "$TARGET_DIR/AGENTS.md.tmp" && mv "$TARGET_DIR/AGENTS.md.tmp" "$TARGET_DIR/AGENTS.md"
             echo "  - removed legacy exobrain block from $TARGET_DIR/AGENTS.md"
         fi
+        prune_home_indexes
 
         # Disable Codex project memory — exobrain supplies context via
         # AGENTS.override.md, so Codex's separate memory layer just adds drift.
@@ -800,6 +844,7 @@ case "$AGENT" in
         mkdir -p "$TARGET_DIR"
         inject_block "$DEST" "exobrain" "$CONTENT_TMP" "$(basename "$DEST")"
         rm -f "$CONTENT_TMP"
+        prune_home_indexes
         ;;
 esac
 
