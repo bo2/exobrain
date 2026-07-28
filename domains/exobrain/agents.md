@@ -59,10 +59,10 @@ A single run:
 4. **Fetch external skills** — route to `skills/` (always) or `skills-optional/` (optional).
 5. **Generate the indexes** — `optional-skills.md` (optional-tier skills), `tools-index.md` (visible tool docs), `domains-index.md` (domains + their summaries).
 6. **Compose + inject** — deliver each connected scope's `AGENTS.md` (+ agent sidecar, shallow→deep) and the generated indexes. Claude writes `.claude/connected-scopes.md` — a manifest of `@-import`s to the live source specs — and a `.claude/CLAUDE.md` that `@-import`s that manifest plus each index; Codex writes the self-contained in-repo `AGENTS.override.md` (root scope and root sidecar inlined, since it replaces `AGENTS.md`); OpenClaw inlines the same specs and indexes into a `USER.md` marker block, with its root sidecar prepended (the root `AGENTS.md` itself loads natively).
-7. **Install the post-merge hook** (first run) — re-links every marked agent after `git pull`.
+7. **Install the git hooks** — rewritten on every run, `--relink` included, so a template change reaches a checkout that connected long ago. What each hook runs: [`machinery.md`](machinery.md) § Git hooks.
 8. **Run scope hooks** — if a scope dir has an executable `scripts/connect-agent.sh`, run it.
 
-`--relink` repeats steps 2–6 without prompting; `--configure` re-resolves identity (the wizard, or the identity flags); `--render-specs-only` runs steps 2–6 and stops before any write outside the target dir (no marker, no hooks) — for wiring a throwaway copy.
+`--relink` repeats steps 2–8 without prompting and writes no marker (the marker records that a human connected this agent, so a `--relink` for an unmarked agent exits before any of this); `--configure` re-resolves identity (the wizard, or the identity flags); `--render-specs-only` runs steps 2–6 and stops before any write outside the target dir (no marker, no hooks) — for wiring a throwaway copy.
 
 ## Adding a new agent
 
