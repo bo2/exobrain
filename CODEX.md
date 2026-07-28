@@ -4,7 +4,7 @@ This file holds Codex-specific guidance. The shared conventions in `AGENTS.md` a
 
 ## Tooling primitive names
 
-*(Skeleton — fill in as Codex-specific tool primitives are documented in this repo. The Claude Code equivalents are under "Tooling primitive names" in `CLAUDE.md`.)*
+When `AGENTS.md` or a skill refers to "the agent's primitive for X", map it to the Codex equivalent — file edits through its patch/apply mechanism, search and shell through its command tool. Codex has no separate skill-invocation primitive: `tier: always` skills are linked into `.agents/skills/`, and `tier: optional` skills appear in the optional-skills index inside `AGENTS.override.md` — read the `SKILL.md` at the path given and follow it inline.
 
 ## Git history hygiene
 
