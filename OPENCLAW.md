@@ -4,7 +4,13 @@ This file holds OpenClaw-specific guidance. The shared conventions in `AGENTS.md
 
 ## Tooling primitive names
 
-*(Skeleton — fill in as OpenClaw-specific tool primitives are documented in this repo. The Claude Code equivalents are under "Tooling primitive names" in `CLAUDE.md`.)*
+When `AGENTS.md` or a skill refers to "the agent's primitive for X", map it to the OpenClaw equivalent for file edits, search, and shell. OpenClaw has no separate skill-invocation primitive: `tier: always` skills are linked into its skills dir, and `tier: optional` skills appear in the optional-skills index inside the injected block — read the `SKILL.md` at the path given and follow it inline.
+
+## Exobrain versus OpenClaw memory
+
+Durable, structured knowledge belongs in the exobrain; OpenClaw's own workspace memory holds session scratch and short-lived conversational continuity. Don't let `MEMORY.md` become a second knowledge base.
+
+A memory-consolidation pass is therefore an exobrain review, not a filing exercise: **reconcile rather than append** — correct what a new note contradicts instead of stacking another version of the fact beside it — and once something is promoted, keep no second copy of the synthesis in `MEMORY.md`. Raw notes and routine churn stay in OpenClaw memory to be pruned normally.
 
 ## Git history hygiene
 
