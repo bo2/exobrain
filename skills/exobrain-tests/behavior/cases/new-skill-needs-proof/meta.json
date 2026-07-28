@@ -1,0 +1,9 @@
+{
+  "name": "new-skill-needs-proof",
+  "description": "authoring-review.sh section 0 blocks a newly declared, unproven shared-scope skill and clears once a committed proof signal is present.",
+  "runs": 1,
+  "permission_profile": "static",
+  "pass_threshold": "all",
+  "timeout_seconds": 120,
+  "tags": ["authoring", "skills", "gate"]
+}

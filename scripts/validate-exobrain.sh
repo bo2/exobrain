@@ -18,6 +18,8 @@
 #     a never-reused provenance key; concurrent PRs can collide on one.
 #   - Agent attribution in outgoing commit messages (CLAUDE.md § Git history
 #     hygiene): "Co-Authored-By: Claude" trailers, "Generated with" footers.
+#   - Machine-specific absolute paths in changed files outside host scope, which
+#     break on every other machine. Diff-scoped, so existing paths are grandfathered.
 #   - Scope validator hooks: every connected scope (plus ancestors and the
 #     auto-joined seed scope) may carry a same-named hook at
 #     <scope>/scripts/validate-exobrain.sh; each runs with the checkout under
@@ -193,6 +195,31 @@ if [[ -z "$default_ref" ]]; then
             default_ref="$cand"; break
         fi
     done
+fi
+
+# ---------------------------------------------------------------------------
+# Portability — machine-specific absolute paths outside host scope. Files at
+# global, group, and person scope are shared across machines, so a /Users/<someone>/
+# or /home/<someone>/ path in one breaks on every other machine (AGENTS.md §
+# Conventions). Scoped to files changed against the default branch: pre-existing
+# paths are grandfathered, and only newly introduced ones block the push. Exempt:
+# host scopes (the scopes.json "hosts" collection, where such paths belong), _raw/
+# source captures, and any directory holding a Dockerfile — a path inside a
+# container image is fixed by the image, not by the machine. Placeholder forms like
+# /Users/<name>/ don't match, since "<" is not a path character.
+# ---------------------------------------------------------------------------
+
+if [[ -n "$default_ref" ]]; then
+    while IFS= read -r f; do
+        [[ -z "$f" ]] && continue
+        case "$f" in hosts/*|*/hosts/*|*/_raw/*|tmp/*) continue ;; esac
+        [[ -f "$REPO_DIR/$f" ]] || continue
+        [[ -f "$REPO_DIR/$(dirname "$f")/Dockerfile" ]] && continue
+        while IFS= read -r hit; do
+            [[ -z "$hit" ]] && continue
+            record "machine-specific path outside host scope — use a relative path, an env var, or host scope (AGENTS.md § Conventions): $f:${hit%%:*}"
+        done < <(grep -InE '/(Users|home)/[A-Za-z0-9._-]+/' "$REPO_DIR/$f" 2>/dev/null | head -5)
+    done < <(git -C "$REPO_DIR" diff --name-only "$default_ref...HEAD" 2>/dev/null)
 fi
 
 # ---------------------------------------------------------------------------
