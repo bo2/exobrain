@@ -46,6 +46,10 @@ assert_file()         { [[ -e "$1" ]] || { echo "ASSERT_FILE${2:+ ($2)}: $1 miss
 assert_no_file()      { [[ ! -e "$1" ]] || { echo "ASSERT_NO_FILE${2:+ ($2)}: $1 unexpectedly exists"; return 1; }; }
 assert_symlink()      { [[ -L "$1" ]] || { echo "ASSERT_SYMLINK${2:+ ($2)}: $1 not a symlink"; return 1; }; }
 
+# Everything a run left in a dir, one space-separated sorted line — for asserting
+# exactly what a connect wrote into an agent's home config dir.
+dir_listing()     { (cd "$1" && LC_ALL=C ls -A | sort | tr '\n' ' ' | sed 's/ $//'); }
+
 claude_manifest() { cat "$1/.claude/connected-scopes.md"; }
 claude_index()    { cat "$1/.claude/optional-skills.md"; }
 claude_tools()    { cat "$1/.claude/tools-index.md"; }
@@ -283,6 +287,29 @@ test_claude_manifest_relative_and_resolves() {
     assert_no_file "$r/.claude/AGENTS.override.md" "no stale inlined override"
 }
 
+# Claude is the one surface that reads the indexes as files on disk, so every
+# @-import in the generated CLAUDE.md must land on one.
+test_claude_index_imports_resolve() {
+    local r; r="$(setup_fake_exobrain)"; add_person "$r" people/alice
+    declare_skill "$r" global optme optional force
+    add_tool "$r" global github "Read and act on GitHub via the gh CLI."
+    add_domain "$r" health "Conditions, meds, providers, and insurance."
+    write_config "$r" people/alice/hosts/h1
+    render "$r" claude >/dev/null 2>&1 || return 1
+    local c; c="$(cat "$r/.claude/CLAUDE.md")"
+    assert_contains "$c" "@optional-skills.md" "CLAUDE.md imports the optional-skills index" || return 1
+    assert_contains "$c" "@tools-index.md" "CLAUDE.md imports the tools index" || return 1
+    assert_contains "$c" "@domains-index.md" "CLAUDE.md imports the domains index" || return 1
+    local p; while IFS= read -r p; do
+        [[ -z "$p" ]] && continue
+        assert_file "$r/.claude/${p#@}" "CLAUDE.md import resolves: $p" || return 1
+    done < <(grep '^@' <<< "$c")
+    # The durable copies carry the generated content, not an empty placeholder.
+    assert_contains "$(claude_index "$r")" "optme" "optional-skills.md holds its rows" || return 1
+    assert_contains "$(claude_tools "$r")" "github" "tools-index.md holds its rows" || return 1
+    assert_contains "$(claude_domains "$r")" "health" "domains-index.md holds its rows"
+}
+
 # Regression for the set -e abort: a connected scope with no per-agent sidecar must
 # still render cleanly (the manifest emitter's last branch returns 0).
 test_render_no_sidecar_exit0() {
@@ -322,6 +349,72 @@ test_codex_inlines_specs() {
     assert_contains "$a" "person scope" "person spec inlined into override" || return 1
     # Codex's surface is in-repo, not in CODEX_HOME.
     assert_no_file "$TEST_DIR/codex/AGENTS.md" "no marker block left in ~/.codex/AGENTS.md"
+}
+
+# The indexes are build inputs for the composed surface, not deliverables: Codex
+# reads them inlined in the override, so nothing durable belongs in CODEX_HOME — a
+# shared dir two checkouts would overwrite, and which --render-specs-only must leave
+# untouched but for the memory-disable config.
+test_codex_indexes_inlined_not_in_home() {
+    local r; r="$(setup_fake_exobrain)"; add_person "$r" people/alice
+    declare_skill "$r" global optme optional force
+    add_tool "$r" global github "Read and act on GitHub via the gh CLI."
+    add_domain "$r" health "Conditions, meds, providers, and insurance."
+    write_config "$r" people/alice/hosts/h1 codex
+    render "$r" codex >/dev/null 2>&1 || return 1
+    local a; a="$(cat "$r/AGENTS.override.md")"
+    assert_contains "$a" "<!-- optional-skills index -->" "optional-skills index inlined" || return 1
+    assert_contains "$a" "<!-- tools index -->" "tools index inlined" || return 1
+    assert_contains "$a" "<!-- domains index -->" "domains index inlined" || return 1
+    assert_contains "$a" "optme" "optional skill row inlined" || return 1
+    assert_contains "$a" "github" "tool row inlined" || return 1
+    assert_contains "$a" "health" "domain row inlined" || return 1
+    assert_eq "config.toml" "$(dir_listing "$TEST_DIR/codex")" \
+        "config.toml is the only thing written to CODEX_HOME"
+}
+
+# Migration: an upgrading instance carries index copies the pre-override connector
+# left in the home dir. Relink clears the ones it wrote — matched on the generated
+# heading — and leaves a same-named file of the human's own alone.
+test_codex_prunes_legacy_home_indexes() {
+    local r; r="$(setup_fake_exobrain)"; add_person "$r" people/alice
+    write_config "$r" people/alice/hosts/h1 codex
+    mkdir -p "$TEST_DIR/codex"
+    printf '# Tools\n\nstale\n'   > "$TEST_DIR/codex/tools-index.md"
+    printf '# Domains\n\nstale\n' > "$TEST_DIR/codex/domains-index.md"
+    printf '# My own notes\n'     > "$TEST_DIR/codex/optional-skills.md"   # not ours
+    render "$r" codex >/dev/null 2>&1 || return 1
+    assert_no_file "$TEST_DIR/codex/tools-index.md" "legacy tools index removed" || return 1
+    assert_no_file "$TEST_DIR/codex/domains-index.md" "legacy domains index removed" || return 1
+    assert_file "$TEST_DIR/codex/optional-skills.md" "foreign same-named file left alone" || return 1
+    assert_eq "# My own notes" "$(head -n 1 "$TEST_DIR/codex/optional-skills.md")" "foreign file unmodified"
+}
+
+# ---------------------------------------------------------------------------
+# Tests — OpenClaw surface (USER.md marker block)
+# ---------------------------------------------------------------------------
+
+test_openclaw_indexes_inlined_not_in_home() {
+    local r; r="$(setup_fake_exobrain)"; add_person "$r" people/alice
+    declare_skill "$r" global optme optional force
+    add_tool "$r" global github "Read and act on GitHub via the gh CLI."
+    add_domain "$r" health "Conditions, meds, providers, and insurance."
+    write_config "$r" people/alice/hosts/h1 openclaw
+    render "$r" openclaw >/dev/null 2>&1 || return 1
+    local u; u="$(cat "$TEST_DIR/ocw/USER.md")"
+    assert_contains "$u" "<!-- optional-skills index -->" "optional-skills index inlined" || return 1
+    assert_contains "$u" "<!-- tools index -->" "tools index inlined" || return 1
+    assert_contains "$u" "<!-- domains index -->" "domains index inlined" || return 1
+    assert_contains "$u" "optme" "optional skill row inlined" || return 1
+    assert_contains "$u" "github" "tool row inlined" || return 1
+    assert_contains "$u" "health" "domain row inlined" || return 1
+    # USER.md is the surface; no index files alongside it.
+    assert_no_file "$TEST_DIR/ocw/optional-skills.md" "no optional-skills.md in OPENCLAW_WORKSPACE" || return 1
+    assert_no_file "$TEST_DIR/ocw/tools-index.md" "no tools-index.md in OPENCLAW_WORKSPACE" || return 1
+    assert_no_file "$TEST_DIR/ocw/domains-index.md" "no domains-index.md in OPENCLAW_WORKSPACE" || return 1
+    # USER.md is the surface; skills/ is OpenClaw's always-tier link dir. Nothing else.
+    assert_eq "USER.md skills" "$(dir_listing "$TEST_DIR/ocw")" \
+        "only USER.md + the skills link dir written to OPENCLAW_WORKSPACE"
 }
 
 # ---------------------------------------------------------------------------
@@ -366,6 +459,24 @@ test_domains_index_claude() {
     assert_contains "$d" "Conditions, meds, providers, and insurance." "summary extracted from frontmatter" || return 1
     local c; c="$(cat "$r/.claude/CLAUDE.md")"
     assert_contains "$c" "@domains-index.md" "CLAUDE.md imports the domains index"
+}
+
+# A domain (or tool doc) going away must take its durable copy with it — otherwise
+# Claude keeps @-importing an index that no longer describes the checkout.
+test_claude_index_removed_when_source_goes() {
+    local r; r="$(setup_fake_exobrain)"; add_person "$r" people/alice
+    add_domain "$r" health "Conditions, meds, providers, and insurance."
+    add_tool "$r" global github "Read and act on GitHub via the gh CLI."
+    write_config "$r" people/alice/hosts/h1
+    render "$r" claude >/dev/null 2>&1 || return 1
+    assert_file "$r/.claude/domains-index.md" "domains index present while the domain exists" || return 1
+    rm -rf "$r/domains" "$r/tools"
+    render "$r" claude >/dev/null 2>&1 || return 1
+    assert_no_file "$r/.claude/domains-index.md" "stale domains index cleared on relink" || return 1
+    assert_no_file "$r/.claude/tools-index.md" "stale tools index cleared on relink" || return 1
+    local c; c="$(cat "$r/.claude/CLAUDE.md")"
+    assert_not_contains "$c" "@domains-index.md" "CLAUDE.md drops the removed domains import" || return 1
+    assert_not_contains "$c" "@tools-index.md" "CLAUDE.md drops the removed tools import"
 }
 
 test_domains_index_empty_skip() {
@@ -510,11 +621,16 @@ run_test "tools resolve excludes template"     test_tools_resolve_excludes_templ
 run_test "claude manifest relative + resolves" test_claude_manifest_relative_and_resolves
 run_test "render no-sidecar exits 0"           test_render_no_sidecar_exit0
 run_test "always linked, unlisted not"         test_always_skill_linked_unlisted_not
+run_test "claude index imports resolve"        test_claude_index_imports_resolve
 run_test "codex inlines specs"                 test_codex_inlines_specs
+run_test "codex indexes inlined, not in home"  test_codex_indexes_inlined_not_in_home
+run_test "codex prunes legacy home indexes"    test_codex_prunes_legacy_home_indexes
+run_test "openclaw indexes inlined, not home"  test_openclaw_indexes_inlined_not_in_home
 run_test "tools index (claude)"                test_tools_index_claude
 run_test "tools index empty -> skip"           test_tools_index_empty_skip
 run_test "domains index (claude)"              test_domains_index_claude
 run_test "domains index empty -> skip"         test_domains_index_empty_skip
+run_test "stale claude index cleared"          test_claude_index_removed_when_source_goes
 run_test "validate clean"                      test_validate_clean
 run_test "validate dangling override"          test_validate_dangling_override
 run_test "fetcher accepts --leaves"            test_fetcher_accepts_leaves_no_external
