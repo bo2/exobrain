@@ -1,12 +1,14 @@
 #!/usr/bin/env bash
 # exobrain-healthcheck.sh — read-only check that this checkout is wired and
-# current for the running agent. It detects three issues and SUGGESTS the fix;
+# current for the running agent. It detects four issues and SUGGESTS the fix;
 # it never writes, never runs connect-agent.sh, and never pulls (see AGENTS.md →
 # "Setup and relink safety" — relink and pull are human-driven):
 #
 #   - not connected  → suggest: scripts/connect-agent.sh <agent>
 #   - links stale    → suggest: scripts/connect-agent.sh <agent> --relink
 #   - trunk behind   → suggest: git pull --ff-only (in the main checkout)
+#   - compat shim past its removal date → name it; the fix is a change, not a command
+#     (the ledger: domains/exobrain/compat.md)
 #
 # The agent connection (the generated CLAUDE.md and skill symlinks) lives in the
 # MAIN checkout, so this resolves to it via the shared git dir and reports its
@@ -68,12 +70,36 @@ skills_dir() {
     esac
 }
 
+# Compatibility shims past their removal date (domains/exobrain/compat.md § Ledger).
+# Reads this checkout, not $MAIN: the ledger is tracked content, which a worktree
+# carries, unlike the generated links. Advisory like the rest of this script — it
+# names the shim and its date; removing it is a change the agent proposes and the
+# human lands.
+compat_due_report() {
+    local ledger="$here/domains/exobrain/compat.md" today id heals remove d
+    local due=()
+    [[ -f "$ledger" ]] || return 0
+    today="$(date +%F)"
+    while IFS='|' read -r _lead id heals _files _added remove _rest; do
+        id="${id// /}"; remove="${remove// /}"
+        [[ "$remove" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]] || continue
+        [[ "$today" > "$remove" ]] || continue
+        heals="$(sed -E 's/^[[:space:]]+//; s/[[:space:]]+$//' <<<"$heals")"
+        due+=("COMPAT $id (due $remove) — $heals")
+    done < <(grep -E '^\|[[:space:]]*[0-9]{4}[[:space:]]*\|' "$ledger" 2>/dev/null)
+    [[ ${#due[@]} -eq 0 ]] && return 0
+    echo "⚠ ${#due[@]} compatibility shim(s) past the removal date:"
+    for d in "${due[@]}"; do echo "  - $d"; done
+    echo "  Remove the marked code, the tests covering it, and the ledger row (domains/exobrain/compat.md)."
+}
+
 problems=()
 
 # 1. Configured at all?
 if [[ ! -f "$MAIN/.exobrain.json" ]]; then
     echo "⚠ exobrain isn't set up in this checkout (no .exobrain.json)."
     echo "  Run: scripts/connect-agent.sh <claude|codex|openclaw>"
+    compat_due_report
     exit 0
 fi
 
@@ -90,6 +116,7 @@ fi
 if [[ ${#agents[@]} -eq 0 ]]; then
     echo "⚠ exobrain is configured but no agent is connected here."
     echo "  Run: scripts/connect-agent.sh <claude|codex|openclaw>"
+    compat_due_report
     exit 0
 fi
 
@@ -136,8 +163,10 @@ if [[ -n "$branch" && -n "$upstream" ]]; then
     (( behind > 0 )) && fresh="$branch is $behind commit(s) behind $upstream — run: git pull --ff-only (in the main checkout)"
 fi
 
-# Output — connection problems and the freshness advisory are independent;
-# print whichever fired, else (verbose) the all-clear.
+# Output — connection problems, the freshness advisory, and due compat shims are
+# independent; print whichever fired, else (verbose) the all-clear.
+compat="$(compat_due_report)"
+
 if [[ ${#problems[@]} -gt 0 ]]; then
     echo "⚠ exobrain connection needs attention:"
     for p in "${problems[@]}"; do echo "  - $p"; done
@@ -145,8 +174,9 @@ if [[ ${#problems[@]} -gt 0 ]]; then
 fi
 
 [[ -n "$fresh" ]] && echo "⚠ $fresh"
+[[ -n "$compat" ]] && echo "$compat"
 
-if [[ ${#problems[@]} -eq 0 && -z "$fresh" ]]; then
+if [[ ${#problems[@]} -eq 0 && -z "$fresh" && -z "$compat" ]]; then
     $VERBOSE && echo "✓ exobrain: ${agents[*]} connected and linked, trunk current ($MAIN)."
 fi
 exit 0

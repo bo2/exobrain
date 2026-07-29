@@ -520,8 +520,9 @@ for d in "$SKILLS_DIR"/*; do
     [[ -n "${_EXPECT_SKILL[$bn]:-}" ]] || { rm "$d"; echo "  - removed stale skill $bn"; }
 done
 
-# Legacy migration: codex skills used to link under ~/.codex/skills (global); they
-# now live in the repo-local .agents/skills. Remove the old exobrain symlinks (only
+# COMPAT 0001 (remove after 2026-08-28) — codex skills used to link under
+# ~/.codex/skills (global); they live in the repo-local .agents/skills. Remove the
+# symlinks left in the home dir (only
 # links pointing back into this repo) so a re-linked codex install keeps no stale
 # global copies; anything else under there is left untouched.
 if [[ "$AGENT" == codex && "$SKILLS_DIR" != "$TARGET_DIR/skills" && -d "$TARGET_DIR/skills" ]]; then
@@ -557,8 +558,9 @@ install_index() {
     fi
 }
 
-# prune_home_indexes — migrate off the pre-override delivery model, which wrote these
-# indexes into the agent's home config dir back when that dir was the transport. The
+# COMPAT 0003 (remove after 2026-08-28) — prune_home_indexes: the pre-override
+# delivery model wrote these indexes into the agent's home config dir, back when that
+# dir was the transport. The
 # composed surface now carries them inlined, so home-dir copies are read by nothing:
 # a shared dir where two checkouts overwrite each other and every copy goes stale at
 # the next relink elsewhere. Removes only a file this connector wrote — matched on the
@@ -803,8 +805,8 @@ case "$AGENT" in
         } > "$OVERRIDE"
         echo "  ✓ $(basename "$OVERRIDE")"
 
-        # Migrate off the prior delivery: strip the exobrain marker block the old
-        # connector injected into ~/.codex/AGENTS.md, now superseded by the override.
+        # COMPAT 0002 (remove after 2026-08-28) — strip the exobrain marker block a
+        # prior connector injected into ~/.codex/AGENTS.md, superseded by the override.
         if [[ -f "$TARGET_DIR/AGENTS.md" ]] && grep -qF "<!-- BEGIN exobrain -->" "$TARGET_DIR/AGENTS.md" 2>/dev/null; then
             awk 'BEGIN{s=0} /<!-- BEGIN exobrain -->/{s=1} /<!-- END exobrain -->/{s=0;next} !s' \
                 "$TARGET_DIR/AGENTS.md" > "$TARGET_DIR/AGENTS.md.tmp" && mv "$TARGET_DIR/AGENTS.md.tmp" "$TARGET_DIR/AGENTS.md"

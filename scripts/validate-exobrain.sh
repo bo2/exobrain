@@ -16,6 +16,9 @@
 #   - Skills registry integrity (delegated to skills-validate.sh).
 #   - Duplicate feed-card IDs (canonical seed only) — the NNNN filename prefix is
 #     a never-reused provenance key; concurrent PRs can collide on one.
+#   - Compatibility-shim ledger: every `COMPAT <id>` marker in the tree has a row in
+#     domains/exobrain/compat.md, every row's files carry its marker, and the marker
+#     and row agree on the removal date. The date itself never fails the gate.
 #   - Agent attribution in outgoing commit messages (CLAUDE.md § Git history
 #     hygiene): "Co-Authored-By: Claude" trailers, "Generated with" footers.
 #   - Machine-specific absolute paths in changed files outside host scope, which
@@ -170,6 +173,62 @@ if [[ -d "$REPO_DIR/seed/feed" ]]; then
             printf '%s\n' "${base%%-*}"
         done | sort | uniq -d
     )
+fi
+
+# ---------------------------------------------------------------------------
+# Compatibility-shim ledger — transitional code carries a `COMPAT <id> (remove
+# after <date>)` marker at the code site and a row in domains/exobrain/compat.md.
+# Checked both ways: a row's files must carry its marker, and a marker must have a
+# row, so a shim can neither lose its removal date nor outlive its entry. The date
+# itself is advisory here — exobrain-healthcheck.sh nags once it passes, and the
+# calendar never blocks a push. No ledger (an instance that dropped it) → skipped.
+# ---------------------------------------------------------------------------
+
+COMPAT_LEDGER="$REPO_DIR/domains/exobrain/compat.md"
+if [[ -f "$COMPAT_LEDGER" ]]; then
+    compat_trim() { local s="$1"; s="${s#"${s%%[![:space:]]*}"}"; printf '%s' "${s%"${s##*[![:space:]]}"}"; }
+    declare -A COMPAT_DUE=()
+
+    while IFS='|' read -r _lead id _heals files added remove _rest; do
+        id="$(compat_trim "$id")"
+        [[ -n "${COMPAT_DUE[$id]:-}" ]] && { record "compat.md: duplicate shim id $id (ids are never reused)"; continue; }
+        added="$(compat_trim "$added")"; remove="$(compat_trim "$remove")"
+        [[ "$added"  =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]] || record "compat.md: shim $id has a malformed 'Added' date: '$added'"
+        [[ "$remove" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]] || record "compat.md: shim $id has a malformed 'Remove after' date: '$remove'"
+        COMPAT_DUE["$id"]="$remove"
+
+        files="$(compat_trim "$files")"; files="${files//\`/}"
+        IFS=',' read -ra _shim_files <<< "$files"
+        for cf in ${_shim_files[@]+"${_shim_files[@]}"}; do
+            cf="$(compat_trim "$cf")"; [[ -z "$cf" ]] && continue
+            if [[ ! -f "$REPO_DIR/$cf" ]]; then
+                record "compat.md: shim $id lists a file that doesn't exist: $cf"
+            elif ! grep -qF "COMPAT $id" "$REPO_DIR/$cf" 2>/dev/null; then
+                record "compat.md: shim $id lists $cf, which carries no 'COMPAT $id' marker"
+            fi
+        done
+    done < <(grep -E '^\|[[:space:]]*[0-9]{4}[[:space:]]*\|' "$COMPAT_LEDGER")
+
+    # The reverse direction. A marker is a *comment line* — the block's opening
+    # comment, in any language — so a doc or a test that merely quotes the string
+    # "COMPAT 0001" isn't mistaken for live transitional code. The ledger is skipped
+    # because its convention section shows an example marker.
+    while IFS= read -r f; do
+        [[ -z "$f" || "$f" == "$COMPAT_LEDGER" ]] && continue
+        while IFS= read -r marker; do
+            [[ "$marker" =~ COMPAT[[:space:]]+([0-9]{4}) ]] || continue
+            mid="${BASH_REMATCH[1]}"
+            rel="${f#"$REPO_DIR"/}"
+            if [[ -z "${COMPAT_DUE[$mid]:-}" ]]; then
+                record "COMPAT $mid marker with no row in domains/exobrain/compat.md: $rel"
+            elif [[ "$marker" =~ \(remove\ after\ ([0-9]{4}-[0-9]{2}-[0-9]{2})\) ]]; then
+                [[ "${BASH_REMATCH[1]}" == "${COMPAT_DUE[$mid]}" ]] || \
+                    record "COMPAT $mid marker date ${BASH_REMATCH[1]} disagrees with the ledger (${COMPAT_DUE[$mid]}): $rel"
+            else
+                record "COMPAT $mid marker missing its '(remove after YYYY-MM-DD)' date: $rel"
+            fi
+        done < <(grep -IhE '^[[:space:]]*(#|//|--|/\*|\*|<!--)[[:space:]]*COMPAT [0-9]{4}' "$f" 2>/dev/null)
+    done < <(find_repo -type f -not -path '*/_raw/*')
 fi
 
 # ---------------------------------------------------------------------------

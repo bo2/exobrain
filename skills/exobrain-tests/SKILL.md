@@ -67,6 +67,10 @@ Exit: `0` all passed · `1` some failed · `2` harness error (including an unkno
 - **`test-authoring-review.sh`** — `authoring-review.sh`'s engine call: inherited proxy
   env is stripped (else a proxied push silently skips the review), and a reported
   violation exits non-zero.
+- **`test-compat-ledger.sh`** — the compatibility-shim gates: `validate-exobrain.sh`
+  holding `COMPAT` markers and `compat.md` rows to each other (both directions, dates
+  included) while never failing on the calendar, and `exobrain-healthcheck.sh` naming
+  shims past their removal date.
 
 ### Add a unit harness
 

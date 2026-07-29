@@ -1,6 +1,6 @@
 # Machinery
 
-A map of the concrete machinery that makes an exobrain work — the scripts, hooks, registries, and gates. One row per artifact: what it does, with a pointer to the topic file that explains it in depth. This is an **index, not a description** — the semantics live in the topic files ([`scopes.md`](scopes.md), [`agents.md`](agents.md), [`skills.md`](skills.md), [`tools.md`](tools.md), [`domains.md`](domains.md), [`authoring.md`](authoring.md), [`propagation.md`](propagation.md)) and in root `AGENTS.md`. Come here for the whole moving-parts surface at a glance; follow the pointer for how each piece works.
+A map of the concrete machinery that makes an exobrain work — the scripts, hooks, registries, and gates. One row per artifact: what it does, with a pointer to the topic file that explains it in depth. This is an **index, not a description** — the semantics live in the topic files ([`scopes.md`](scopes.md), [`agents.md`](agents.md), [`skills.md`](skills.md), [`tools.md`](tools.md), [`domains.md`](domains.md), [`authoring.md`](authoring.md), [`propagation.md`](propagation.md), [`compat.md`](compat.md)) and in root `AGENTS.md`. Come here for the whole moving-parts surface at a glance; follow the pointer for how each piece works.
 
 Paths are repo-relative. *Generated* artifacts are produced by `connect-agent.sh` and gitignored (under `.claude/`, or the agent's `$TARGET_DIR`); everything else is tracked. Keep this map current when machinery is added or removed — it's part of auditing the surface area of a change.
 
@@ -45,12 +45,16 @@ Installed by `connect-agent.sh`, refreshed idempotently on every relink.
 
 | Gate | Checks | When |
 |---|---|---|
-| `scripts/validate-exobrain.sh` | Deterministic conventions: `AGENTS.md` placement, file naming, JSON syntax, `scopes.json` shape, the skills registry, agent-neutral outgoing commit messages, machine-specific absolute paths outside host scope (diff-scoped against the default branch, so existing paths are grandfathered; `_raw/` and Dockerfile-siblings exempt) — plus every connected scope's validator hook (`<scope>/scripts/validate-exobrain.sh`, run with the checkout under validation as `$1`; non-zero exit → its output becomes violations; the gitignored `local/` scope's hook is the private leak scan). | pre-push + manual |
+| `scripts/validate-exobrain.sh` | Deterministic conventions: `AGENTS.md` placement, file naming, JSON syntax, `scopes.json` shape, the skills registry, agent-neutral outgoing commit messages, machine-specific absolute paths outside host scope (diff-scoped against the default branch, so existing paths are grandfathered; `_raw/` and Dockerfile-siblings exempt), compat markers against the shim ledger both ways (see [`compat.md`](compat.md); the removal date never fails the gate) — plus every connected scope's validator hook (`<scope>/scripts/validate-exobrain.sh`, run with the checkout under validation as `$1`; non-zero exit → its output becomes violations; the gitignored `local/` scope's hook is the private leak scan). | pre-push + manual |
 | `scripts/authoring-review.sh` | Two layers. Deterministic (§0, exit 2): the new-shared-skill proof gate — criteria in [`skills.md`](skills.md). LLM (exit 1): judgment over changed specs/domains against the authoring rules, plus the skill-authoring rubric (type / leverage / proof / reach → KEEP, TRIM, PROVE, DEMOTE, MERGE) for changed `SKILL.md` files. Self-skips when nothing changed; degrades open when no agent CLI is installed; skippable with `EXOBRAIN_SKIP_AUTHORING_REVIEW=1`. | `exobrain-persist` (after commit, before push) + manual; not a push-hook gate |
-| `scripts/exobrain-healthcheck.sh` | Connection integrity (not-connected / stale links) + trunk freshness (main checkout behind upstream → suggests `git pull --ff-only`; the fetch is throttled and time-boxed, and it never pulls). Read-only; resolves the main checkout from a worktree; always exits 0. | SessionStart + manual |
+| `scripts/exobrain-healthcheck.sh` | Connection integrity (not-connected / stale links) + trunk freshness (main checkout behind upstream → suggests `git pull --ff-only`; the fetch is throttled and time-boxed, and it never pulls) + compatibility shims past their removal date ([`compat.md`](compat.md) § Ledger, read from the current checkout). Read-only; resolves the main checkout from a worktree; always exits 0. | SessionStart + manual |
 | `exobrain-authoring-audit` skill | Scopes a new or justification-heavy doc by its readers, tracing each contested fact to a real reader need. | before drafting/revising a substantial doc |
 
 The authoring rules these enforce live in [`authoring.md`](authoring.md) and `AGENTS.md` → "Reader Lens" / "Conventions".
+
+| Registry | Role |
+|---|---|
+| `domains/exobrain/compat.md` | The compatibility-shim ledger: one row per piece of transitional code (id, what it heals, the files carrying its `COMPAT <id>` marker, when it landed, when it may go), plus the marking convention. Read by both gates above — see [`compat.md`](compat.md). |
 
 ## Skills system
 
