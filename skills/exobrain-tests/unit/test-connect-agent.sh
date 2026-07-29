@@ -373,9 +373,10 @@ test_codex_indexes_inlined_not_in_home() {
         "config.toml is the only thing written to CODEX_HOME"
 }
 
-# Migration: an upgrading instance carries index copies the pre-override connector
-# left in the home dir. Relink clears the ones it wrote — matched on the generated
-# heading — and leaves a same-named file of the human's own alone.
+# COMPAT 0003 (remove after 2026-08-28) — an upgrading instance carries index copies
+# the pre-override connector left in the home dir. Relink clears the ones it wrote —
+# matched on the generated heading — and leaves a same-named file of the human's own
+# alone.
 test_codex_prunes_legacy_home_indexes() {
     local r; r="$(setup_fake_exobrain)"; add_person "$r" people/alice
     write_config "$r" people/alice/hosts/h1 codex
