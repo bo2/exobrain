@@ -18,9 +18,9 @@ knowledge/<area>/
 
 A small domain (under ~10 files) skips section directories and puts topic files at the root beside `README.md`. `_meta/` appears once the domain accumulates open questions or needs a sources index — a one-file domain doesn't need it.
 
-## The README `summary:` and the domains index
+## The README `summary:` and the knowledge index
 
-Every domain's `README.md` opens with YAML frontmatter — `name`, `type`, `curator`, and a one-line `summary:` (add `timeline: true` to opt into change tracking). The `summary:` states the domain's scope in a sentence — what it covers, kept current — and it is load-bearing: `connect-agent.sh` globs every `knowledge/*/README.md` and composes a **domains index** (each domain's name, README path, and `summary:`) into every agent's auto-loaded surface, the same way it builds the tools index. That index is how an agent knows which areas of your world exist *before* a task points at one, rather than answering cold — the difference between an agent that knows your world and a stranger.
+Every domain's `README.md` opens with YAML frontmatter — `name`, `type`, `curator`, and a one-line `summary:` (add `timeline: true` to opt into change tracking). The `summary:` states the domain's scope in a sentence — what it covers, kept current — and it is load-bearing: `connect-agent.sh` globs every `knowledge/*/README.md` and composes a **knowledge index** (each domain's name, README path, and `summary:`) into every agent's auto-loaded surface, the same way it builds the tools index. That index is how an agent knows which areas of your world exist *before* a task points at one, rather than answering cold — the difference between an agent that knows your world and a stranger.
 
 The index is a pure function of the committed READMEs: generated, never hand-maintained, regenerated on every relink. Domains are root-only and unscoped, so it's a flat catalog — no tiers, overlays, or per-agent filtering. A domain appears as soon as it has a `README.md`; its `summary:` fills the description cell, so keep that to a single line and let the body's TL;DR carry any elaboration. Setting and refreshing `summary:` is part of building and maintaining a domain — the `exobrain-knowledge` skill does it in every mode.
 

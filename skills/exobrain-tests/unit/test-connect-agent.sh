@@ -53,7 +53,7 @@ dir_listing()     { (cd "$1" && LC_ALL=C ls -A | sort | tr '\n' ' ' | sed 's/ $/
 claude_manifest() { cat "$1/.claude/connected-scopes.md"; }
 claude_index()    { cat "$1/.claude/optional-skills.md"; }
 claude_tools()    { cat "$1/.claude/tools-index.md"; }
-claude_domains()  { cat "$1/.claude/domains-index.md"; }
+claude_knowledge()  { cat "$1/.claude/knowledge-index.md"; }
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -299,7 +299,7 @@ test_claude_index_imports_resolve() {
     local c; c="$(cat "$r/.claude/CLAUDE.md")"
     assert_contains "$c" "@optional-skills.md" "CLAUDE.md imports the optional-skills index" || return 1
     assert_contains "$c" "@tools-index.md" "CLAUDE.md imports the tools index" || return 1
-    assert_contains "$c" "@domains-index.md" "CLAUDE.md imports the domains index" || return 1
+    assert_contains "$c" "@knowledge-index.md" "CLAUDE.md imports the knowledge index" || return 1
     local p; while IFS= read -r p; do
         [[ -z "$p" ]] && continue
         assert_file "$r/.claude/${p#@}" "CLAUDE.md import resolves: $p" || return 1
@@ -307,7 +307,7 @@ test_claude_index_imports_resolve() {
     # The durable copies carry the generated content, not an empty placeholder.
     assert_contains "$(claude_index "$r")" "optme" "optional-skills.md holds its rows" || return 1
     assert_contains "$(claude_tools "$r")" "github" "tools-index.md holds its rows" || return 1
-    assert_contains "$(claude_domains "$r")" "health" "domains-index.md holds its rows"
+    assert_contains "$(claude_knowledge "$r")" "health" "knowledge-index.md holds its rows"
 }
 
 # Regression for the set -e abort: a connected scope with no per-agent sidecar must
@@ -365,7 +365,7 @@ test_codex_indexes_inlined_not_in_home() {
     local a; a="$(cat "$r/AGENTS.override.md")"
     assert_contains "$a" "<!-- optional-skills index -->" "optional-skills index inlined" || return 1
     assert_contains "$a" "<!-- tools index -->" "tools index inlined" || return 1
-    assert_contains "$a" "<!-- domains index -->" "domains index inlined" || return 1
+    assert_contains "$a" "<!-- knowledge index -->" "knowledge index inlined" || return 1
     assert_contains "$a" "optme" "optional skill row inlined" || return 1
     assert_contains "$a" "github" "tool row inlined" || return 1
     assert_contains "$a" "health" "domain row inlined" || return 1
@@ -405,14 +405,14 @@ test_openclaw_indexes_inlined_not_in_home() {
     local u; u="$(cat "$TEST_DIR/ocw/USER.md")"
     assert_contains "$u" "<!-- optional-skills index -->" "optional-skills index inlined" || return 1
     assert_contains "$u" "<!-- tools index -->" "tools index inlined" || return 1
-    assert_contains "$u" "<!-- domains index -->" "domains index inlined" || return 1
+    assert_contains "$u" "<!-- knowledge index -->" "knowledge index inlined" || return 1
     assert_contains "$u" "optme" "optional skill row inlined" || return 1
     assert_contains "$u" "github" "tool row inlined" || return 1
     assert_contains "$u" "health" "domain row inlined" || return 1
     # USER.md is the surface; no index files alongside it.
     assert_no_file "$TEST_DIR/ocw/optional-skills.md" "no optional-skills.md in OPENCLAW_WORKSPACE" || return 1
     assert_no_file "$TEST_DIR/ocw/tools-index.md" "no tools-index.md in OPENCLAW_WORKSPACE" || return 1
-    assert_no_file "$TEST_DIR/ocw/domains-index.md" "no domains-index.md in OPENCLAW_WORKSPACE" || return 1
+    assert_no_file "$TEST_DIR/ocw/knowledge-index.md" "no knowledge-index.md in OPENCLAW_WORKSPACE" || return 1
     # USER.md is the surface; skills/ is OpenClaw's always-tier link dir. Nothing else.
     assert_eq "USER.md skills" "$(dir_listing "$TEST_DIR/ocw")" \
         "only USER.md + the skills link dir written to OPENCLAW_WORKSPACE"
@@ -445,24 +445,24 @@ test_tools_index_empty_skip() {
 }
 
 # ---------------------------------------------------------------------------
-# Tests — domains index injection
+# Tests — knowledge index injection
 # ---------------------------------------------------------------------------
 
-test_domains_index_claude() {
+test_knowledge_index_claude() {
     local r; r="$(setup_fake_exobrain)"; add_person "$r" people/alice
     add_domain "$r" health "Conditions, meds, providers, and insurance."
     write_config "$r" people/alice/hosts/h1
     render "$r" claude >/dev/null 2>&1 || return 1
-    assert_file "$r/.claude/domains-index.md" "domains-index.md generated" || return 1
-    local d; d="$(claude_domains "$r")"
-    # The heading is paired with a row in the connector's dead-copy table, which
-    # matches a stale index by its first line — change one, change the other.
-    assert_contains "$d" "# Knowledge domains" "heading matches the dead-copy table" || return 1
+    assert_file "$r/.claude/knowledge-index.md" "knowledge-index.md generated" || return 1
+    local d; d="$(claude_knowledge "$r")"
+    # Both dead-copy prunes identify a stale index by this heading rather than by
+    # name, so a human's same-named file survives — change the heading, change them.
+    assert_contains "$d" "# Knowledge domains" "heading matches the dead-copy prunes" || return 1
     assert_contains "$d" "health" "domain row present" || return 1
     assert_contains "$d" "knowledge/health/README.md" "README path present" || return 1
     assert_contains "$d" "Conditions, meds, providers, and insurance." "summary extracted from frontmatter" || return 1
     local c; c="$(cat "$r/.claude/CLAUDE.md")"
-    assert_contains "$c" "@domains-index.md" "CLAUDE.md imports the domains index"
+    assert_contains "$c" "@knowledge-index.md" "CLAUDE.md imports the knowledge index"
 }
 
 # A domain (or tool doc) going away must take its durable copy with it — otherwise
@@ -473,23 +473,43 @@ test_claude_index_removed_when_source_goes() {
     add_tool "$r" global github "Read and act on GitHub via the gh CLI."
     write_config "$r" people/alice/hosts/h1
     render "$r" claude >/dev/null 2>&1 || return 1
-    assert_file "$r/.claude/domains-index.md" "domains index present while the domain exists" || return 1
+    assert_file "$r/.claude/knowledge-index.md" "knowledge index present while the domain exists" || return 1
     rm -rf "$r/knowledge" "$r/tools"
     render "$r" claude >/dev/null 2>&1 || return 1
-    assert_no_file "$r/.claude/domains-index.md" "stale domains index cleared on relink" || return 1
+    assert_no_file "$r/.claude/knowledge-index.md" "stale knowledge index cleared on relink" || return 1
     assert_no_file "$r/.claude/tools-index.md" "stale tools index cleared on relink" || return 1
     local c; c="$(cat "$r/.claude/CLAUDE.md")"
-    assert_not_contains "$c" "@domains-index.md" "CLAUDE.md drops the removed domains import" || return 1
+    assert_not_contains "$c" "@knowledge-index.md" "CLAUDE.md drops the removed knowledge import" || return 1
     assert_not_contains "$c" "@tools-index.md" "CLAUDE.md drops the removed tools import"
 }
 
-test_domains_index_empty_skip() {
+# COMPAT 0004 (remove after 2026-08-30) — a checkout relinking across the rename
+# carries .claude/domains-index.md, which nothing imports once CLAUDE.md is
+# regenerated. install_index only clears the name it writes, so the old copy needs
+# its own sweep — and a same-named file the human wrote must survive it.
+test_claude_prunes_renamed_index() {
+    local r; r="$(setup_fake_exobrain)"; add_person "$r" people/alice
+    add_domain "$r" health "Conditions, meds, providers, and insurance."
+    write_config "$r" people/alice/hosts/h1
+    mkdir -p "$r/.claude"
+    printf '# Knowledge domains\n\nstale\n' > "$r/.claude/domains-index.md"
+    render "$r" claude >/dev/null 2>&1 || return 1
+    assert_no_file "$r/.claude/domains-index.md" "renamed index copy removed" || return 1
+    assert_file "$r/.claude/knowledge-index.md" "the current index is in place" || return 1
+
+    printf '# My own notes\n' > "$r/.claude/domains-index.md"   # not ours
+    render "$r" claude >/dev/null 2>&1 || return 1
+    assert_file "$r/.claude/domains-index.md" "foreign same-named file left alone" || return 1
+    assert_eq "# My own notes" "$(head -n 1 "$r/.claude/domains-index.md")" "foreign file unmodified"
+}
+
+test_knowledge_index_empty_skip() {
     local r; r="$(setup_fake_exobrain)"; add_person "$r" people/alice  # no knowledge/
     write_config "$r" people/alice/hosts/h1
     render "$r" claude >/dev/null 2>&1 || return 1
-    assert_no_file "$r/.claude/domains-index.md" "no domains-index.md when no knowledge/" || return 1
+    assert_no_file "$r/.claude/knowledge-index.md" "no knowledge-index.md when no knowledge/" || return 1
     local c; c="$(cat "$r/.claude/CLAUDE.md")"
-    assert_not_contains "$c" "@domains-index.md" "CLAUDE.md does not import a missing domains index"
+    assert_not_contains "$c" "@knowledge-index.md" "CLAUDE.md does not import a missing knowledge index"
 }
 
 # ---------------------------------------------------------------------------
@@ -632,8 +652,9 @@ run_test "codex prunes legacy home indexes"    test_codex_prunes_legacy_home_ind
 run_test "openclaw indexes inlined, not home"  test_openclaw_indexes_inlined_not_in_home
 run_test "tools index (claude)"                test_tools_index_claude
 run_test "tools index empty -> skip"           test_tools_index_empty_skip
-run_test "domains index (claude)"              test_domains_index_claude
-run_test "domains index empty -> skip"         test_domains_index_empty_skip
+run_test "knowledge index (claude)"              test_knowledge_index_claude
+run_test "renamed index copy pruned"             test_claude_prunes_renamed_index
+run_test "knowledge index empty -> skip"         test_knowledge_index_empty_skip
 run_test "stale claude index cleared"          test_claude_index_removed_when_source_goes
 run_test "validate clean"                      test_validate_clean
 run_test "validate dangling override"          test_validate_dangling_override
