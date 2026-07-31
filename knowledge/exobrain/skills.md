@@ -31,10 +31,11 @@ Skills live at any scope; each scope's `skills.json` declares skills in its own 
 
 ## Seed-local skills (`seed/`)
 
-The canonical seed has two seed-local skills under `seed/skills/`, both **seed-only** (never copied into a rendered instance — it has no `seed/` at all):
+The canonical seed has three seed-local skills under `seed/skills/`, all **seed-only** (never copied into a rendered instance — it has no `seed/` at all):
 
 - **`create-instance`** (the generator) stays *outside* the registry — it bootstraps from an empty dir before any `skills.json` exists, so it carries no declaration; invoke it by reading its `SKILL.md` directly (the bootstrap prompt points a fresh agent there).
 - **`seed-tests`** (the seed test driver) *is* declared, in `seed/skills.json`, owned by the `seed/` scope — so it resolves only here, where that scope joins the chain (it never appears in an instance, which has no `seed/`).
+- **`seed-harvest`** (the instance→seed pull) is declared the same way. It's seed-local because only the seed has downstream instances to harvest from — see [`propagation.md`](propagation.md) § The harvest workflow.
 
 `skills-validate` excludes `seed/` from its declaration and orphan scans, so the undeclared `create-instance` isn't flagged (`validate-exobrain` still JSON-checks `seed/skills.json`). The **universal** self-test suites are *not* seed-local — they're the global `exobrain-tests` skill, which ships into instances so any instance can self-test; `seed-tests` invokes it against the seed's built instance. A harness for a framework script under `scripts/` belongs there too (`exobrain-tests/unit/`), not in `seed-tests`: the script is inherited by every instance, so its test travels with it.
 

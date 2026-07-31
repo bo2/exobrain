@@ -1,6 +1,7 @@
 {
   "$schema": "../skills.schema.json",
   "skills": [
-    { "name": "seed-tests", "owner": "maintainer", "tier": "optional", "force": true }
+    { "name": "seed-tests", "owner": "maintainer", "tier": "optional", "force": true },
+    { "name": "seed-harvest", "owner": "maintainer", "tier": "optional", "force": true }
   ]
 }

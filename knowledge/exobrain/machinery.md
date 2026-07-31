@@ -126,14 +126,16 @@ How one body of content serves Claude, Codex, and OpenClaw without bleed — see
 
 ## Propagation
 
-How improvements move between this seed and downstream instances — see [`propagation.md`](propagation.md). This repo is the canonical read-target + generator, so it **publishes** rather than adopts.
+How improvements move between this seed and downstream instances — see [`propagation.md`](propagation.md). This repo is the canonical read-target + generator, so it **publishes** and **harvests** rather than adopts.
 
 | Artifact | Role |
 |---|---|
 | `seed/feed/` | The published changelog — dated pattern-cards (a problem, a pattern, the files it touches, adapt notes) that instances read (from the seed cache) to adopt. Seed-only; never copied into an instance. |
 | `exobrain-evolve` skill | The command an instance runs to move forward: fetch the seed into `src/exobrain-seed/`, diff the feed against its own adoption ledger, copy/re-synthesize each new card, record what it adopted. |
+| `seed-harvest` skill *(seed-only)* | The reverse pull: scan the instances listed in `.exobrain.json` (`instances` — slugs cached in `src/`, or local paths read in place), report framework drift, offer the universal ones as a checkbox list, re-synthesize each pick into the framework body, and publish a card. Read-only toward the instances. |
+| `seed/harvest-ledger.md` *(seed-only)* | Every candidate `seed-harvest` presented — adopted (with its card id) or declined (with a reason) — so settled divergence isn't re-proposed. |
 
-A downstream instance keeps an adoption ledger (`adopted-feed.md` at its repo root) of the card IDs it has taken; the seed, as the source, keeps none.
+A downstream instance keeps an adoption ledger (`adopted-feed.md` at its repo root) of the card IDs it has taken; the seed keeps no adoption ledger, only the harvest ledger of what it pulled up.
 
 ## Behavioral rules
 
