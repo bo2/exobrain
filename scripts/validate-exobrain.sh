@@ -178,8 +178,9 @@ fi
 # ---------------------------------------------------------------------------
 # Compatibility-shim ledger — transitional code carries a `COMPAT <id> (remove
 # after <date>)` marker at the code site and a row in knowledge/exobrain/compat.md.
-# Checked both ways: a row's files must carry its marker, and a marker must have a
-# row, so a shim can neither lose its removal date nor outlive its entry. The date
+# Checked both ways: a row's files must carry its marker, and every marked file must
+# have a row that lists it — so a shim can neither lose its removal date nor leave a
+# site off the checklist that retires it (the row is that checklist). The date
 # itself is advisory here — exobrain-healthcheck.sh nags once it passes, and the
 # calendar never blocks a push. No ledger (an instance that dropped it) → skipped.
 # ---------------------------------------------------------------------------
@@ -187,7 +188,7 @@ fi
 COMPAT_LEDGER="$REPO_DIR/knowledge/exobrain/compat.md"
 if [[ -f "$COMPAT_LEDGER" ]]; then
     compat_trim() { local s="$1"; s="${s#"${s%%[![:space:]]*}"}"; printf '%s' "${s%"${s##*[![:space:]]}"}"; }
-    declare -A COMPAT_DUE=()
+    declare -A COMPAT_DUE=() COMPAT_FILES=()
 
     while IFS='|' read -r _lead id _heals files added remove _rest; do
         id="$(compat_trim "$id")"
@@ -201,6 +202,7 @@ if [[ -f "$COMPAT_LEDGER" ]]; then
         IFS=',' read -ra _shim_files <<< "$files"
         for cf in ${_shim_files[@]+"${_shim_files[@]}"}; do
             cf="$(compat_trim "$cf")"; [[ -z "$cf" ]] && continue
+            COMPAT_FILES["$id"]="${COMPAT_FILES[$id]:-} $cf"
             if [[ ! -f "$REPO_DIR/$cf" ]]; then
                 record "compat.md: shim $id lists a file that doesn't exist: $cf"
             elif ! grep -qF "COMPAT $id" "$REPO_DIR/$cf" 2>/dev/null; then
@@ -221,11 +223,19 @@ if [[ -f "$COMPAT_LEDGER" ]]; then
             rel="${f#"$REPO_DIR"/}"
             if [[ -z "${COMPAT_DUE[$mid]:-}" ]]; then
                 record "COMPAT $mid marker with no row in knowledge/exobrain/compat.md: $rel"
-            elif [[ "$marker" =~ \(remove\ after\ ([0-9]{4}-[0-9]{2}-[0-9]{2})\) ]]; then
-                [[ "${BASH_REMATCH[1]}" == "${COMPAT_DUE[$mid]}" ]] || \
-                    record "COMPAT $mid marker date ${BASH_REMATCH[1]} disagrees with the ledger (${COMPAT_DUE[$mid]}): $rel"
             else
-                record "COMPAT $mid marker missing its '(remove after YYYY-MM-DD)' date: $rel"
+                if [[ "$marker" =~ \(remove\ after\ ([0-9]{4}-[0-9]{2}-[0-9]{2})\) ]]; then
+                    [[ "${BASH_REMATCH[1]}" == "${COMPAT_DUE[$mid]}" ]] || \
+                        record "COMPAT $mid marker date ${BASH_REMATCH[1]} disagrees with the ledger (${COMPAT_DUE[$mid]}): $rel"
+                else
+                    record "COMPAT $mid marker missing its '(remove after YYYY-MM-DD)' date: $rel"
+                fi
+                # A marked site the row doesn't name is a site the retirement misses —
+                # the shim's tests are the ones that go missing most easily.
+                case " ${COMPAT_FILES[$mid]:-} " in
+                    *" $rel "*) ;;
+                    *) record "COMPAT $mid marker in a file its ledger row doesn't list: $rel" ;;
+                esac
             fi
         done < <(grep -IhE '^[[:space:]]*(#|//|--|/\*|\*|<!--)[[:space:]]*COMPAT [0-9]{4}' "$f" 2>/dev/null)
     done < <(find_repo -type f -not -path '*/_raw/*')

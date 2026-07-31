@@ -110,6 +110,20 @@ test_row_without_marker_fails() {
     assert_contains "$o" "carries no 'COMPAT 0001' marker"
 }
 
+# The row is the retirement checklist. A second marked site the row omits — most
+# often the shim's own test — survives the deletion that was meant to take it.
+test_marked_file_absent_from_row_fails() {
+    local r; r="$(setup_repo)"
+    write_shim "$r" 0001 "$FUTURE_DATE"
+    printf '# COMPAT 0001 (remove after %s) — covers the shim above.\ntrue\n' \
+        "$FUTURE_DATE" > "$r/scripts/shim-test.sh"
+    write_ledger "$r" "| 0001 | Old thing. | \`scripts/shim.sh\` | 2026-01-01 | $FUTURE_DATE |"
+    local o rc; o="$(validate "$r")" && rc=0 || rc=$?
+    assert_eq 1 "$rc" "a marked file the row omits fails" || return 1
+    assert_contains "$o" "marker in a file its ledger row doesn't list" || return 1
+    assert_contains "$o" "scripts/shim-test.sh" "the unlisted file is named"
+}
+
 test_missing_file_fails() {
     local r; r="$(setup_repo)"
     write_ledger "$r" "| 0001 | Old thing. | \`scripts/gone.sh\` | 2026-01-01 | $FUTURE_DATE |"
@@ -197,6 +211,7 @@ echo ""; echo "${BOLD}compat-ledger test suite${RESET}"; echo ""
 run_test "matching marker and row validate clean"   test_matching_marker_and_row_pass
 run_test "marker with no ledger row fails"          test_marker_without_row_fails
 run_test "row over an unmarked file fails"          test_row_without_marker_fails
+run_test "marked file absent from its row fails"    test_marked_file_absent_from_row_fails
 run_test "row naming a missing file fails"          test_missing_file_fails
 run_test "marker/ledger date drift fails"           test_date_drift_fails
 run_test "duplicate shim id fails"                  test_duplicate_id_fails
