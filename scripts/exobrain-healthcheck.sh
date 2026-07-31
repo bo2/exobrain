@@ -8,7 +8,7 @@
 #   - links stale    → suggest: scripts/connect-agent.sh <agent> --relink
 #   - trunk behind   → suggest: git pull --ff-only (in the main checkout)
 #   - compat shim past its removal date → name it; the fix is a change, not a command
-#     (the ledger: domains/exobrain/compat.md)
+#     (the ledger: knowledge/exobrain/compat.md)
 #
 # The agent connection (the generated CLAUDE.md and skill symlinks) lives in the
 # MAIN checkout, so this resolves to it via the shared git dir and reports its
@@ -70,13 +70,13 @@ skills_dir() {
     esac
 }
 
-# Compatibility shims past their removal date (domains/exobrain/compat.md § Ledger).
+# Compatibility shims past their removal date (knowledge/exobrain/compat.md § Ledger).
 # Reads this checkout, not $MAIN: the ledger is tracked content, which a worktree
 # carries, unlike the generated links. Advisory like the rest of this script — it
 # names the shim and its date; removing it is a change the agent proposes and the
 # human lands.
 compat_due_report() {
-    local ledger="$here/domains/exobrain/compat.md" today id heals remove d
+    local ledger="$here/knowledge/exobrain/compat.md" today id heals remove d
     local due=()
     [[ -f "$ledger" ]] || return 0
     today="$(date +%F)"
@@ -90,7 +90,7 @@ compat_due_report() {
     [[ ${#due[@]} -eq 0 ]] && return 0
     echo "⚠ ${#due[@]} compatibility shim(s) past the removal date:"
     for d in "${due[@]}"; do echo "  - $d"; done
-    echo "  Remove the marked code, the tests covering it, and the ledger row (domains/exobrain/compat.md)."
+    echo "  Remove the marked code, the tests covering it, and the ledger row (knowledge/exobrain/compat.md)."
 }
 
 problems=()

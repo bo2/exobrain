@@ -147,7 +147,7 @@ files=()
 while IFS= read -r f; do
     case "$f" in
         */_raw/*) continue ;;
-        domains/*.md|AGENTS.md|*/AGENTS.md|*/AGENTS.*.md|CLAUDE.md|*/CLAUDE.md|CODEX.md|*/CODEX.md|OPENCLAW.md|*/OPENCLAW.md|*/SKILL.md)
+        knowledge/*.md|AGENTS.md|*/AGENTS.md|*/AGENTS.*.md|CLAUDE.md|*/CLAUDE.md|CODEX.md|*/CODEX.md|OPENCLAW.md|*/OPENCLAW.md|*/SKILL.md)
             [[ -f "$REPO_DIR/$f" ]] && files+=("$f") ;;
     esac
 done < <(git -C "$REPO_DIR" diff --name-only "$BASE...HEAD" -- '*.md' 2>/dev/null)
@@ -176,7 +176,7 @@ You are an authoring linter for the "exobrain" knowledge repository. Review the
 git diff below for CLEAR, high-confidence violations of the repo's authoring and
 convention rules. Output text only; do not modify any files.
 
-The rules live in domains/exobrain/authoring.md, domains/exobrain/domains.md,
+The rules live in knowledge/exobrain/authoring.md, knowledge/exobrain/domains.md,
 and AGENTS.md (sections "Conventions", "Reader Lens", and "Keep auto-loaded
 specs tight") -- read them if useful. The ones to check:
 
@@ -187,7 +187,7 @@ specs tight") -- read them if useful. The ones to check:
 - Synthesize, don't transcribe: no code transcription, enum dumps,
   function-by-function walks, or hardcoded tuning constants in domain files.
 - No ephemeral numbers: no point-in-time percentages or counts that go stale.
-- Scope placement: durable truth belongs in domains/, time-bound records in
+- Scope placement: durable truth belongs in knowledge/, time-bound records in
   workspaces/; don't cite a workspace from anything that must stay current.
 - Specs (auto-loaded files -- AGENTS.md, sidecars, SKILL.md): keep tight (state
   the rule, drop non-load-bearing exposition); write standalone, not as a delta

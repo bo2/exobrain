@@ -52,15 +52,15 @@ FAKE_BIN=""; FAKE_REC=""
 # and a changed in-scope domain file on HEAD. Prints the repo path.
 setup_repo() {
     local repo="$TEST_DIR/exobrain"
-    mkdir -p "$repo/scripts" "$repo/domains/sample"
+    mkdir -p "$repo/scripts" "$repo/knowledge/sample"
     cp "$SCRIPTS_DIR/authoring-review.sh" "$repo/scripts/"
     chmod +x "$repo/scripts/authoring-review.sh"
     git -C "$repo" init -q
     git -C "$repo" config user.email t@t.test; git -C "$repo" config user.name tester
-    printf '# Sample\n\nBaseline line.\n' > "$repo/domains/sample/profile.md"
+    printf '# Sample\n\nBaseline line.\n' > "$repo/knowledge/sample/profile.md"
     git -C "$repo" add -A; git -C "$repo" commit -q -m base --no-gpg-sign
     git -C "$repo" branch base
-    printf '# Sample\n\nBaseline line.\nAn added line under review.\n' > "$repo/domains/sample/profile.md"
+    printf '# Sample\n\nBaseline line.\nAn added line under review.\n' > "$repo/knowledge/sample/profile.md"
     git -C "$repo" add -A; git -C "$repo" commit -q -m change --no-gpg-sign
     echo "$repo"
 }
@@ -106,9 +106,9 @@ test_proxy_stripped_from_engine() {
 test_violation_exits_nonzero() {
     local r; r="$(setup_repo)"; make_fake_engine
     local o rc
-    o="$(run_review "$r" "domains/sample/profile.md: no ephemeral numbers -- drop the count." 2>&1)" && rc=0 || rc=$?
+    o="$(run_review "$r" "knowledge/sample/profile.md: no ephemeral numbers -- drop the count." 2>&1)" && rc=0 || rc=$?
     assert_eq 1 "$rc" "violation exits 1" || return 1
-    assert_contains "$o" "domains/sample/profile.md" "the finding is surfaced"
+    assert_contains "$o" "knowledge/sample/profile.md" "the finding is surfaced"
 }
 
 # ---------------------------------------------------------------------------

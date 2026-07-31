@@ -65,4 +65,4 @@ Onboarding maps a stated goal to tools via each file's `Use cases` tags. Keep th
 3. **`.env.example`** — add any `.env` variables with placeholder values. Keychain/OAuth credentials are documented in the tool file, not `.env.example`.
 4. **Confirm** the doc's **Verify** step passes from a fresh setup.
 
-See [`domains/exobrain/tools.md`](../domains/exobrain/tools.md) for the concept and machinery. `example-tool.md` here is a non-functional template — copy it as a starting point, or delete it once you have real tools.
+See [`knowledge/exobrain/tools.md`](../knowledge/exobrain/tools.md) for the concept and machinery. `example-tool.md` here is a non-functional template — copy it as a starting point, or delete it once you have real tools.

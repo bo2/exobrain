@@ -8,7 +8,7 @@ Two entry shapes, one flow:
 
 Arguments: `<domain>` and optionally `<input>` (file path, URL, pasted text, or pointer). Omit `<input>` to run an open-questions session.
 
-The [shared foundation](SKILL.md) applies. Triage and challenge run the discipline in [`domains/exobrain/grill.md`](../../domains/exobrain/grill.md), scoped to a session — this file adds the session flow.
+The [shared foundation](SKILL.md) applies. Triage and challenge run the discipline in [`knowledge/exobrain/grill.md`](../../knowledge/exobrain/grill.md), scoped to a session — this file adds the session flow.
 
 ## 1. Ingest (with input)
 

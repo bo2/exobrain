@@ -1,6 +1,6 @@
 # Workspaces
 
-Time-bound efforts — a trip, a renovation, a job search, an investigation. A workspace captures what was true during its window; once the effort ends it's a historical record and outdates by design. Durable findings get **promoted** into a `domains/` area, not linked from one (see `domains/exobrain/entities.md`).
+Time-bound efforts — a trip, a renovation, a job search, an investigation. A workspace captures what was true during its window; once the effort ends it's a historical record and outdates by design. Durable findings get **promoted** into a `knowledge/` area, not linked from one (see `knowledge/exobrain/entities.md`).
 
 ## Naming
 
@@ -34,7 +34,7 @@ related: ["<links to docs, threads, domains>"]  # optional
 - **resolved** — conclusions reached, no more work expected.
 - **archived** — moved out of active view (rarely needed; the year/month nesting handles this).
 
-Most go `active → resolved`. Update the `status` when the state changes. **Resolved workspaces stay in the repo** as the record of how you got somewhere — don't delete them; promote anything durable into `domains/` and leave the workspace as provenance.
+Most go `active → resolved`. Update the `status` when the state changes. **Resolved workspaces stay in the repo** as the record of how you got somewhere — don't delete them; promote anything durable into `knowledge/` and leave the workspace as provenance.
 
 ## Workstreams
 

@@ -6,15 +6,15 @@ Positioning: [`create`](create.md) builds from a broad source sweep and a code w
 
 Arguments: `<workspace>` (source path) and optionally `<domain-name> <type>` (without it, detect the target in Phase 1 and propose it). The corpus is the primary source, not the only one — when a register item is answerable from code or connected tools, explore there before spending a human question.
 
-The [shared foundation](SKILL.md) applies. The interview runs the discipline in [`domains/exobrain/grill.md`](../../domains/exobrain/grill.md) — this file adds only the distill-specific flow.
+The [shared foundation](SKILL.md) applies. The interview runs the discipline in [`knowledge/exobrain/grill.md`](../../knowledge/exobrain/grill.md) — this file adds only the distill-specific flow.
 
 ## Phase 1 — Ingest and target
 
-Read the source workspace fully (`README.md`, workstreams, artifacts, `_raw/`). Map it against the existing `domains/` landscape: if a suitable domain exists, extend it in place (respecting its file structure); otherwise scaffold a new one — don't create a parallel home for knowledge that already has one. Confirm the target (extend vs. create, name, type, boundaries) with the user before touching files.
+Read the source workspace fully (`README.md`, workstreams, artifacts, `_raw/`). Map it against the existing `knowledge/` landscape: if a suitable domain exists, extend it in place (respecting its file structure); otherwise scaffold a new one — don't create a parallel home for knowledge that already has one. Confirm the target (extend vs. create, name, type, boundaries) with the user before touching files.
 
 ## Phase 2 — Draft and register
 
-Scaffold (the file shapes `create` produces) or open the existing files, and write a **complete draft** from the corpus, applying [`authoring.md`](../../domains/exobrain/authoring.md). While drafting, build the **register** — a session working file (under `tmp/`, not committed) with one entry per unresolved item: **gap** (corpus silent on something the domain needs), **contradiction** (two sources disagree), **low-confidence** (claim rests on thin evidence or agent inference). Each entry records the claim, its type, the evidence on each side, and a proposed resolution. Never smooth over a conflict silently — that converts a known unknown into a silent error.
+Scaffold (the file shapes `create` produces) or open the existing files, and write a **complete draft** from the corpus, applying [`authoring.md`](../../knowledge/exobrain/authoring.md). While drafting, build the **register** — a session working file (under `tmp/`, not committed) with one entry per unresolved item: **gap** (corpus silent on something the domain needs), **contradiction** (two sources disagree), **low-confidence** (claim rests on thin evidence or agent inference). Each entry records the claim, its type, the evidence on each side, and a proposed resolution. Never smooth over a conflict silently — that converts a known unknown into a silent error.
 
 ## Phase 3 — Triage
 
@@ -22,7 +22,7 @@ Classify every register item (the `grill.md` triage): **discoverable** → explo
 
 ## Phase 4 — Grill
 
-Run the interview per [`grill.md`](../../domains/exobrain/grill.md): present the decision list, then work the judgment queue one question at a time, updating the domain files inline as each item resolves (don't batch edits to the end). Hold the challenge discipline — a contested claim enters attributed, never as plain fact.
+Run the interview per [`grill.md`](../../knowledge/exobrain/grill.md): present the decision list, then work the judgment queue one question at a time, updating the domain files inline as each item resolves (don't batch edits to the end). Hold the challenge discipline — a contested claim enters attributed, never as plain fact.
 
 ## Phase 5 — Verify
 
@@ -34,7 +34,7 @@ Move register leftovers the user explicitly consented to park into `open-questio
 
 ## `--wip` — parallel-build WIP domains
 
-A **WIP domain** exists to let several people build one thing in parallel without colliding — not to document everything. Its conventions (the `.wip` suffix, design-and-intent-not-live-status, the dissolve-and-promote lifecycle) are in [`domains/exobrain/domains.md`](../../domains/exobrain/domains.md) → "WIP domains". Same adversarial discipline as above, opposite completeness goal: **plan up front as little as possible, but no less.**
+A **WIP domain** exists to let several people build one thing in parallel without colliding — not to document everything. Its conventions (the `.wip` suffix, design-and-intent-not-live-status, the dissolve-and-promote lifecycle) are in [`knowledge/exobrain/domains.md`](../../knowledge/exobrain/domains.md) → "WIP domains". Same adversarial discipline as above, opposite completeness goal: **plan up front as little as possible, but no less.**
 
 **Definition altitude — set it first.** How precisely is this project meant to be specified? Establish it with the curator explicitly before drafting depth is chosen or any question is asked: *"are exact metrics, data paths, and UI choices in scope now, or are those implementation's to answer?"* Record it in the WIP domain's README; note per-area deviations in the area file.
 

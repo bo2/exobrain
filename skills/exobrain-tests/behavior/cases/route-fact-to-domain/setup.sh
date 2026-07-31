@@ -9,9 +9,9 @@
 set -uo pipefail
 INST="$1"
 
-mkdir -p "$INST/domains/finance" "$INST/domains/home"
+mkdir -p "$INST/knowledge/finance" "$INST/knowledge/home"
 
-cat >"$INST/domains/finance/README.md" <<'EOF'
+cat >"$INST/knowledge/finance/README.md" <<'EOF'
 ---
 name: finance
 type: area
@@ -28,7 +28,7 @@ Current accounts, the institutions that hold them, and where retirement and othe
 savings sit.
 EOF
 
-cat >"$INST/domains/home/README.md" <<'EOF'
+cat >"$INST/knowledge/home/README.md" <<'EOF'
 ---
 name: home
 type: area

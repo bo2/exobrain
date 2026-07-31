@@ -13,14 +13,14 @@ for f in AGENTS.md scopes.json skills.json skills.schema.json .exobrain.json \
 done
 
 # Meta-domain copied (concept docs only — the feed is seed-only, not shipped).
-for f in domains/exobrain/entities.md domains/exobrain/scopes.md \
-         domains/exobrain/propagation.md; do
+for f in knowledge/exobrain/entities.md knowledge/exobrain/scopes.md \
+         knowledge/exobrain/propagation.md; do
     [[ -f "$INST/$f" ]] || fail "missing meta-domain file: $f"
 done
 # The birth-time adoption ledger lives at the instance root, not the meta-domain.
 [[ -f "$INST/adopted-feed.md" ]] || fail "missing adopted-feed.md ledger at instance root"
 # The seed's feed of cards must never ship into an instance.
-[[ ! -e "$INST/domains/exobrain/feed" ]] || fail "domains/exobrain/feed/ should not ship (cards are seed-only)"
+[[ ! -e "$INST/knowledge/exobrain/feed" ]] || fail "knowledge/exobrain/feed/ should not ship (cards are seed-only)"
 
 # The three shipped skills are present.
 for s in exobrain-persist exobrain-evolve exobrain-authoring-audit; do
@@ -39,7 +39,7 @@ done
     || fail "connect-agent.sh did not generate an agent surface (.claude/CLAUDE.md or .codex)"
 
 # At least two durable domains beyond the meta-domain.
-dcount="$(find "$INST/domains" -mindepth 1 -maxdepth 1 -type d ! -name exobrain 2>/dev/null | wc -l | tr -d ' ')"
+dcount="$(find "$INST/knowledge" -mindepth 1 -maxdepth 1 -type d ! -name exobrain 2>/dev/null | wc -l | tr -d ' ')"
 [[ "$dcount" -ge 2 ]] || fail "expected >=2 starter domains, found $dcount"
 
 pass "instance well-formed ($dcount starter domains)"

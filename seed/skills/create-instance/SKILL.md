@@ -13,7 +13,7 @@ description: >
 
 You are scaffolding a **new exobrain** for the user, in the directory they're
 working in. An exobrain is a version-controlled knowledge base their AI agent
-loads as context; the full model is in this repo's `domains/exobrain/`. Read
+loads as context; the full model is in this repo's `knowledge/exobrain/`. Read
 that first if you haven't — especially `entities.md`, `scopes.md`, and
 `propagation.md` — so you can explain choices and adapt the structure sensibly.
 
@@ -48,8 +48,8 @@ Keep it short — 3–5 questions. Adapt; don't read them robotically.
   - family → a `groups/<household>/` scope containing `people/<each>/`.
   - team/org → `groups/<org>/` (or `teams/<team>/`) containing people; nest as deep as needed.
 - **Your handle and this machine's name** (for the person and host scopes).
-- **Vocabulary.** The durable-content directory is `domains/` by default.
-  Offer alternatives if they'd prefer (`knowledge/`, `memory/`, `areas/`, …). Most should keep `domains/`.
+- **Vocabulary.** The durable-content directory is `knowledge/` by default.
+  Offer alternatives if they'd prefer (`domains/`, `memory/`, `areas/`, …). Most should keep `knowledge/`.
 - **A domain or two to start** (e.g. `finances`, `home`, a project). Optional — they can add later.
 - **Which agent(s)** they'll connect (claude / codex / openclaw).
 
@@ -59,7 +59,7 @@ Create under `$DST`:
 
 - `AGENTS.md` — copy `$SRC/AGENTS.md`. It's the auto-loaded spec and is already
   generic. If the user renamed the durable-content dir, update the few references to
-  `domains/` in it (see step 5).
+  `knowledge/` in it (see step 5).
 - `README.md` — stamp `$SRC/seed/skills/create-instance/instance-readme.md` (a
   template, not the seed's own `README.md`, which is the "concept + generator" pitch
   and is wrong for an instance). Replace `{{OWNER}}` with the user's handle or the
@@ -89,7 +89,7 @@ Create under `$DST`:
 
 ## 3. Copy the concept (the meta-domain)
 
-Copy `$SRC/domains/exobrain/` into `$DST/<domains-dir>/exobrain/` — entities,
+Copy `$SRC/knowledge/exobrain/` into `$DST/<domains-dir>/exobrain/` — entities,
 scopes, agents, skills, tools, authoring, propagation. This is what makes the new
 exobrain self-documenting. The feed of cards is **not** part of the meta-domain: it
 lives under `$SRC/seed/`, which never ships into an instance, so there's nothing to
@@ -121,13 +121,13 @@ connection state and establishes it in step 6 from the flags you pass it.
 
 ## 5. If the user renamed the durable-content dir
 
-`domains/` appears in a few places that must move together — otherwise
+`knowledge/` appears in a few places that must move together — otherwise
 validation and the docs drift:
 
 - The directory itself and everything under it.
-- `AGENTS.md` and `README.md` references to `domains/`.
+- `AGENTS.md` and `README.md` references to `knowledge/`.
 - `scripts/validate-exobrain.sh` — the content-tree check forbids `AGENTS.md`
-  under `domains/` and `workspaces/`; update those two names to match.
+  under `knowledge/` and `workspaces/`; update those two names to match.
 - Cross-references inside the meta-domain files.
 
 Grep the tree for the old name and update every hit. This is the kind of
@@ -164,7 +164,7 @@ Tell the user, briefly:
 - **Reuse, don't reinvent.** Everything except the seed content is a copy of
   `$SRC`. The value you add is the interview, the scope shape, and any vocabulary
   adaptation — not rewriting the framework.
-- **Don't over-scaffold.** A solo user needs `domains/`, `workspaces/`,
+- **Don't over-scaffold.** A solo user needs `knowledge/`, `workspaces/`,
   `people/<you>/hosts/<machine>/`, and the framework. Skip groups/teams unless
   they're sharing.
 - **Keep secrets out.** Never write real credentials anywhere; `.env` is

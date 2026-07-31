@@ -4,7 +4,7 @@
 # pre-push hook installed by connect-agent.sh and is also runnable manually.
 #
 # Catches:
-#   - AGENTS.md inside a content tree (domains/, workspaces/) — any other dir is
+#   - AGENTS.md inside a content tree (knowledge/, workspaces/) — any other dir is
 #     a valid scope, so only content-tree placement is rejected.
 #   - Custom UPPERCASE.md filenames (allowed: standard open-source +
 #     AI/tool entry-point conventions).
@@ -17,7 +17,7 @@
 #   - Duplicate feed-card IDs (canonical seed only) — the NNNN filename prefix is
 #     a never-reused provenance key; concurrent PRs can collide on one.
 #   - Compatibility-shim ledger: every `COMPAT <id>` marker in the tree has a row in
-#     domains/exobrain/compat.md, every row's files carry its marker, and the marker
+#     knowledge/exobrain/compat.md, every row's files carry its marker, and the marker
 #     and row agree on the removal date. The date itself never fails the gate.
 #   - Agent attribution in outgoing commit messages (CLAUDE.md § Git history
 #     hygiene): "Co-Authored-By: Claude" trailers, "Generated with" footers.
@@ -32,7 +32,7 @@
 #     → skipped (degrades open).
 #
 # Tools need no schema check: a tool is a self-contained doc under tools/, and
-# its presence at a scope is its registration (see domains/exobrain/tools.md).
+# its presence at a scope is its registration (see knowledge/exobrain/tools.md).
 #
 # Exits 0 if clean, 1 with a violation list if anything fails.
 #
@@ -66,7 +66,7 @@ find_repo() {
 
 # ---------------------------------------------------------------------------
 # AGENTS.md placement — the scope flag. Any dir may carry one (it becomes a scope);
-# forbidden only inside content trees (domains/, workspaces/), where the entry point
+# forbidden only inside content trees (knowledge/, workspaces/), where the entry point
 # is README.md. Path segments may not contain the reserved scope-suffix separator
 # "__".
 # ---------------------------------------------------------------------------
@@ -77,7 +77,7 @@ while IFS= read -r f; do
     [[ "$rel" == "AGENTS.md" ]] && continue   # root scope — always fine
     dir="${rel%/AGENTS.md}"
     case "$dir" in
-        domains|domains/*|workspaces|workspaces/*)
+        knowledge|knowledge/*|workspaces|workspaces/*)
             record "AGENTS.md inside a content tree (use README.md as the entry point): $rel" ;;
     esac
     [[ "$dir" == *__* ]] && record "scope path contains reserved separator '__': $rel"
@@ -143,8 +143,8 @@ while IFS= read -r hit; do
     [[ -z "$hit" ]] && continue
     record "file:line citation in a domain profile — cite the file, not the line (authoring.md): ${hit#"$REPO_DIR"/}"
 done < <(grep -rnE '[A-Za-z0-9_./-]+\.(go|php|ts|tsx|js|jsx|py|rb|rs|java|sql):[0-9]' \
-    "$REPO_DIR/domains" --include='*.md' 2>/dev/null \
-    | grep -v '/_raw/' | grep -v '/domains/exobrain/')
+    "$REPO_DIR/knowledge" --include='*.md' 2>/dev/null \
+    | grep -v '/_raw/' | grep -v '/knowledge/exobrain/')
 
 # "(verified <date>)" temporal markers — a citation records provenance, not a
 # freshness stamp; specs are written standalone, not as deltas (authoring.md).
@@ -152,7 +152,7 @@ while IFS= read -r hit; do
     [[ -z "$hit" ]] && continue
     record "temporal '(verified …)' marker — specs are standalone, not deltas (authoring.md): ${hit#"$REPO_DIR"/}"
 done < <(grep -rnE '\(verified [0-9]{4}-[0-9]{2}-[0-9]{2}' \
-    "$REPO_DIR/domains" "$REPO_DIR/AGENTS.md" --include='*.md' 2>/dev/null \
+    "$REPO_DIR/knowledge" "$REPO_DIR/AGENTS.md" --include='*.md' 2>/dev/null \
     | grep -v '/_raw/')
 
 # ---------------------------------------------------------------------------
@@ -177,14 +177,14 @@ fi
 
 # ---------------------------------------------------------------------------
 # Compatibility-shim ledger — transitional code carries a `COMPAT <id> (remove
-# after <date>)` marker at the code site and a row in domains/exobrain/compat.md.
+# after <date>)` marker at the code site and a row in knowledge/exobrain/compat.md.
 # Checked both ways: a row's files must carry its marker, and a marker must have a
 # row, so a shim can neither lose its removal date nor outlive its entry. The date
 # itself is advisory here — exobrain-healthcheck.sh nags once it passes, and the
 # calendar never blocks a push. No ledger (an instance that dropped it) → skipped.
 # ---------------------------------------------------------------------------
 
-COMPAT_LEDGER="$REPO_DIR/domains/exobrain/compat.md"
+COMPAT_LEDGER="$REPO_DIR/knowledge/exobrain/compat.md"
 if [[ -f "$COMPAT_LEDGER" ]]; then
     compat_trim() { local s="$1"; s="${s#"${s%%[![:space:]]*}"}"; printf '%s' "${s%"${s##*[![:space:]]}"}"; }
     declare -A COMPAT_DUE=()
@@ -220,7 +220,7 @@ if [[ -f "$COMPAT_LEDGER" ]]; then
             mid="${BASH_REMATCH[1]}"
             rel="${f#"$REPO_DIR"/}"
             if [[ -z "${COMPAT_DUE[$mid]:-}" ]]; then
-                record "COMPAT $mid marker with no row in domains/exobrain/compat.md: $rel"
+                record "COMPAT $mid marker with no row in knowledge/exobrain/compat.md: $rel"
             elif [[ "$marker" =~ \(remove\ after\ ([0-9]{4}-[0-9]{2}-[0-9]{2})\) ]]; then
                 [[ "${BASH_REMATCH[1]}" == "${COMPAT_DUE[$mid]}" ]] || \
                     record "COMPAT $mid marker date ${BASH_REMATCH[1]} disagrees with the ledger (${COMPAT_DUE[$mid]}): $rel"

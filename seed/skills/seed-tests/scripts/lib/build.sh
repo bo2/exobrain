@@ -30,7 +30,7 @@ This is a NON-INTERACTIVE run. Do not ask questions; use these interview answers
 - Purpose: solo (just one person)
 - Handle: test-user
 - Machine name: test-host
-- Vocabulary: keep the default durable-content directory name "domains/"
+- Vocabulary: keep the default durable-content directory name "knowledge/"
 - Starting domains: finance, home
 - Agent to connect: __AGENT__
 
