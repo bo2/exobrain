@@ -6,10 +6,10 @@ This repo is one **implementation** of the exobrain concept, not a fork kept in 
 
 ## Two kinds of content
 
-- **Domains** (`knowledge/`) — durable areas of what you know: health, finances, home, a project's facts. **Holds current truth; kept current.** Each domain's entry point is its `README.md`, whose frontmatter carries a one-line `summary:`. A generated **domains index** (every domain + its summary) is auto-loaded so you know which areas exist — read a domain's `README.md` before reasoning about it.
+- **Knowledge domains** (`knowledge/`) — durable areas of what you know: health, finances, home, a project's facts. **Holds current truth; kept current.** Each domain's entry point is its `README.md`, whose frontmatter carries a one-line `summary:`. A generated **domains index** (every domain + its summary) is auto-loaded so you know which areas exist — read a domain's `README.md` before reasoning about it.
 - **Workspaces** (`workspaces/`) — time-bound efforts: a trip, a renovation, a job search, an investigation. **Point-in-time records; outdate by design.** Durable findings get *promoted* into `knowledge/`, not linked from it.
 
-Don't cite a workspace from anything that must stay current (domains, skills) — those links go stale silently.
+Don't cite a workspace from anything that must stay current (knowledge domains, skills) — those links go stale silently.
 
 Two working habits: **create a workspace for any non-trivial work session** (scripts, queries, analysis, charts — keep the artifacts there, not scattered), and **default to saving** it at session end unless it's clearly throwaway — institutional memory is cheap, redoing lost work is expensive.
 
@@ -104,7 +104,7 @@ Before writing anything — doc, commit, message — name who reads it and what 
 ## Validation
 
 - `scripts/validate-exobrain.sh` — deterministic checks (naming, JSON syntax, `scopes.json` shape, the skills registry, agent-neutral outgoing commit messages, machine-specific paths in changed files outside host scope, compat markers against their ledger rows), plus each connected scope's own validator hook: a scope carrying `scripts/validate-exobrain.sh` extends the gate with its own checks (e.g. the gitignored `local/` scope's private leak scan). Fast; run before committing structural changes.
-- `scripts/authoring-review.sh` — an LLM judgment layer that reviews changed specs and domain files against the authoring rules. The `exobrain-persist` flow runs it automatically (after commit, before push); you can also run it by hand before a substantial spec or domain edit. It self-skips when no spec/domain file changed, degrades open when no agent CLI is installed, and is skippable with `EXOBRAIN_SKIP_AUTHORING_REVIEW=1`. The pre-push hook runs only the deterministic validator above.
+- `scripts/authoring-review.sh` — an LLM judgment layer that reviews changed specs and knowledge-domain files against the authoring rules. The `exobrain-persist` flow runs it automatically (after commit, before push); you can also run it by hand before a substantial spec or domain edit. It self-skips when no spec/domain file changed, degrades open when no agent CLI is installed, and is skippable with `EXOBRAIN_SKIP_AUTHORING_REVIEW=1`. The pre-push hook runs only the deterministic validator above.
 - **Transitional code carries a removal date** — a shim that exists only to heal checkouts crossing a change gets a `COMPAT <id> (remove after <date>)` marker at the code site and a row in `knowledge/exobrain/compat.md`; the validator keeps marker and row in sync, and the healthcheck names each shim past its date. Retire one by deleting the code, the tests covering it, and the row in a single change.
 - **A skill newly declared at a shared scope must carry committed proof it earns that reach** — otherwise it belongs under a person scope's `skills/`, where it imposes on no one. `authoring-review.sh` blocks the land and names what counts as proof; the criteria live in `knowledge/exobrain/skills.md`.
 

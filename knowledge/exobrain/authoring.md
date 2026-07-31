@@ -1,6 +1,6 @@
-# Domain authoring
+# Knowledge domain authoring
 
-How to write a well-formed domain. These rules apply to any writing into `knowledge/` — first draft, incremental update, or targeted edit.
+How to write a well-formed knowledge domain. These rules apply to any writing into `knowledge/` — first draft, incremental update, or targeted edit.
 
 For *what* a domain is, see [`entities.md`](entities.md). This file is the *how*.
 

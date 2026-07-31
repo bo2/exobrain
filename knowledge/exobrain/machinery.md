@@ -46,7 +46,7 @@ Installed by `connect-agent.sh`, refreshed idempotently on every relink.
 | Gate | Checks | When |
 |---|---|---|
 | `scripts/validate-exobrain.sh` | Deterministic conventions: `AGENTS.md` placement, file naming, JSON syntax, `scopes.json` shape, the skills registry, agent-neutral outgoing commit messages, machine-specific absolute paths outside host scope (diff-scoped against the default branch, so existing paths are grandfathered; `_raw/` and Dockerfile-siblings exempt), compat markers against the shim ledger both ways (see [`compat.md`](compat.md); the removal date never fails the gate) — plus every connected scope's validator hook (`<scope>/scripts/validate-exobrain.sh`, run with the checkout under validation as `$1`; non-zero exit → its output becomes violations; the gitignored `local/` scope's hook is the private leak scan). | pre-push + manual |
-| `scripts/authoring-review.sh` | Two layers. Deterministic (§0, exit 2): the new-shared-skill proof gate — criteria in [`skills.md`](skills.md). LLM (exit 1): judgment over changed specs/domains against the authoring rules, plus the skill-authoring rubric (type / leverage / proof / reach → KEEP, TRIM, PROVE, DEMOTE, MERGE) for changed `SKILL.md` files. Self-skips when nothing changed; degrades open when no agent CLI is installed; skippable with `EXOBRAIN_SKIP_AUTHORING_REVIEW=1`. | `exobrain-persist` (after commit, before push) + manual; not a push-hook gate |
+| `scripts/authoring-review.sh` | Two layers. Deterministic (§0, exit 2): the new-shared-skill proof gate — criteria in [`skills.md`](skills.md). LLM (exit 1): judgment over changed specs/knowledge domains against the authoring rules, plus the skill-authoring rubric (type / leverage / proof / reach → KEEP, TRIM, PROVE, DEMOTE, MERGE) for changed `SKILL.md` files. Self-skips when nothing changed; degrades open when no agent CLI is installed; skippable with `EXOBRAIN_SKIP_AUTHORING_REVIEW=1`. | `exobrain-persist` (after commit, before push) + manual; not a push-hook gate |
 | `scripts/exobrain-healthcheck.sh` | Connection integrity (not-connected / stale links) + trunk freshness (main checkout behind upstream → suggests `git pull --ff-only`; the fetch is throttled and time-boxed, and it never pulls) + compatibility shims past their removal date ([`compat.md`](compat.md) § Ledger, read from the current checkout). Read-only; resolves the main checkout from a worktree; always exits 0. | SessionStart + manual |
 | `exobrain-authoring-audit` skill | Scopes a new or justification-heavy doc by its readers, tracing each contested fact to a real reader need. | before drafting/revising a substantial doc |
 
@@ -86,7 +86,7 @@ The per-tool catalog of external data sources — see [`tools.md`](tools.md).
 
 Each tool doc carries its own Setup → Verify procedure; run it by hand, or let the `exobrain-tools` skill drive it (it never reads or stores a secret value).
 
-## Domains
+## Knowledge domains
 
 The durable knowledge areas — see [`domains.md`](domains.md).
 
@@ -94,7 +94,7 @@ The durable knowledge areas — see [`domains.md`](domains.md).
 |---|---|
 | `knowledge/*/README.md` | Each domain's entry point — frontmatter (`name`, `type`, `curator`, `summary`) + TL;DR + file index. The one-line `summary:` is pulled verbatim into the domains index. |
 | domains index *(generated)* | Flat catalog of every domain (name + README path + `summary:`), composed into each agent's surface like the tools index — `.claude/domains-index.md` (Claude), or inlined into `AGENTS.override.md` (Codex) / `~/.openclaw/workspace/USER.md` (OpenClaw). Root-only and unscoped (no tiers/overlays); a pure function of the committed READMEs, regenerated on relink. |
-| `exobrain-knowledge` skill | Builds and maintains domains (`create` / `distill` / `curate` / `update`), including setting and refreshing each README's `summary:`. |
+| `exobrain-knowledge` skill | Builds and maintains knowledge domains (`create` / `distill` / `curate` / `update`), including setting and refreshing each README's `summary:`. |
 
 ## Git workflow
 

@@ -5,7 +5,7 @@ description: >
   when the user wants to set up, create, bootstrap, or initialize their own
   exobrain — a personal knowledge base their AI agent loads as context — or when
   they paste the bootstrap prompt from github.com/bo2/exobrain. Interviews the
-  user, then generates a working repo (scopes, framework scripts, seed domains)
+  user, then generates a working repo (scopes, framework scripts, seed knowledge domains)
   adapted to their answers. Seed-local (under seed/); never copied into instances.
 ---
 
@@ -50,7 +50,7 @@ Keep it short — 3–5 questions. Adapt; don't read them robotically.
 - **Your handle and this machine's name** (for the person and host scopes).
 - **Vocabulary.** The durable-content directory is `knowledge/` by default.
   Offer alternatives if they'd prefer (`domains/`, `memory/`, `areas/`, …). Most should keep `knowledge/`.
-- **A domain or two to start** (e.g. `finances`, `home`, a project). Optional — they can add later.
+- **A knowledge domain or two to start** (e.g. `finances`, `home`, a project). Optional — they can add later.
 - **Which agent(s)** they'll connect (claude / codex / openclaw).
 
 ## 2. Scaffold the structure

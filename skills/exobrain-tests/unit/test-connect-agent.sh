@@ -455,6 +455,9 @@ test_domains_index_claude() {
     render "$r" claude >/dev/null 2>&1 || return 1
     assert_file "$r/.claude/domains-index.md" "domains-index.md generated" || return 1
     local d; d="$(claude_domains "$r")"
+    # The heading is paired with a row in the connector's dead-copy table, which
+    # matches a stale index by its first line — change one, change the other.
+    assert_contains "$d" "# Knowledge domains" "heading matches the dead-copy table" || return 1
     assert_contains "$d" "health" "domain row present" || return 1
     assert_contains "$d" "knowledge/health/README.md" "README path present" || return 1
     assert_contains "$d" "Conditions, meds, providers, and insurance." "summary extracted from frontmatter" || return 1

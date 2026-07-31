@@ -141,7 +141,7 @@ fi
 # file:line citations — cite the file, not the line (authoring.md § cut line).
 while IFS= read -r hit; do
     [[ -z "$hit" ]] && continue
-    record "file:line citation in a domain profile — cite the file, not the line (authoring.md): ${hit#"$REPO_DIR"/}"
+    record "file:line citation in a knowledge-domain profile — cite the file, not the line (authoring.md): ${hit#"$REPO_DIR"/}"
 done < <(grep -rnE '[A-Za-z0-9_./-]+\.(go|php|ts|tsx|js|jsx|py|rb|rs|java|sql):[0-9]' \
     "$REPO_DIR/knowledge" --include='*.md' 2>/dev/null \
     | grep -v '/_raw/' | grep -v '/knowledge/exobrain/')

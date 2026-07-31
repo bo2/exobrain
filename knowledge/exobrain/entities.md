@@ -2,11 +2,11 @@
 
 An exobrain holds two kinds of **content** and one kind of **identity**. Anything you add belongs to one of them. Knowing which shapes where it lives, who owns it, and how long it stays current.
 
-## Content: domains vs. workspaces
+## Content: knowledge domains vs. workspaces
 
 | Kind | Where | What it is | Relationship to time |
 |---|---|---|---|
-| **Domain** | `knowledge/<area>/` | A bounded area of what you know — a part of your life, a system, a project's facts | **Current truth.** Drift means it owes a refresh. |
+| **Knowledge domain** | `knowledge/<area>/` | A bounded area of what you know — a part of your life, a system, a project's facts | **Current truth.** Drift means it owes a refresh. |
 | **Workspace** | `workspaces/YYYY/MM/DD-<slug>/` | A time-bound effort — a trip, a renovation, a job search, an investigation | **Point-in-time record.** Outdates by design once the effort ends. |
 
 These are not a layering — they're different *kinds* of context pulled in for different reasons. Different reading patterns demand different update contracts:
@@ -29,7 +29,7 @@ A person lives at top-level `people/<id>/` and needs **no group**. Add a group o
 
 The rule most easily violated:
 
-> **Don't reference workspace files from anything that must stay current** — domains, skills, agent specs, any auto-loaded context.
+> **Don't reference workspace files from anything that must stay current** — knowledge domains, skills, agent specs, any auto-loaded context.
 
 Workspace links rot silently: the workspace stays fixed, the world moves, and a reader finds old information presented as current. If a finding turns out durably useful, **promote it** — move the script into a scope's `scripts/`, the fact into a `knowledge/` area, the framework into a skill. The workspace remains as historical provenance ("this originated in `workspaces/…`"); the artifact lives where it gets maintained. Citing a workspace as the *source* of a current fact is fine; citing it *as* the current fact is not.
 
@@ -41,7 +41,7 @@ Every domain and workspace uses `README.md` as its entry point — for humans br
 
 | You're capturing… | It belongs in… |
 |---|---|
-| Current state of a part of your life, a system, or a project | A **domain** — `knowledge/<area>/` |
+| Current state of a part of your life, a system, or a project | A **knowledge domain** — `knowledge/<area>/` |
 | A reusable agent capability | A **skill** — at the scope that owns it (`skills/`, `people/<id>/skills/`, …) |
 | A personal preference or override | The **person** scope — `people/<id>/` |
 | Machine-specific config (paths, tunnels, local replicas) | The **host** scope — `people/<id>/hosts/<host>/` |

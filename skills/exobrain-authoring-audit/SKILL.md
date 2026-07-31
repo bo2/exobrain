@@ -19,14 +19,14 @@ Skip it for mechanical edits (typos, links, renames); those get only the in-head
 
 ### 1. Name the genre
 
-Identify the artifact kind — skill-behavior doc, API reference, domain profile, connector doc, README, auto-loaded spec. The genre fixes the readers, and the genre→personas mapping is reusable across artifacts of the same kind.
+Identify the artifact kind — skill-behavior doc, API reference, knowledge-domain profile, connector doc, README, auto-loaded spec. The genre fixes the readers, and the genre→personas mapping is reusable across artifacts of the same kind.
 
 ### 2. Predict readers — blind to your draft
 
 Spawn an audience-scout sub-agent to reconstruct who reads this genre and why, fenced from your draft so it can't launder your framing back to you:
 
 - **Mechanical fence:** point it at the committed version on the default branch, or revert the doc-under-audit to that version in a scratch copy — your unmerged prose isn't there to read. For a net-new doc, let it read the *code/behavior* (ground truth) but not your new prose.
-- Give it the artifact's name, location, and durable higher-altitude context (root `AGENTS.md`, `knowledge/exobrain/`, the scope/domain it serves) — never a brief you authored.
+- Give it the artifact's name, location, and durable higher-altitude context (root `AGENTS.md`, `knowledge/exobrain/`, the scope/knowledge domain it serves) — never a brief you authored.
 - Ask it to output, per persona: trigger, the question in their head, plausibility, and **whether they'd actually arrive at *this* genre** vs. elsewhere. A reader who exists but lands on a different doc justifies nothing here.
 
 ### 3. Derive scope from personas
@@ -41,7 +41,7 @@ Atomize the draft (or planned content) into atomic facts. Per fact:
 2. **Question → presupposed expectation.** ("Why isn't X here?" arises only for a reader who expected X.)
 3. **Universal or narrow** to this genre's readers? Universal → keep. Narrow → verify.
 4. **Verify the need is real,** cheapest-authoritative-first:
-   - grep **the exobrain** (domains / skills / docs / workflows) — present = strong keep.
+   - grep **the exobrain** (knowledge domains / skills / docs / workflows) — present = strong keep.
    - if absent, check the discussion history or ask the human — judged by recurring demand, not a single hit.
 5. **Decide:** real recurring need → keep (sized to it); none/rare → cut. **Default cut.**
 

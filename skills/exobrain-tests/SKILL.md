@@ -112,7 +112,7 @@ met threshold, `1` some below, `2` harness/setup error.
    `main` base branch (so worktree cases have a base), hook-neutralized, and asserted
    free of any github origin. Behavior cases run against cheap `cp -r` copies of it.
 2. **Run each case** (`run.sh`): for each agent, copy the template, run optional
-   `setup.sh` (which **self-seeds the case's fixtures** — scopes, domains), invoke the
+   `setup.sh` (which **self-seeds the case's fixtures** — scopes, knowledge domains), invoke the
    agent (`lib/invoke.sh`) with the case's permission profile, capture the transcript,
    run `check.sh`, tally PASS/FAIL/ERROR, aggregate against `pass_threshold`.
 

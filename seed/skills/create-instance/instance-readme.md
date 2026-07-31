@@ -20,7 +20,7 @@ The full model — entities, scopes, skills, tools, propagation — is in
 
 ## What's in here
 
-- **Domains** (`knowledge/`) — durable areas of what I know (health, finances, a
+- **Knowledge domains** (`knowledge/`) — durable areas of what I know (health, finances, a
   project's facts), kept current. Each domain's entry point is its `README.md`.
 - **Workspaces** (`workspaces/`) — time-bound efforts (a trip, an investigation)
   that outdate by design; durable findings get promoted into `knowledge/`.
