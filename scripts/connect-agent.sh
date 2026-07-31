@@ -604,6 +604,9 @@ LEGACY
 # install_index only ever clears the destination it writes, so a checkout relinking
 # across the rename keeps the old copy in .claude/ with nothing importing it. Matched
 # on the generated heading, so a same-named file of the human's own is left alone.
+# Must run before the index installs: the heading match can't tell a stale copy from
+# a live index a diverged connector still writes under the old name — sweeping first
+# means such a connector regenerates the file instead of deleting what it just wrote.
 prune_renamed_claude_index() {
     local dead="$TARGET_DIR/domains-index.md" first
     [[ -f "$dead" ]] || return 0
@@ -790,10 +793,10 @@ case "$AGENT" in
         # Claude is the one surface that reads the indexes as files: the manifest
         # @-imports them by name, so they need durable copies in the in-repo
         # (gitignored) .claude/ that travels with the checkout.
+        prune_renamed_claude_index
         install_index "$INDEX_FILE"           "$TARGET_DIR/optional-skills.md" ".claude/optional-skills.md"
         install_index "$TOOLS_INDEX_FILE"     "$TARGET_DIR/tools-index.md"     ".claude/tools-index.md"
         install_index "$KNOWLEDGE_INDEX_FILE" "$TARGET_DIR/knowledge-index.md" ".claude/knowledge-index.md"
-        prune_renamed_claude_index
         {
             echo "@connected-scopes.md"
             # `if`, not `&& printf`: when an index is absent the trailing conditional
