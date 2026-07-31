@@ -65,6 +65,43 @@ setup_repo() {
     echo "$repo"
 }
 
+# declare_skills <repo> <name>... — write the global registry declaring each skill
+# at a shared scope (global), force-shared so it reaches everyone in the chain.
+declare_skills() {
+    local repo="$1"; shift
+    local nm rows=""
+    for nm in "$@"; do
+        [[ -n "$rows" ]] && rows="$rows,"
+        rows="$rows { \"name\": \"$nm\", \"owner\": \"maintainer\", \"tier\": \"optional\", \"force\": true }"
+    done
+    printf '{ "skills": [%s ] }\n' "$rows" > "$repo/skills.json"
+}
+
+# write_skill <repo> <name> — a minimal SKILL.md carrying no proof artifact.
+write_skill() {
+    local repo="$1" nm="$2"
+    mkdir -p "$repo/skills/$nm"
+    printf -- '---\nname: %s\ndescription: "A demo skill for the proof gate."\n---\n\n# %s\n\nBody.\n' \
+        "$nm" "$nm" > "$repo/skills/$nm/SKILL.md"
+}
+
+# setup_skill_repo — fake exobrain whose `base` branch declares one unproven shared
+# skill (grandfathered, since the gate only looks at what BASE lacks). HEAD is left
+# to the caller. Prints the repo path.
+setup_skill_repo() {
+    local repo="$TEST_DIR/skillrepo"
+    mkdir -p "$repo/scripts"
+    cp "$SCRIPTS_DIR/authoring-review.sh" "$repo/scripts/"
+    chmod +x "$repo/scripts/authoring-review.sh"
+    git -C "$repo" init -q
+    git -C "$repo" config user.email t@t.test; git -C "$repo" config user.name tester
+    write_skill "$repo" demo-alpha
+    declare_skills "$repo" demo-alpha
+    git -C "$repo" add -A; git -C "$repo" commit -q -m base --no-gpg-sign
+    git -C "$repo" branch base
+    echo "$repo"
+}
+
 # make_fake_engine — install a fake `claude` on PATH that records any proxy env
 # it sees, drains the prompt, and prints $FAKE_OUT (the canned model verdict).
 make_fake_engine() {
@@ -111,6 +148,33 @@ test_violation_exits_nonzero() {
     assert_contains "$o" "knowledge/sample/profile.md" "the finding is surfaced"
 }
 
+# The proof gate reads a registry name absent at BASE as a new shared skill. A
+# rename presents exactly that, while changing nothing about the skill's reach —
+# so it must pass, or renaming any shared skill becomes unlandable.
+test_renamed_shared_skill_grandfathered() {
+    local r; r="$(setup_skill_repo)"; make_fake_engine
+    git -C "$r" mv skills/demo-alpha skills/demo-beta
+    write_skill "$r" demo-beta
+    declare_skills "$r" demo-beta
+    git -C "$r" add -A; git -C "$r" commit -q -m rename --no-gpg-sign
+    local o rc
+    o="$(run_review "$r" "AUTHORING-OK" 2>&1)" && rc=0 || rc=$?
+    assert_eq 0 "$rc" "a renamed shared skill does not trip the proof gate" || { echo "$o"; return 1; }
+}
+
+# The counterpart guard: grandfathering a rename must not blunt the gate for a
+# genuinely new, unproven shared skill.
+test_new_shared_skill_still_blocked() {
+    local r; r="$(setup_skill_repo)"; make_fake_engine
+    write_skill "$r" demo-gamma
+    declare_skills "$r" demo-alpha demo-gamma
+    git -C "$r" add -A; git -C "$r" commit -q -m add --no-gpg-sign
+    local o rc
+    o="$(run_review "$r" "AUTHORING-OK" 2>&1)" && rc=0 || rc=$?
+    assert_eq 2 "$rc" "an unproven new shared skill still blocks the land" || return 1
+    assert_contains "$o" "demo-gamma" "the blocking skill is named"
+}
+
 # ---------------------------------------------------------------------------
 # Run
 # ---------------------------------------------------------------------------
@@ -119,6 +183,8 @@ echo ""; echo "${BOLD}authoring-review.sh test suite${RESET}"; echo ""
 
 run_test "proxy env stripped from engine call"  test_proxy_stripped_from_engine
 run_test "reported violation exits non-zero"    test_violation_exits_nonzero
+run_test "renamed shared skill grandfathered"   test_renamed_shared_skill_grandfathered
+run_test "new unproven shared skill blocked"    test_new_shared_skill_still_blocked
 
 echo ""; echo "─────────────────────────────────────────────"
 if [[ $TESTS_FAILED -eq 0 ]]; then
