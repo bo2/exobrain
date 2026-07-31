@@ -4,7 +4,7 @@
 set -uo pipefail
 source "$HARNESS_LIB/check-helpers.sh"
 INST="$1"
-REL="domains/scratch/README.md"
+REL="knowledge/scratch/README.md"
 
 assert_main_untouched "$INST"
 [[ ! -f "$INST/$REL" ]] || fail "$REL present in the MAIN checkout — agent edited the default branch"

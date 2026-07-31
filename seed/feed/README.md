@@ -1,10 +1,10 @@
 # Feed
 
-The feed is the **changelog** of exobrain improvements — dated pattern-cards. It lives **only in the canonical seed** (`seed/feed/`): the seed publishes one dated card per durable framework pattern here, and instances read the cards they haven't adopted yet (via `exobrain-evolve`, from the seed cache) and apply each — **copying** the seed's files where undiverged, **re-synthesizing** where they've diverged in names or structure. An instance never carries its own copy of the feed. Background: [`../../domains/exobrain/propagation.md`](../../domains/exobrain/propagation.md).
+The feed is the **changelog** of exobrain improvements — dated pattern-cards. It lives **only in the canonical seed** (`seed/feed/`): the seed publishes one dated card per durable framework pattern here, and instances read the cards they haven't adopted yet (via `exobrain-evolve`, from the seed cache) and apply each — **copying** the seed's files where undiverged, **re-synthesizing** where they've diverged in names or structure. An instance never carries its own copy of the feed. Background: [`../../knowledge/exobrain/propagation.md`](../../knowledge/exobrain/propagation.md).
 
 A card describes a **problem and a pattern**, optionally naming the files it touches. Any reference snippet is **illustration**: an instance that diverged adapts the pattern; an instance that didn't can copy the seed's files directly.
 
-**Cards are public and generic.** Never name a downstream instance's org, internal hosts, ticket prefixes, usernames, or private repos — describe the pattern, not its origin. See [`../../domains/exobrain/propagation.md`](../../domains/exobrain/propagation.md) → Provenance hygiene.
+**Cards are public and generic.** Never name a downstream instance's org, internal hosts, ticket prefixes, usernames, or private repos — describe the pattern, not its origin. See [`../../knowledge/exobrain/propagation.md`](../../knowledge/exobrain/propagation.md) → Provenance hygiene.
 
 ## Card files
 

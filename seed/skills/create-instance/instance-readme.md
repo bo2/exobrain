@@ -3,7 +3,7 @@
   create-instance copies this to the new instance's README.md and personalizes it.
   When you stamp it: replace {{OWNER}} with the owner's handle or the group/org name,
   set the connect-agent line to the agent(s) the user chose, and delete this comment.
-  Leave `domains/` literal — step 5 of the skill rewrites it if the durable-content
+  Leave `knowledge/` literal — step 5 of the skill rewrites it if the durable-content
   dir was renamed. The seed's own README.md ("concept + generator") does NOT belong
   here: this README describes a live exobrain, not how to make one.
 -->
@@ -16,14 +16,14 @@ content lives in `AGENTS.md`; per-agent quirks live in `CLAUDE.md` / `CODEX.md` 
 `OPENCLAW.md` sidecars.
 
 The full model — entities, scopes, skills, tools, propagation — is in
-[`domains/exobrain/`](domains/exobrain/), written for an agent to read.
+[`knowledge/exobrain/`](knowledge/exobrain/), written for an agent to read.
 
 ## What's in here
 
-- **Domains** (`domains/`) — durable areas of what I know (health, finances, a
+- **Domains** (`knowledge/`) — durable areas of what I know (health, finances, a
   project's facts), kept current. Each domain's entry point is its `README.md`.
 - **Workspaces** (`workspaces/`) — time-bound efforts (a trip, an investigation)
-  that outdate by design; durable findings get promoted into `domains/`.
+  that outdate by design; durable findings get promoted into `knowledge/`.
 - **Scopes** — any directory with an `AGENTS.md`. The agent resolves the connected
   leaf (me, on this machine) plus every `AGENTS.md`-bearing ancestor, innermost
   wins: `global < … < me < this machine`.
@@ -48,4 +48,4 @@ canonical exobrain ships a change, ask the agent to run `exobrain-evolve`: it
 reads the feed since the last update, **copies** the files undiverged and
 **re-synthesizes** the rest into this setup, then records the card IDs in
 `adopted-feed.md` (at the repo root). Background:
-[`domains/exobrain/propagation.md`](domains/exobrain/propagation.md).
+[`knowledge/exobrain/propagation.md`](knowledge/exobrain/propagation.md).

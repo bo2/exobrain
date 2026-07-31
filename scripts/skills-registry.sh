@@ -392,13 +392,13 @@ frontmatter_field() {
 # domains_resolve <repo_dir>
 # Resolve the domain catalog. Domains are root-only, unscoped content — unlike
 # skills/tools they don't overlay per scope — so this is a flat glob of
-# domains/*/README.md, no scope chain. Emits TSV: <name>\t<repo-relative-readme>,
+# knowledge/*/README.md, no scope chain. Emits TSV: <name>\t<repo-relative-readme>,
 # sorted by name; <name> is the README frontmatter `name`, falling back to the dir.
 domains_resolve() {
     local repo_dir="$1"
     local d readme name rel
     {
-        for d in "$repo_dir"/domains/*/; do
+        for d in "$repo_dir"/knowledge/*/; do
             [[ -d "$d" ]] || continue          # guard the no-match literal glob
             readme="${d%/}/README.md"
             [[ -f "$readme" ]] || continue

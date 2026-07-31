@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # test-compat-ledger.sh — tests for the compatibility-shim ledger
-# (domains/exobrain/compat.md): the marker↔row consistency checks in
+# (knowledge/exobrain/compat.md): the marker↔row consistency checks in
 # validate-exobrain.sh and the past-the-date advisory in exobrain-healthcheck.sh.
 # Exercises the framework scripts in <repo>/scripts/ of whichever instance this
 # suite is installed in.
@@ -52,7 +52,7 @@ FUTURE_DATE="2999-12-31"
 # setup_repo — fake exobrain carrying the real validator and healthcheck.
 setup_repo() {
     local repo="$TEST_DIR/exobrain"
-    mkdir -p "$repo/scripts" "$repo/domains/exobrain"
+    mkdir -p "$repo/scripts" "$repo/knowledge/exobrain"
     cp "$SCRIPTS_DIR/validate-exobrain.sh" "$SCRIPTS_DIR/exobrain-healthcheck.sh" "$repo/scripts/"
     chmod +x "$repo/scripts/"*.sh
     printf '# Exobrain\n\nFake.\n' > "$repo/AGENTS.md"
@@ -65,7 +65,7 @@ write_ledger() {
     { printf '# Compatibility shims\n\n## Ledger\n\n'
       printf '| id | Heals | Files | Added | Remove after |\n|---|---|---|---|---|\n'
       printf '%s\n' "$@"
-    } > "$repo/domains/exobrain/compat.md"
+    } > "$repo/knowledge/exobrain/compat.md"
 }
 
 # write_shim <repo> <id> <date> — a script carrying one marker.
@@ -160,7 +160,7 @@ test_prose_mention_is_not_a_marker() {
 
 test_no_ledger_skips() {
     local r; r="$(setup_repo)"
-    rm -rf "$r/domains"
+    rm -rf "$r/knowledge"
     local o rc; o="$(validate "$r")" && rc=0 || rc=$?
     assert_eq 0 "$rc" "an instance without the ledger degrades open" || { echo "$o"; return 1; }
 }

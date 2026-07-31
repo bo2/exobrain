@@ -3,9 +3,9 @@ status: resolved
 created: 2026-06-19
 owner: maintainer
 related:
-  - domains/exobrain/scopes.md
-  - domains/exobrain/agents.md
-  - domains/exobrain/machinery.md
+  - knowledge/exobrain/scopes.md
+  - knowledge/exobrain/agents.md
+  - knowledge/exobrain/machinery.md
   - scripts/connect-agent.sh
   - scripts/skills-registry.sh
   - seed/skills/create-instance/

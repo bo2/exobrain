@@ -73,7 +73,7 @@ def parse_duration(value, field, job, units):
 
 
 PRUNE_DIRS = {".git", ".worktrees", ".agent-worktrees", ".agents", ".claude",
-              "src", "tmp", "node_modules", "__pycache__", "domains", "workspaces"}
+              "src", "tmp", "node_modules", "__pycache__", "knowledge", "workspaces"}
 
 
 def discover_configs(explicit):

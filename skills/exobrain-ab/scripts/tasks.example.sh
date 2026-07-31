@@ -36,7 +36,7 @@
 TASKS=(
 # --- DEV SET (iterate treatment variants against these) ---
 "D1_list|dev|match|^example-tool .*list|^example-tool .*(create|delete)|You need a list of the project's widgets. Run the command that lists them and report what it returns."
-"D2_neg_count|dev|no_tool|||How many Markdown (.md) files are in the domains/ directory of this repository? Run a command to count them and report the number."
+"D2_neg_count|dev|no_tool|||How many Markdown (.md) files are in the knowledge/ directory of this repository? Run a command to count them and report the number."
 
 # --- HELD-OUT SET (different framing; run ONCE to report) ---
 "H1_list_alt|holdout|match|^example-tool .*list|^example-tool .*(create|delete)|Show me the widgets currently configured in this project. Run the appropriate command."

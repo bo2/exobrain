@@ -6,6 +6,6 @@ useDefault = true
 [[allowlists]]
 description = "Raw research notes, snapshots, and time-bound workspace content"
 paths = [
-  '''^domains/.*/_raw/.*''',
+  '''^knowledge/.*/_raw/.*''',
   '''^workspaces/.*''',
 ]

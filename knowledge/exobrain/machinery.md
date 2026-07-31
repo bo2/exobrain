@@ -54,7 +54,7 @@ The authoring rules these enforce live in [`authoring.md`](authoring.md) and `AG
 
 | Registry | Role |
 |---|---|
-| `domains/exobrain/compat.md` | The compatibility-shim ledger: one row per piece of transitional code (id, what it heals, the files carrying its `COMPAT <id>` marker, when it landed, when it may go), plus the marking convention. Read by both gates above — see [`compat.md`](compat.md). |
+| `knowledge/exobrain/compat.md` | The compatibility-shim ledger: one row per piece of transitional code (id, what it heals, the files carrying its `COMPAT <id>` marker, when it landed, when it may go), plus the marking convention. Read by both gates above — see [`compat.md`](compat.md). |
 
 ## Skills system
 
@@ -92,7 +92,7 @@ The durable knowledge areas — see [`domains.md`](domains.md).
 
 | Artifact | Role |
 |---|---|
-| `domains/*/README.md` | Each domain's entry point — frontmatter (`name`, `type`, `curator`, `summary`) + TL;DR + file index. The one-line `summary:` is pulled verbatim into the domains index. |
+| `knowledge/*/README.md` | Each domain's entry point — frontmatter (`name`, `type`, `curator`, `summary`) + TL;DR + file index. The one-line `summary:` is pulled verbatim into the domains index. |
 | domains index *(generated)* | Flat catalog of every domain (name + README path + `summary:`), composed into each agent's surface like the tools index — `.claude/domains-index.md` (Claude), or inlined into `AGENTS.override.md` (Codex) / `~/.openclaw/workspace/USER.md` (OpenClaw). Root-only and unscoped (no tiers/overlays); a pure function of the committed READMEs, regenerated on relink. |
 | `exobrain-domains` skill | Builds and maintains domains (`create` / `distill` / `curate` / `update`), including setting and refreshing each README's `summary:`. |
 

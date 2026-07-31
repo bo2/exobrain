@@ -5,7 +5,7 @@ description: "Manage this machine's exobrain tool installation — onboard a fre
 
 # Exobrain Tools
 
-Manage this machine's exobrain tool installation. A **tool** is an external system the agent reads from or acts on (see [`tools/README.md`](../../tools/README.md) and [`domains/exobrain/tools.md`](../../domains/exobrain/tools.md)). This skill is a small dispatcher; the per-tool docs under `tools/` are the source of truth for each tool's Setup/Verify — the skill drives them and records per-machine state, it does not duplicate them.
+Manage this machine's exobrain tool installation. A **tool** is an external system the agent reads from or acts on (see [`tools/README.md`](../../tools/README.md) and [`knowledge/exobrain/tools.md`](../../knowledge/exobrain/tools.md)). This skill is a small dispatcher; the per-tool docs under `tools/` are the source of truth for each tool's Setup/Verify — the skill drives them and records per-machine state, it does not duplicate them.
 
 | Sub-op | What it does | When |
 |--------|--------------|------|

@@ -8,7 +8,7 @@ The template era assumed a human running `git merge upstream` against a fork. Th
 
 ## The model: read target, not merge source
 
-The canonical exobrain (`github.com/bo2/exobrain`) is a **read target + a generator**, not a fork parent. It is itself an exobrain — its `domains/exobrain/` meta-domain *is* the concept. Downstream exobrains:
+The canonical exobrain (`github.com/bo2/exobrain`) is a **read target + a generator**, not a fork parent. It is itself an exobrain — its `knowledge/exobrain/` meta-domain *is* the concept. Downstream exobrains:
 
 - **Are independent.** Each owns its own tree. No upstream remote, no merge, no conflicts — `exobrain-evolve` caches the seed in a gitignored `src/exobrain-seed/` (pull if present, else clone) and reads it from there. A local cache, not a tracked remote: nothing to merge, nothing that pulls framework code in automatically.
 - **May diverge freely.** Different names, layout, scripts. Where an instance diverged, changes re-synthesize; where it didn't, they copy cleanly.
@@ -52,7 +52,7 @@ When an agent builds a fresh exobrain by reading this concept (`create-instance`
 1. Read this meta-domain. It describes *principles*, not a rigid layout.
 2. Choose names and structure that fit the principal — durable-content dir name, whether groups exist, which scopes are populated. Divergence is expected.
 3. Preserve the **invariants** above. Carry the framework scripts, adapting them to your structure.
-4. Seed the minimum: `AGENTS.md`, a `domains/exobrain/` meta-domain, one person scope, an empty `workspaces/`, and the `exobrain-evolve` skill.
+4. Seed the minimum: `AGENTS.md`, a `knowledge/exobrain/` meta-domain, one person scope, an empty `workspaces/`, and the `exobrain-evolve` skill.
 5. Seed the adoption ledger (`adopted-feed.md` at the instance root) with the cards the seed currently publishes — you built from them — so `exobrain-evolve` carries you forward from there.
 
 The proof of the model is that the exobrain you're reading this in was built exactly this way.

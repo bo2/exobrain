@@ -26,7 +26,7 @@ Identify the artifact kind — skill-behavior doc, API reference, domain profile
 Spawn an audience-scout sub-agent to reconstruct who reads this genre and why, fenced from your draft so it can't launder your framing back to you:
 
 - **Mechanical fence:** point it at the committed version on the default branch, or revert the doc-under-audit to that version in a scratch copy — your unmerged prose isn't there to read. For a net-new doc, let it read the *code/behavior* (ground truth) but not your new prose.
-- Give it the artifact's name, location, and durable higher-altitude context (root `AGENTS.md`, `domains/exobrain/`, the scope/domain it serves) — never a brief you authored.
+- Give it the artifact's name, location, and durable higher-altitude context (root `AGENTS.md`, `knowledge/exobrain/`, the scope/domain it serves) — never a brief you authored.
 - Ask it to output, per persona: trigger, the question in their head, plausibility, and **whether they'd actually arrive at *this* genre** vs. elsewhere. A reader who exists but lands on a different doc justifies nothing here.
 
 ### 3. Derive scope from personas

@@ -19,7 +19,7 @@ The concept and a generator live at https://github.com/bo2/exobrain. Please:
 1. Fetch it: clone https://github.com/bo2/exobrain into `src/exobrain-seed/` in
    this folder — my instance keeps it there as its update-cache (gitignored)
    (or, if you can't clone, read the repo's raw files from GitHub).
-2. Read its domains/exobrain/ (what an exobrain is — scopes, skills,
+2. Read its knowledge/exobrain/ (what an exobrain is — scopes, skills,
    propagation) and seed/skills/create-instance/SKILL.md (how to build one).
 3. Then follow create-instance: ask me a few short questions (what I'll use
    this for, whether anyone else shares it, one or two domains to
@@ -40,19 +40,19 @@ That's it. The agent reads the concept, interviews you, and scaffolds a working 
 
 Two kinds of content, plus a way to scope them to *you*:
 
-- **Domains** (`domains/`) — durable areas of what you know (health, finances, a project's facts), kept current.
+- **Domains** (`knowledge/`) — durable areas of what you know (health, finances, a project's facts), kept current.
 - **Workspaces** (`workspaces/`) — time-bound efforts (a trip, an investigation) that outdate by design.
 - **Scopes** — a scope is any directory with an `AGENTS.md`. Connect a leaf (you, on this machine) and the agent inherits its whole ancestor chain: `global < … < you < this machine`. Solo, family, and org all use the same machinery.
 
 It serves **any** agent: universal content lives in `AGENTS.md`; per-agent quirks live in `CLAUDE.md` / `CODEX.md` / `OPENCLAW.md` sidecars.
 
-Full model: [`domains/exobrain/`](domains/exobrain/).
+Full model: [`knowledge/exobrain/`](knowledge/exobrain/).
 
 ## What's in this repo
 
 | Path | What it is |
 |------|-----------|
-| [`domains/exobrain/`](domains/exobrain/) | **The concept** — entities, scopes, agents, skills, tools, authoring, propagation, written for an agent to read |
+| [`knowledge/exobrain/`](knowledge/exobrain/) | **The concept** — entities, scopes, agents, skills, tools, authoring, propagation, written for an agent to read |
 | [`seed/`](seed/) | **Seed-local** — the `create-instance` generator, the behavioral test harness, and the change feed (`seed/feed/`). Operates on the seed itself; never copied into an instance |
 | [`skills/exobrain-evolve/`](skills/exobrain-evolve/) | Bring an instance up to date — read this repo's feed, copy/rewire each change, record it. Copied into every instance. |
 | [`seed/feed/`](seed/feed/) | **The feed** — the changelog of dated pattern-cards `exobrain-evolve` reads (from the seed cache) to bring instances forward. Seed-only |
@@ -61,7 +61,7 @@ Full model: [`domains/exobrain/`](domains/exobrain/).
 
 ## How updates work — no forking
 
-Your instance is **independent** — no upstream remote, no merge. When this repo ships a change, you ask your agent to run `exobrain-evolve`: it reads the feed since you last updated, **copies** the files you haven't diverged and **re-synthesizes** the rest into your setup, then records the card IDs in your adoption ledger. See [`domains/exobrain/propagation.md`](domains/exobrain/propagation.md).
+Your instance is **independent** — no upstream remote, no merge. When this repo ships a change, you ask your agent to run `exobrain-evolve`: it reads the feed since you last updated, **copies** the files you haven't diverged and **re-synthesizes** the rest into your setup, then records the card IDs in your adoption ledger. See [`knowledge/exobrain/propagation.md`](knowledge/exobrain/propagation.md).
 
 ## License
 

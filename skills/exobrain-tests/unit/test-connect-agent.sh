@@ -132,9 +132,9 @@ add_tool() {
 # Domains are root-only and unscoped, so there's no scope arg.
 add_domain() {
     local repo="$1" name="$2" summary="$3"
-    mkdir -p "$repo/domains/$name"
+    mkdir -p "$repo/knowledge/$name"
     printf -- '---\nname: %s\ntype: reference\ncurator: alice\nsummary: %s\n---\n\n# %s\n' \
-        "$name" "$summary" "$name" > "$repo/domains/$name/README.md"
+        "$name" "$summary" "$name" > "$repo/knowledge/$name/README.md"
 }
 
 write_config() { printf '{"connected_scopes":["%s"],"agents":["%s"]}\n' "$2" "${3:-claude}" > "$1/.exobrain.json"; }
@@ -456,7 +456,7 @@ test_domains_index_claude() {
     assert_file "$r/.claude/domains-index.md" "domains-index.md generated" || return 1
     local d; d="$(claude_domains "$r")"
     assert_contains "$d" "health" "domain row present" || return 1
-    assert_contains "$d" "domains/health/README.md" "README path present" || return 1
+    assert_contains "$d" "knowledge/health/README.md" "README path present" || return 1
     assert_contains "$d" "Conditions, meds, providers, and insurance." "summary extracted from frontmatter" || return 1
     local c; c="$(cat "$r/.claude/CLAUDE.md")"
     assert_contains "$c" "@domains-index.md" "CLAUDE.md imports the domains index"
@@ -471,7 +471,7 @@ test_claude_index_removed_when_source_goes() {
     write_config "$r" people/alice/hosts/h1
     render "$r" claude >/dev/null 2>&1 || return 1
     assert_file "$r/.claude/domains-index.md" "domains index present while the domain exists" || return 1
-    rm -rf "$r/domains" "$r/tools"
+    rm -rf "$r/knowledge" "$r/tools"
     render "$r" claude >/dev/null 2>&1 || return 1
     assert_no_file "$r/.claude/domains-index.md" "stale domains index cleared on relink" || return 1
     assert_no_file "$r/.claude/tools-index.md" "stale tools index cleared on relink" || return 1
@@ -481,10 +481,10 @@ test_claude_index_removed_when_source_goes() {
 }
 
 test_domains_index_empty_skip() {
-    local r; r="$(setup_fake_exobrain)"; add_person "$r" people/alice  # no domains/
+    local r; r="$(setup_fake_exobrain)"; add_person "$r" people/alice  # no knowledge/
     write_config "$r" people/alice/hosts/h1
     render "$r" claude >/dev/null 2>&1 || return 1
-    assert_no_file "$r/.claude/domains-index.md" "no domains-index.md when no domains/" || return 1
+    assert_no_file "$r/.claude/domains-index.md" "no domains-index.md when no knowledge/" || return 1
     local c; c="$(cat "$r/.claude/CLAUDE.md")"
     assert_not_contains "$c" "@domains-index.md" "CLAUDE.md does not import a missing domains index"
 }

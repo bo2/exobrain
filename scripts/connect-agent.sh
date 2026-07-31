@@ -7,7 +7,7 @@
 # A scope is any directory containing an AGENTS.md. The connected scopes (recorded
 # in .exobrain.json `connected_scopes`) plus each one's AGENTS.md-bearing ancestors
 # are unioned and resolved innermost-wins — skills, specs, the optional-skills
-# index. See domains/exobrain/ for the model.
+# index. See knowledge/exobrain/ for the model.
 #
 # Identity is resolved from one of four sources, in precedence order:
 #   explicit flags (--handle/--host/--scope/--guest)  >  existing/parent config  >
@@ -656,14 +656,14 @@ else
 fi
 
 # --------------------------------------------------------------------------
-# Domains index — a flat catalog of the durable knowledge areas (domains/*)
+# Domains index — a flat catalog of the durable knowledge areas (knowledge/*)
 # --------------------------------------------------------------------------
 # Domains are root-only, unscoped content (no tiers, force, owner, or overlays), so
-# the index is a plain glob of domains/*/README.md — name + one-line summary from
+# the index is a plain glob of knowledge/*/README.md — name + one-line summary from
 # each README's frontmatter. Auto-loaded like the tools index so the agent knows
 # which areas of *your* world it can draw on instead of answering cold; read the
 # domain's README before reasoning about it. A pure function of committed docs,
-# regenerated on every relink. (Empty in a checkout with no domains/.)
+# regenerated on every relink. (Empty in a checkout with no knowledge/.)
 echo ""; echo "Domains index:"
 DOMAINS_TSV="$(domains_resolve "$REPO_DIR")"
 if [[ -n "$DOMAINS_TSV" ]]; then
@@ -687,7 +687,7 @@ HEADER
     echo "  ✓ generated"
 else
     rm -f "$DOMAINS_INDEX_FILE"
-    echo "  SKIP (no domains/ in this checkout)"
+    echo "  SKIP (no knowledge/ in this checkout)"
 fi
 
 # --------------------------------------------------------------------------

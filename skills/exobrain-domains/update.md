@@ -10,7 +10,7 @@ The [shared foundation](SKILL.md) applies. This file adds the sweep-specific pha
 
 ## Phase 1 — Setup
 
-Determine the last-update date (the README's `Last synthesis:` marker, else the domain's last substantive commit: `git log -1 --format=%cs -- domains/<domain>/`). Read `sources.json`. Search window: **from** last-update minus 3 days (overlap to catch in-flight items) **to** today.
+Determine the last-update date (the README's `Last synthesis:` marker, else the domain's last substantive commit: `git log -1 --format=%cs -- knowledge/<domain>/`). Read `sources.json`. Search window: **from** last-update minus 3 days (overlap to catch in-flight items) **to** today.
 
 ## Phase 2 — Collection
 
@@ -27,7 +27,7 @@ Fully-owned repos (`paths: ["."]`) — all PRs are relevant. Shared repos (speci
 
 ## Phase 3 — Editorial filtering
 
-The most important phase. Apply the **horizon test** and significance filter to every finding (worked examples in [`domains/exobrain/authoring.md`](../../domains/exobrain/authoring.md)):
+The most important phase. Apply the **horizon test** and significance filter to every finding (worked examples in [`knowledge/exobrain/authoring.md`](../../knowledge/exobrain/authoring.md)):
 
 | Level | Criteria | Goes to |
 |-------|----------|---------|
@@ -39,7 +39,7 @@ Produce a structured changeset (working doc, not committed) labelling each findi
 
 ## Phase 4 — Profile updates
 
-Route each INCLUDE to the file the README's index assigns, in that section's editorial voice. Apply all of [`authoring.md`](../../domains/exobrain/authoring.md). Sweep-specific rules (the no-human posture):
+Route each INCLUDE to the file the README's index assigns, in that section's editorial voice. Apply all of [`authoring.md`](../../knowledge/exobrain/authoring.md). Sweep-specific rules (the no-human posture):
 
 1. **Never delete existing text.** Flag possibly-obsolete content in open-questions under "Possibly obsolete" instead.
 2. **Never ask.** A finding needing judgment goes to open-questions ("Needs human judgment"), with the evidence and why it was filtered.
