@@ -48,8 +48,6 @@ Keep it short — 3–5 questions. Adapt; don't read them robotically.
   - family → a `groups/<household>/` scope containing `people/<each>/`.
   - team/org → `groups/<org>/` (or `teams/<team>/`) containing people; nest as deep as needed.
 - **Your handle and this machine's name** (for the person and host scopes).
-- **Vocabulary.** The durable-content directory is `knowledge/` by default.
-  Offer alternatives if they'd prefer (`domains/`, `memory/`, `areas/`, …). Most should keep `knowledge/`.
 - **A knowledge domain or two to start** (e.g. `finances`, `home`, a project). Optional — they can add later.
 - **Which agent(s)** they'll connect (claude / codex / openclaw).
 
@@ -58,8 +56,7 @@ Keep it short — 3–5 questions. Adapt; don't read them robotically.
 Create under `$DST`:
 
 - `AGENTS.md` — copy `$SRC/AGENTS.md`. It's the auto-loaded spec and is already
-  generic. If the user renamed the durable-content dir, update the few references to
-  `knowledge/` in it (see step 5).
+  generic.
 - `README.md` — stamp `$SRC/seed/skills/create-instance/instance-readme.md` (a
   template, not the seed's own `README.md`, which is the "concept + generator" pitch
   and is wrong for an instance). Replace `{{OWNER}}` with the user's handle or the
@@ -89,7 +86,7 @@ Create under `$DST`:
 
 ## 3. Copy the concept (the meta-domain)
 
-Copy `$SRC/knowledge/exobrain/` into `$DST/<domains-dir>/exobrain/` — entities,
+Copy `$SRC/knowledge/exobrain/` into `$DST/knowledge/exobrain/` — entities,
 scopes, agents, skills, tools, authoring, propagation. This is what makes the new
 exobrain self-documenting. The feed of cards is **not** part of the meta-domain: it
 lives under `$SRC/seed/`, which never ships into an instance, so there's nothing to
@@ -110,30 +107,16 @@ point (see `propagation.md`).
   - person: `people/<handle>/AGENTS.md` — a short personal-preferences stub.
   - host: `people/<handle>/hosts/<machine>/AGENTS.md` — a machine-config stub.
   - (family/org) the group/team scope's `AGENTS.md` too.
-- For each starting domain: `<domains-dir>/<area>/README.md` with frontmatter
+- For each starting domain: `knowledge/<area>/README.md` with frontmatter
   (`name`, `type`, `curator`, and a one-line `summary:`) plus a short orientation
-  (see `<domains-dir>/exobrain/authoring.md`). The `summary:` feeds the auto-loaded
-  domains index `connect-agent.sh` generates in step 6, so write it now.
+  (see `knowledge/exobrain/authoring.md`). The `summary:` feeds the auto-loaded
+  domains index `connect-agent.sh` generates in step 5, so write it now.
 - `workspaces/README.md` — copy from `$SRC`.
 
 Don't write `.exobrain.json` here — `connect-agent.sh` is the sole writer of
-connection state and establishes it in step 6 from the flags you pass it.
+connection state and establishes it in step 5 from the flags you pass it.
 
-## 5. If the user renamed the durable-content dir
-
-`knowledge/` appears in a few places that must move together — otherwise
-validation and the docs drift:
-
-- The directory itself and everything under it.
-- `AGENTS.md` and `README.md` references to `knowledge/`.
-- `scripts/validate-exobrain.sh` — the content-tree check forbids `AGENTS.md`
-  under `knowledge/` and `workspaces/`; update those two names to match.
-- Cross-references inside the meta-domain files.
-
-Grep the tree for the old name and update every hit. This is the kind of
-"adapt, don't merge" work the propagation model expects of you.
-
-## 6. Initialize and verify
+## 5. Initialize and verify
 
 ```bash
 cd "$DST"
@@ -149,7 +132,7 @@ non-interactively: it name-matches the person/host scopes you created in step 4,
 writes `.exobrain.json` (with the `person` id), and links the scope chain without
 prompting. If validation fails, fix it before handing off.
 
-## 7. Hand off
+## 6. Hand off
 
 Tell the user, briefly:
 - Where their exobrain is and how it's structured (one line per top-level dir).
@@ -162,8 +145,8 @@ Tell the user, briefly:
 ## Notes
 
 - **Reuse, don't reinvent.** Everything except the seed content is a copy of
-  `$SRC`. The value you add is the interview, the scope shape, and any vocabulary
-  adaptation — not rewriting the framework.
+  `$SRC`. The value you add is the interview and the scope shape — not rewriting
+  the framework.
 - **Don't over-scaffold.** A solo user needs `knowledge/`, `workspaces/`,
   `people/<you>/hosts/<machine>/`, and the framework. Skip groups/teams unless
   they're sharing.
