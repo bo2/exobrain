@@ -93,7 +93,7 @@ Every edit ripples. Before calling a change done, grep for what else names, regi
 - **Keep auto-loaded specs tight.** `AGENTS.md` and sidecars cost tokens every session — state the rule, not the exposition; push depth to on-demand docs (`knowledge/exobrain/`, schemas).
 - **Write specs standalone, not as a delta** — describe the present world; avoid "now / still / no longer / since".
 - **Apply coding discipline to specs** — DRY, single-responsibility; each rule states its own scope, not "as above".
-- **No machine-specific paths outside host scope** — files at global, group, or person scope are shared across machines. Use relative paths or describe locations generically ("a sibling directory", not `~/src/`). Absolute or machine-specific paths belong only in host-scoped files (`people/<id>/hosts/<h>/`).
+- **No machine-specific paths outside host scope** — files at global, group, or person scope are shared across machines. Use relative paths or describe locations generically ("a sibling directory", not `~/src/`). Absolute or machine-specific paths belong only in host-scoped files (the `hosts/` collection at any depth, e.g. `people/<id>/hosts/<h>/`).
 - **No downstream specifics in shared scopes** — backporting a change up into the seed, feed, or any shared scope strips the source instance's org, internal hostnames, ticket prefixes, usernames, and private repo/tool names; re-synthesize to generic terms. Depth: `knowledge/exobrain/propagation.md` → Provenance hygiene.
 - **Verify a script before running it** — confirm its path and type with Glob/Grep, don't infer. Agent-specific scripts use the `<name>.<agent>.sh` suffix.
 
