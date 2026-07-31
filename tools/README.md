@@ -63,6 +63,6 @@ Onboarding maps a stated goal to tools via each file's `Use cases` tags. Keep th
 1. **Pick the scope.** Useful everywhere → `tools/<name>.md` (here). One group → `groups/<g>/tools/<name>.md`. Personal or machine-specific → the person/host `tools/` directory.
 2. **Write `<name>.md`** following the shape above. Reuse an existing credential where one already covers the system — don't introduce a parallel one.
 3. **`.env.example`** — add any `.env` variables with placeholder values. Keychain/OAuth credentials are documented in the tool file, not `.env.example`.
-4. **Confirm** the doc's **Verify** step passes from a fresh setup.
+4. **Confirm** the catalog discovers it (`exobrain-tools` → `status`, then `add <name>`) and that the doc's **Verify** step passes from a fresh setup — a doc that works but isn't discovered is invisible.
 
 See [`knowledge/exobrain/tools.md`](../knowledge/exobrain/tools.md) for the concept and machinery. `example-tool.md` here is a non-functional template — copy it as a starting point, or delete it once you have real tools.

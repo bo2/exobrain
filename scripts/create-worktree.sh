@@ -13,6 +13,12 @@
 #   files like .env.example that already materialize in the worktree).
 #   Walks the repo root plus immediate subdirectories so nested env files
 #   like api/.env.development are picked up too.
+# - Symlinks each agent's generated context surface (.claude/*.md,
+#   AGENTS.override.md) from the main checkout. The connector writes these
+#   and they're gitignored, so a fresh worktree would otherwise load without
+#   the connected scopes, the optional-skills index, or the generated
+#   indexes — an agent working in a worktree would silently miss context a
+#   main-checkout session has.
 # - Prints the worktree path on stdout, so:
 #     cd "$(scripts/create-worktree.sh fix-budget-calc)"
 
@@ -116,7 +122,23 @@ for rel in "${ENV_RELS[@]}"; do
     done
 done
 
+# Each agent's generated context surface. The connector writes these into the
+# main checkout and gitignores them, so without this a worktree session loads
+# without its connected scopes and generated indexes. Symlinks (not copies) so a
+# later --relink in the main checkout reaches the worktree too. Tracked files
+# like .claude/settings.json already materialize on checkout and are skipped.
+for src in "$MAIN_ROOT"/.claude/*.md "$MAIN_ROOT"/AGENTS.override.md; do
+    [[ -f "$src" ]] || continue
+    rel="${src#"$MAIN_ROOT"/}"
+    dst="$WORKTREE_PATH/$rel"
+    [[ -e "$dst" || -L "$dst" ]] && continue
+    mkdir -p "$(dirname "$dst")"
+    ln -s "$src" "$dst"
+    echo "  linked $rel -> $src" >&2
+    linked=$(( linked + 1 ))
+done
+
 shopt -u nullglob dotglob
-[[ "$linked" -eq 0 ]] && echo "  (no env files to link)" >&2
+[[ "$linked" -eq 0 ]] && echo "  (nothing to link)" >&2
 
 echo "$WORKTREE_PATH"
