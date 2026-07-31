@@ -1,6 +1,6 @@
 # The grill
 
-The shared interview discipline used wherever an exobrain turns one person's understanding into knowledge others — and agents — hold identically: distilling a corpus into a domain, curating a domain, stress-testing a plan, shaping a spec. An adversarial, one-question-at-a-time interview that reaches shared *correct* understanding, not just recorded answers.
+The shared interview discipline used wherever an exobrain turns one person's understanding into knowledge others — and agents — hold identically: distilling a corpus into a knowledge domain, curating a domain, stress-testing a plan, shaping a spec. An adversarial, one-question-at-a-time interview that reaches shared *correct* understanding, not just recorded answers.
 
 It descends from Matt Pocock's `grill-me`; this is the exobrain generalization that knowledge-building and planning skills cite rather than each restating.
 

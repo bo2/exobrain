@@ -23,7 +23,7 @@ status: active        # active | paused | resolved | archived
 created: YYYY-MM-DD
 owner: <id>
 participants: [<ids>] # optional, for shared workspaces
-related: ["<links to docs, threads, domains>"]  # optional
+related: ["<links to docs, threads, knowledge domains>"]  # optional
 ---
 ```
 

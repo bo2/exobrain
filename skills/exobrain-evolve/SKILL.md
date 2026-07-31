@@ -31,7 +31,7 @@ The files that arrived in this instance as verbatim copies of the seed — the o
 (`skills/exobrain-evolve/`, `skills/exobrain-persist/`, `skills/exobrain-authoring-audit/`,
 `skills/exobrain-knowledge/`, `skills/exobrain-ab/`), `tools/README.md`,
 `<domains-dir>/exobrain/*` (the concept), and the root spec (`AGENTS.md`, agent
-sidecars). Everything else (`people/*`, your domains, `scopes.json`, your per-tool
+sidecars). Everything else (`people/*`, your knowledge domains, `scopes.json`, your per-tool
 docs under `tools/`, `skills.json`, `workspaces/*`, the adoption ledger) is
 **instance-owned — never overwrite it from the seed**.
 

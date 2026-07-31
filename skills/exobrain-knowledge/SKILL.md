@@ -1,11 +1,11 @@
 ---
 name: exobrain-knowledge
-description: "Build and maintain exobrain domains — one skill, four modes. create: scaffold a new domain from a broad sweep of your sources plus a code walk, when the knowledge is scattered and no corpus exists. distill: turn an already-collected corpus or workspace into a domain through a grill interview, with alignment verification (--wip for a parallel-build WIP domain — sets a definition altitude and grills only at/above it plus collision-critical questions). curate: interactive upkeep with the curator present — fold one new artifact (doc, transcript, thread, decision) into the right files, or work the open-questions backlog, asking only what targeted lookups can't settle. update: autonomous periodic refresh from the domain's sources.json — sweeps recent activity in the domain's connected sources, filters by the horizon test, never asks, never deletes. Use when asked to create/build/scaffold a domain, distill/promote a workspace into a domain, bootstrap or ingest an area into a WIP domain, fold something into a domain, resolve a domain's open questions, refresh/update a domain, or ask what changed since the last synthesis."
+description: "Build and maintain exobrain knowledge domains — one skill, four modes. create: scaffold a new domain from a broad sweep of your sources plus a code walk, when the knowledge is scattered and no corpus exists. distill: turn an already-collected corpus or workspace into a domain through a grill interview, with alignment verification (--wip for a parallel-build WIP domain — sets a definition altitude and grills only at/above it plus collision-critical questions). curate: interactive upkeep with the curator present — fold one new artifact (doc, transcript, thread, decision) into the right files, or work the open-questions backlog, asking only what targeted lookups can't settle. update: autonomous periodic refresh from the domain's sources.json — sweeps recent activity in the domain's connected sources, filters by the horizon test, never asks, never deletes. Use when asked to create/build/scaffold a knowledge domain, distill/promote a workspace into a domain, bootstrap or ingest an area into a WIP domain, fold something into a domain, resolve a domain's open questions, refresh/update a domain, or ask what changed since the last synthesis."
 ---
 
 # Exobrain Knowledge
 
-Build and maintain exobrain domains. One skill, four modes — pick by what already exists (a domain? a collected corpus?) and whether a human is in the loop.
+Build and maintain exobrain knowledge domains. One skill, four modes — pick by what already exists (a domain? a collected corpus?) and whether a human is in the loop.
 
 | Situation | Mode |
 |---|---|

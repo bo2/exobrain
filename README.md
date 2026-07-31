@@ -22,7 +22,7 @@ The concept and a generator live at https://github.com/bo2/exobrain. Please:
 2. Read its knowledge/exobrain/ (what an exobrain is — scopes, skills,
    propagation) and seed/skills/create-instance/SKILL.md (how to build one).
 3. Then follow create-instance: ask me a few short questions (what I'll use
-   this for, whether anyone else shares it, one or two domains to
+   this for, whether anyone else shares it, one or two knowledge domains to
    start with), and scaffold a fresh exobrain for me IN THE CURRENT DIRECTORY,
    copying the framework scripts from the clone and adapting names and
    structure to my answers.
@@ -40,7 +40,7 @@ That's it. The agent reads the concept, interviews you, and scaffolds a working 
 
 Two kinds of content, plus a way to scope them to *you*:
 
-- **Domains** (`knowledge/`) — durable areas of what you know (health, finances, a project's facts), kept current.
+- **Knowledge domains** (`knowledge/`) — durable areas of what you know (health, finances, a project's facts), kept current.
 - **Workspaces** (`workspaces/`) — time-bound efforts (a trip, an investigation) that outdate by design.
 - **Scopes** — a scope is any directory with an `AGENTS.md`. Connect a leaf (you, on this machine) and the agent inherits its whole ancestor chain: `global < … < you < this machine`. Solo, family, and org all use the same machinery.
 

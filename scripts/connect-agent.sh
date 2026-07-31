@@ -575,6 +575,7 @@ prune_home_indexes() {
 optional-skills.md|# Optional skills
 tools-index.md|# Tools
 domains-index.md|# Domains
+domains-index.md|# Knowledge domains
 LEGACY
 }
 
@@ -669,12 +670,12 @@ DOMAINS_TSV="$(domains_resolve "$REPO_DIR")"
 if [[ -n "$DOMAINS_TSV" ]]; then
     {
         cat <<'HEADER'
-# Domains
+# Knowledge domains
 
 The durable knowledge areas in this exobrain — what *you* know, kept current. Each row points at a domain's `README.md` entry point; **read it before reasoning about that area** so you draw on recorded truth instead of answering cold. (Domains hold current truth; time-bound efforts live in `workspaces/`.)
 
-| Domain | README | Summary |
-|--------|--------|---------|
+| Knowledge domain | README | Summary |
+|------------------|--------|---------|
 HEADER
         while IFS= read -r _row; do
             [[ -n "$_row" ]] || continue

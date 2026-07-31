@@ -2,7 +2,7 @@
 
 A **scope** is a level at which wiring (skills, tools, agent specs, scripts) can live. The same kind of content can exist at several scopes; deeper scopes override shallower ones at link time.
 
-Scopes apply to the **identity** side of an exobrain. Domains and workspaces are content, not scopes — see [`entities.md`](entities.md).
+Scopes apply to the **identity** side of an exobrain. Knowledge domains and workspaces are content, not scopes — see [`entities.md`](entities.md).
 
 ## A scope is any directory with an AGENTS.md
 

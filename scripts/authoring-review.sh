@@ -207,7 +207,7 @@ The rules live in knowledge/exobrain/authoring.md, knowledge/exobrain/domains.md
 and AGENTS.md (sections "Conventions", "Reader Lens", and "Keep auto-loaded
 specs tight") -- read them if useful. The ones to check:
 
-- Horizon test: domain files hold durable current truth, not point-in-time
+- Horizon test: knowledge-domain files hold durable current truth, not point-in-time
   metrics or a sprint changelog.
 - Current-state-only: no change-narrative ("in May we...", "PR #x added...") in
   domain files -- that belongs in workspaces or history files.

@@ -1,6 +1,6 @@
-# Domain structure and maintenance
+# Knowledge domain structure and maintenance
 
-The editor manual for the **domain** entity: directory layout, how to break a domain into sections, the WIP-domain convention, and timeline tracking. For *what* a domain is versus a workspace, see [`entities.md`](entities.md). For *how to write* the prose — horizon test, current-state-only, synthesize-don't-transcribe, order-of-magnitude framing, citations — see [`authoring.md`](authoring.md). This file is the *structure* spec; every effort that builds or maintains a domain reads all three.
+The editor manual for the **knowledge domain** entity: directory layout, how to break a domain into sections, the WIP-domain convention, and timeline tracking. For *what* a domain is versus a workspace, see [`entities.md`](entities.md). For *how to write* the prose — horizon test, current-state-only, synthesize-don't-transcribe, order-of-magnitude framing, citations — see [`authoring.md`](authoring.md). This file is the *structure* spec; every effort that builds or maintains a domain reads all three.
 
 ## Directory structure
 
