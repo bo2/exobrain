@@ -69,6 +69,14 @@ Schema: [`/skills.schema.json`](../../skills.schema.json).
 | **`unlisted`** | Registered and invocable **by name**, but absent from every auto-loaded surface — not linked, not in the optional index. For misfire-risk or name-only skills. The agent reaches it only when the user names it or it consults the registry (`skills-status.sh --all`). |
 | **`off`** | Override-only. Shadow/disable a skill that would otherwise resolve on (e.g. opt out of a forced shared skill); removes any previously linked/fetched artifact. |
 
+## Choosing placement, tier, and force
+
+Three independent knobs — decide them separately.
+
+- **Placement** — the shallowest scope the skill might *ever* serve: a person scope if it's yours, a group scope if the group might want it, global if any group might. Placing optimistically costs nothing, since a declaration reaches only its `owner` until forced.
+- **`tier`** — reserve `always` for the rare skill earning its keep in a large share of sessions; `optional` is the default; `unlisted` for misfire-risk or name-only skills.
+- **`force`** — off by default. Turn it on only for what the whole scope genuinely needs, and only with the committed proof § Declaration vs override requires.
+
 ## Resolution
 
 `skills_resolve` in [`/scripts/skills-registry.sh`](../../scripts/skills-registry.sh) reads every connected scope's `skills.json` shallow→deep and, per skill:
