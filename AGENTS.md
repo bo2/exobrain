@@ -99,7 +99,7 @@ Every edit ripples. Before calling a change done, grep for what else names, regi
 
 ## Reader Lens
 
-Before writing anything — doc, commit, message — name who reads it and what they need; keep what serves them, cut the rest. A line that serves no nameable reader doesn't belong, however true — especially prose that explains or defends your own choices ("why we did X", "note that…"), which serves the author, not the reader. The `exobrain-authoring-audit` skill scopes new or justification-heavy docs.
+Before writing anything — doc, commit, message — name who reads it and what they need; keep what serves them, cut the rest. A line that serves no nameable reader doesn't belong, however true — especially prose that explains or defends your own choices ("why we did X", "note that…"), which serves the author, not the reader. Two shapes of this to catch before they land: **rationale echo** — a why restated at every mention of a thing; state it once where the thing is defined, everywhere else state only the fact — and **session echo** — prose that only makes sense as a reply to the conversation or incident behind the change; a cold reader gets the present rule, not the story. The `exobrain-authoring-audit` skill scopes new or justification-heavy docs.
 
 ## Validation
 
