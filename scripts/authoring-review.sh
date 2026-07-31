@@ -224,6 +224,13 @@ specs tight") -- read them if useful. The ones to check:
   genre. Flag author-serving prose -- "why we did X" justifications, narrative
   about the change itself, asides defending the author's choices -- that no
   reader of the doc needs. (Cut test only; what's *missing* is out of scope.)
+- Rationale echo: the same justification attached to a thing at MORE THAN ONE
+  mention site across the diff (each site reads fine alone -- check across
+  files). Keep the why at the single site that defines the thing; flag every
+  other mention with the fix "state the fact, drop the rationale". Session
+  echo: added prose that presumes the change's backstory -- it answers a
+  question only the conversation or incident behind this diff asked, where a
+  cold reader needs only the present rule.
 
 For any changed */SKILL.md, ALSO evaluate the skill against the skill-authoring
 rubric:
