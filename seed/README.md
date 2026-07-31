@@ -9,7 +9,6 @@ exclusion is one rule: `create-instance` never copies `seed/`.
 |------|-----------|
 | [`AGENTS.md`](AGENTS.md) | The `seed/` **scope flag** — marks this checkout as the canonical seed (the seed scope auto-joins the chain here, never in an instance). |
 | [`feed/`](feed/) | **The change feed** — dated pattern-cards, one per durable framework change, published for instances to adopt via `exobrain-evolve`. Public and generic; instances read it from the seed cache and never carry a copy. |
-| [`harvest-ledger.md`](harvest-ledger.md) | **The harvest ledger** — every candidate `seed-harvest` has presented, adopted or declined, so a later run doesn't re-propose it. The mirror of an instance's `adopted-feed.md`. |
 | [`skills/create-instance/`](skills/create-instance/) | **The generator** — interviews the user and scaffolds a fresh instance. Invoked from an empty directory via the bootstrap prompt (it reads this `SKILL.md` directly), so it stays outside the skills registry. |
 | [`skills/seed-tests/`](skills/seed-tests/) | **The seed test driver** — builds an instance from the seed, verifies the bootstrap, and runs the built instance's own `exobrain-tests` sub-suites against it. Declared in `seed/skills.json`, owned by the seed scope. |
 | [`skills/seed-harvest/`](skills/seed-harvest/) | **The harvester** — scans the downstream instances listed in `.exobrain.json`, proposes their universally useful changes as a checkbox list, and re-synthesizes each pick into the framework body. The instance→seed direction; an instance has no downstream, so it's seed-only. |

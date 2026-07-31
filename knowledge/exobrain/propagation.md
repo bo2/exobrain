@@ -48,8 +48,9 @@ seed's own names and voice rather than pasted, stripped of the source's identity
 Provenance hygiene below. A change that can't be described without naming its origin
 was never harvestable.
 
-Presented candidates are recorded either way in the seed's `harvest-ledger.md`;
-the declines are what keeps a later run from re-proposing settled divergence.
+Presented candidates are recorded either way in a harvest ledger, kept in the seed's
+gitignored local scope; the declines are what keeps a later run from re-proposing
+settled divergence.
 
 ## Invariants — adapt around, never reinterpret
 

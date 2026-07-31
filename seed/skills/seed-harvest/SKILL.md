@@ -89,9 +89,16 @@ unchecked). When you're unsure, it's `maybe`.
 
 ## 4. Skip what the ledger already settled
 
-Read `seed/harvest-ledger.md`. Drop any candidate already recorded as adopted, and
-any recorded as declined whose source hasn't changed since. Without this the same
-long-standing divergences resurface every run and the menu becomes noise.
+Read the harvest ledger — untracked, in the gitignored `local/` scope of the main
+checkout (a worktree doesn't carry it):
+
+```bash
+ledger="$(dirname "$(git rev-parse --git-common-dir)")/local/harvest-ledger.md"
+```
+
+Drop any candidate already recorded as adopted, and any recorded as declined whose
+source hasn't changed since. Without this the same long-standing divergences
+resurface every run and the menu becomes noise.
 
 ## 5. Ask — the checkbox list
 
@@ -117,6 +124,8 @@ For each pick, in the seed's own structure and vocabulary:
   internal hostnames and URLs, ticket prefixes, usernames, private repo/tool/project
   names, and any path embedding them. Examples become invented ones (`alex`, `acme`,
   `laptop`); functional fields use the role word `maintainer`.
+- **Name no instance in anything tracked** — not in the change, a card, a commit
+  message, or a PR body. Instance names belong only in the local ledger.
 - **Preserve invariants exactly** — security rules, scope-resolution order, the
   validation contract. A harvested change may extend them, never quietly reinterpret
   them (`propagation.md` § Invariants).
@@ -160,8 +169,8 @@ scripts/validate-exobrain.sh
 seed/skills/seed-harvest/tests/test-seed-harvest.sh
 ```
 
-Append a row to `seed/harvest-ledger.md` for every candidate you **presented** —
-adopted with its card id, or declined with a one-line reason.
+Append a row to the ledger (§4) for every candidate you **presented** — date,
+instance, candidate, outcome, and a one-line reason.
 
 Then land it the normal way (`exobrain-persist`).
 
