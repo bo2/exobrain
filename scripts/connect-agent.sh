@@ -33,7 +33,8 @@
 # connect marker. It lets a throwaway copy (a test sandbox, a CI checkout) be
 # wired exactly like a real checkout with zero global side effects. Codex's
 # AGENTS.override.md lands in the checkout itself; codex's config.toml and openclaw's
-# USER.md land in a copy dir when CODEX_HOME / OPENCLAW_WORKSPACE point there.
+# USER.md land in the CODEX_HOME / OPENCLAW_WORKSPACE copy dir, which a render
+# requires to be set — it refuses rather than default to the real home config.
 
 set -euo pipefail
 
@@ -394,6 +395,25 @@ case "$AGENT" in
     openclaw) MARKER="$REPO_DIR/.openclaw"; MARKER_IS_DIR=false; TARGET_DIR="${OPENCLAW_WORKSPACE:-$HOME/.openclaw/workspace}"
               AGENT_SIDECAR="OPENCLAW.md"; AGENT_SIDECAR_BASE="OPENCLAW" ;;
 esac
+
+# --render-specs-only promises no writes outside the checkout, but codex and
+# openclaw deliver part of their surface into TARGET_DIR — the real home config
+# dir when the override isn't set. Refuse up front rather than write into the
+# home dir and call it a render.
+if $RENDER_ONLY; then
+    case "$AGENT" in
+        codex)    [[ -n "${CODEX_HOME:-}" ]] || {
+                      echo "--render-specs-only for codex writes config.toml into CODEX_HOME (default ~/.codex)." >&2
+                      echo "Set CODEX_HOME to a throwaway dir first, e.g.: CODEX_HOME=\$(mktemp -d) $0 codex --render-specs-only" >&2
+                      exit 1
+                  } ;;
+        openclaw) [[ -n "${OPENCLAW_WORKSPACE:-}" ]] || {
+                      echo "--render-specs-only for openclaw writes USER.md into OPENCLAW_WORKSPACE (default ~/.openclaw/workspace)." >&2
+                      echo "Set OPENCLAW_WORKSPACE to a throwaway dir first, e.g.: OPENCLAW_WORKSPACE=\$(mktemp -d) $0 openclaw --render-specs-only" >&2
+                      exit 1
+                  } ;;
+    esac
+fi
 
 # Where this agent's always-tier skills are linked. Most agents read skills from
 # their context surface ($TARGET_DIR/skills). Codex is the exception: it scans a
@@ -867,9 +887,10 @@ esac
 
 # --render-specs-only stops here. Everything above writes only inside the checkout
 # (the in-repo .claude surface, or the in-repo AGENTS.override.md for codex) or a
-# *_HOME-overridden copy dir (codex's config.toml, openclaw's USER.md); the connect
-# marker and git hooks below are the first writes outside it. Truncating here — not
-# forking a parallel render path — keeps the rendered surface identical to a full connect.
+# *_HOME-overridden copy dir (codex's config.toml, openclaw's USER.md — the guard at
+# TARGET_DIR selection refuses a render without the override); the connect marker and
+# git hooks below are the first writes outside it. Truncating here — not forking a
+# parallel render path — keeps the rendered surface identical to a full connect.
 if $RENDER_ONLY; then
     echo ""; echo "✓ Rendered $AGENT context surface (no out-of-dir writes)."
     exit 0
