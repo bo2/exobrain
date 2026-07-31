@@ -2,7 +2,7 @@
 
 How exobrains share improvements **without** a fork-and-merge relationship.
 
-Three words, kept distinct: **propagation** is the whole exchange between seed and instances; **adoption** (verb *adopt*) is the seed→instance direction — an instance taking in the seed's changes, run via the `exobrain-evolve` skill; **publishing** is the reverse — contributing a pattern back as a feed card; since cards live only on the seed, an instance publishes by adding one in the seed repo, not in its own tree. The wiring-refresh op (`connect-agent.sh --relink`) is a separate concern and is deliberately not called "update", so the two never collide.
+Four words, kept distinct: **propagation** is the whole exchange between seed and instances; **adoption** (verb *adopt*) is the seed→instance direction — an instance taking in the seed's changes, run via the `exobrain-evolve` skill; **publishing** is the reverse, instance-initiated — contributing a pattern back as a feed card; since cards live only on the seed, an instance publishes by adding one in the seed repo, not in its own tree; **harvesting** is that same reverse direction seed-initiated — the seed reading its instances and pulling their universal improvements up into the framework, run via the seed-local `seed-harvest` skill. The wiring-refresh op (`connect-agent.sh --relink`) is a separate concern and is deliberately not called "update", so the two never collide.
 
 The template era assumed a human running `git merge upstream` against a fork. That breaks the moment two exobrains diverge — with/without groups, restructured scripts, locally rewritten skills. The agentic era assumes something the template era couldn't: **a competent adapter sits at every node.** So an exobrain has no upstream remote and never merges. Instead, an agent reads the seed's **feed**, **copies** the files an instance hasn't diverged, and **re-synthesizes** the rest into local names and structure.
 
@@ -30,6 +30,26 @@ The `exobrain-evolve` skill is the single way an instance moves forward — ther
 4. **Apply each card** — *copy* the seed's files where this instance is undiverged; *re-synthesize* where it diverged or where structure differs. Preserve invariants exactly.
 5. **Validate** and re-link.
 6. **Record** the adopted card IDs in the ledger.
+
+## The harvest workflow
+
+Instances are where the framework meets real use, so they're where its gaps get
+solved first. Harvesting is how a solution stops being one instance's local fix and
+becomes everyone's — the seed reads its instances, keeps what is universal, and
+publishes it as a card the others adopt normally.
+
+It runs on the seed only (an instance has no downstream) and is **read-only toward
+the instances**: nothing is committed or pushed into a downstream checkout. Two
+filters do the work. **Universality** — a candidate must help an exobrain sharing
+none of that instance's content, so instance domains, workspaces, person scopes,
+tool docs, and one-machine workarounds never qualify. **Genericization** — instances
+are private and the seed is public, so a harvested change is re-synthesized in the
+seed's own names and voice rather than pasted, stripped of the source's identity per
+Provenance hygiene below. A change that can't be described without naming its origin
+was never harvestable.
+
+Presented candidates are recorded either way in the seed's `harvest-ledger.md`;
+the declines are what keeps a later run from re-proposing settled divergence.
 
 ## Invariants — adapt around, never reinterpret
 
