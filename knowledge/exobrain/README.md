@@ -33,4 +33,4 @@ Crucially, an exobrain is **one implementation of a shared concept, not a fork o
 
 ## For an agent instantiating a new exobrain
 
-Read [`propagation.md`](propagation.md) → *Instantiating*. The short version: these files describe principles, not a rigid layout. Choose names and structure that fit your principal (a different durable-content dir name, with/without groups). Preserve the **invariants** (security, scope-resolution semantics, the validation contract); adapt everything else.
+Read [`propagation.md`](propagation.md) → *Instantiating*. The short version: these files describe principles, not a rigid layout. Choose the structure that fits your principal (with/without groups, which scopes are populated). Preserve the **invariants** (security, scope-resolution semantics, the validation contract); adapt everything else.

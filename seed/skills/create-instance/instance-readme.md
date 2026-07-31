@@ -3,9 +3,8 @@
   create-instance copies this to the new instance's README.md and personalizes it.
   When you stamp it: replace {{OWNER}} with the owner's handle or the group/org name,
   set the connect-agent line to the agent(s) the user chose, and delete this comment.
-  Leave `knowledge/` literal — step 5 of the skill rewrites it if the durable-content
-  dir was renamed. The seed's own README.md ("concept + generator") does NOT belong
-  here: this README describes a live exobrain, not how to make one.
+  The seed's own README.md ("concept + generator") does NOT belong here: this
+  README describes a live exobrain, not how to make one.
 -->
 # Exobrain
 

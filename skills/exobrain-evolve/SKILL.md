@@ -19,7 +19,7 @@ or a pattern) with notes on how to adopt it. Read the new cards since this
 instance last updated, decide what's useful here, and apply each change the right
 way — **copy** the seed's files where this instance hasn't diverged them,
 **rewire** (re-synthesize) where it has or where structure differs. Background:
-this instance's `<domains-dir>/exobrain/propagation.md`.
+this instance's `knowledge/exobrain/propagation.md`.
 
 **Be permissive by default** — prefer to take improvements, adapting as needed.
 This is a procedure; follow it, keeping the user in control of what's adopted.
@@ -30,7 +30,7 @@ The files that arrived in this instance as verbatim copies of the seed — the o
 "copy" applies to: `scripts/*`, `skills.schema.json`, the framework skills
 (`skills/exobrain-evolve/`, `skills/exobrain-persist/`, `skills/exobrain-authoring-audit/`,
 `skills/exobrain-knowledge/`, `skills/exobrain-ab/`), `tools/README.md`,
-`<domains-dir>/exobrain/*` (the concept), and the root spec (`AGENTS.md`, agent
+`knowledge/exobrain/*` (the concept), and the root spec (`AGENTS.md`, agent
 sidecars). Everything else (`people/*`, your knowledge domains, `scopes.json`, your per-tool
 docs under `tools/`, `skills.json`, `workspaces/*`, the adoption ledger) is
 **instance-owned — never overwrite it from the seed**.
@@ -66,8 +66,7 @@ For each card you're taking:
   optional `files:` frontmatter lists the seed paths).
 - **Copy where undiverged:** if the change touches framework files and this
   instance's copies still match the seed's *prior* version, copy the seed's current
-  version of those files in. Map paths if you renamed the durable-content dir or
-  restructured scopes.
+  version of those files in. Map paths if you restructured scopes.
 - **Rewire where diverged:** if you've locally modified those files, or the card is
   a structural/pattern change that doesn't map 1:1, re-synthesize it into your setup
   per the card's Pattern + Adapt notes. Don't clobber local changes — reconcile them.
