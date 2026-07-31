@@ -62,7 +62,7 @@ A single run:
 7. **Install the git hooks** — rewritten on every run, `--relink` included, so a template change reaches a checkout that connected long ago. What each hook runs: [`machinery.md`](machinery.md) § Git hooks.
 8. **Run scope hooks** — if a scope dir has an executable `scripts/connect-agent.sh`, run it.
 
-`--relink` repeats steps 2–8 without prompting and writes no marker (the marker records that a human connected this agent, so a `--relink` for an unmarked agent exits before any of this); `--configure` re-resolves identity (the wizard, or the identity flags); `--render-specs-only` runs steps 2–6 and stops before any write outside the target dir (no marker, no hooks) — for wiring a throwaway copy.
+`--relink` repeats steps 2–8 without prompting and writes no marker (the marker records that a human connected this agent, so a `--relink` for an unmarked agent exits before any of this); `--configure` re-resolves identity (the wizard, or the identity flags); `--render-specs-only` runs steps 2–6 and stops before any write outside the target dir (no marker, no hooks) — for wiring a throwaway copy; for codex/openclaw it refuses to run unless `CODEX_HOME` / `OPENCLAW_WORKSPACE` points the target dir away from the real home config.
 
 ## Adding a new agent
 

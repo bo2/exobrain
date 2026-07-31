@@ -391,6 +391,26 @@ test_codex_prunes_legacy_home_indexes() {
     assert_eq "# My own notes" "$(head -n 1 "$TEST_DIR/codex/optional-skills.md")" "foreign file unmodified"
 }
 
+# A render advertised as side-effect-free must refuse the one default that isn't:
+# codex/openclaw deliver into the real home config dir when the override is unset.
+test_render_codex_refuses_without_codex_home() {
+    local r out; r="$(setup_fake_exobrain)"; add_person "$r" people/alice
+    write_config "$r" people/alice/hosts/h1 codex
+    out="$(cd "$r" && env "HOME=$TEST_DIR/hm" "CODEX_HOME=" "OPENCLAW_WORKSPACE=$TEST_DIR/ocw" \
+        bash scripts/connect-agent.sh codex --render-specs-only 2>&1)" && { echo "should refuse"; return 1; }
+    assert_contains "$out" "CODEX_HOME" "error names the override" || return 1
+    assert_no_file "$TEST_DIR/hm/.codex/config.toml" "nothing written to home config"
+}
+
+test_render_openclaw_refuses_without_workspace() {
+    local r out; r="$(setup_fake_exobrain)"; add_person "$r" people/alice
+    write_config "$r" people/alice/hosts/h1 openclaw
+    out="$(cd "$r" && env "HOME=$TEST_DIR/hm" "CODEX_HOME=$TEST_DIR/codex" "OPENCLAW_WORKSPACE=" \
+        bash scripts/connect-agent.sh openclaw --render-specs-only 2>&1)" && { echo "should refuse"; return 1; }
+    assert_contains "$out" "OPENCLAW_WORKSPACE" "error names the override" || return 1
+    assert_no_file "$TEST_DIR/hm/.openclaw/workspace/USER.md" "nothing written to home workspace"
+}
+
 # ---------------------------------------------------------------------------
 # Tests — OpenClaw surface (USER.md marker block)
 # ---------------------------------------------------------------------------
@@ -666,6 +686,8 @@ run_test "flags never scaffold"                test_flags_no_scaffold_unknown_ha
 run_test "flags guest connects nothing"        test_flags_guest
 run_test "flags extra --scope"                 test_flags_extra_scope
 run_test "flags name-match nested"             test_flags_name_match_nested
+run_test "render codex refuses without CODEX_HOME" test_render_codex_refuses_without_codex_home
+run_test "render openclaw refuses without workspace" test_render_openclaw_refuses_without_workspace
 run_test "seed scope auto-joins chain"         test_seed_scope_auto_joins_chain
 run_test "no seed scope without seed/"         test_no_seed_scope_without_seed_dir
 run_test "seed scope in manifest"              test_seed_scope_in_manifest
