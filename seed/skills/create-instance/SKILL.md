@@ -110,7 +110,7 @@ point (see `propagation.md`).
 - For each starting domain: `knowledge/<area>/README.md` with frontmatter
   (`name`, `type`, `curator`, and a one-line `summary:`) plus a short orientation
   (see `knowledge/exobrain/authoring.md`). The `summary:` feeds the auto-loaded
-  domains index `connect-agent.sh` generates in step 5, so write it now.
+  knowledge index `connect-agent.sh` generates in step 5, so write it now.
 - `workspaces/README.md` — copy from `$SRC`.
 
 Don't write `.exobrain.json` here — `connect-agent.sh` is the sole writer of

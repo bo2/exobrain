@@ -92,8 +92,8 @@ The durable knowledge areas — see [`domains.md`](domains.md).
 
 | Artifact | Role |
 |---|---|
-| `knowledge/*/README.md` | Each domain's entry point — frontmatter (`name`, `type`, `curator`, `summary`) + TL;DR + file index. The one-line `summary:` is pulled verbatim into the domains index. |
-| domains index *(generated)* | Flat catalog of every domain (name + README path + `summary:`), composed into each agent's surface like the tools index — `.claude/domains-index.md` (Claude), or inlined into `AGENTS.override.md` (Codex) / `~/.openclaw/workspace/USER.md` (OpenClaw). Root-only and unscoped (no tiers/overlays); a pure function of the committed READMEs, regenerated on relink. |
+| `knowledge/*/README.md` | Each domain's entry point — frontmatter (`name`, `type`, `curator`, `summary`) + TL;DR + file index. The one-line `summary:` is pulled verbatim into the knowledge index. |
+| knowledge index *(generated)* | Flat catalog of every knowledge domain (name + README path + `summary:`), composed into each agent's surface like the tools index — `.claude/knowledge-index.md` (Claude), or inlined into `AGENTS.override.md` (Codex) / `~/.openclaw/workspace/USER.md` (OpenClaw). Root-only and unscoped (no tiers/overlays); a pure function of the committed READMEs, regenerated on relink. |
 | `exobrain-knowledge` skill | Builds and maintains knowledge domains (`create` / `distill` / `curate` / `update`), including setting and refreshing each README's `summary:`. |
 
 ## Git workflow

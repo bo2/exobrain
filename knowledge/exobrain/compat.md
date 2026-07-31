@@ -27,3 +27,4 @@ Delete the marked block, the tests that cover it, and the row — in one change.
 | 0001 | Codex skill symlinks in the agent's home config dir, from before skills linked repo-locally into `.agents/skills`. | `scripts/connect-agent.sh` | 2026-06-18 | 2026-08-28 |
 | 0002 | The `<!-- BEGIN exobrain -->` marker block in the Codex home `AGENTS.md`, superseded by the in-repo `AGENTS.override.md`. | `scripts/connect-agent.sh` | 2026-07-11 | 2026-08-28 |
 | 0003 | Generated index copies in the agent's home config dir, from when that dir was the delivery transport. | `scripts/connect-agent.sh`, `skills/exobrain-tests/unit/test-connect-agent.sh` | 2026-07-28 | 2026-08-28 |
+| 0004 | `.claude/domains-index.md`, the knowledge index under the name it carried before it was named after its tree. | `scripts/connect-agent.sh`, `skills/exobrain-tests/unit/test-connect-agent.sh` | 2026-07-31 | 2026-08-30 |

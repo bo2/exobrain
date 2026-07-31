@@ -22,7 +22,7 @@
 # index, per-agent paths — so a shared file would let the last writer clobber it):
 #   claude   → .claude/CLAUDE.md @-imports .claude/connected-scopes.md (a manifest of
 #              live source specs) + .claude/optional-skills.md + .claude/tools-index.md
-#              + .claude/domains-index.md
+#              + .claude/knowledge-index.md
 #   codex    → in-repo AGENTS.override.md (read natively; outranks AGENTS.md at the
 #              same dir level); skills in repo-local .agents/skills/
 #   openclaw → ~/.openclaw/workspace/USER.md, marker-block injection
@@ -543,8 +543,8 @@ fi
 # durable copies, because its @-import manifest names them as real files on disk.
 # An index that has nothing to list is expressed by removing its temp file, so the
 # `[[ -f … ]]` guards downstream read as "was anything generated?".
-INDEX_FILE="$(mktemp)"; TOOLS_INDEX_FILE="$(mktemp)"; DOMAINS_INDEX_FILE="$(mktemp)"
-trap 'rm -f "$INDEX_FILE" "$TOOLS_INDEX_FILE" "$DOMAINS_INDEX_FILE"' EXIT
+INDEX_FILE="$(mktemp)"; TOOLS_INDEX_FILE="$(mktemp)"; KNOWLEDGE_INDEX_FILE="$(mktemp)"
+trap 'rm -f "$INDEX_FILE" "$TOOLS_INDEX_FILE" "$KNOWLEDGE_INDEX_FILE"' EXIT
 
 # install_index <tmp> <dest> <label> — persist a generated index onto a surface that
 # reads it from disk. No temp means nothing was generated this run: clear whatever an
@@ -577,6 +577,19 @@ tools-index.md|# Tools
 domains-index.md|# Domains
 domains-index.md|# Knowledge domains
 LEGACY
+}
+
+# COMPAT 0004 (remove after 2026-08-30) — prune_renamed_claude_index: the knowledge
+# index was called domains-index.md before it was named after the tree it catalogs.
+# install_index only ever clears the destination it writes, so a checkout relinking
+# across the rename keeps the old copy in .claude/ with nothing importing it. Matched
+# on the generated heading, so a same-named file of the human's own is left alone.
+prune_renamed_claude_index() {
+    local dead="$TARGET_DIR/domains-index.md" first
+    [[ -f "$dead" ]] || return 0
+    first="$(head -n 1 "$dead")"
+    [[ "$first" == "# Knowledge domains" || "$first" == "# Domains" ]] || return 0
+    rm -f "$dead"; echo "  - removed renamed index copy .claude/domains-index.md"
 }
 
 echo ""; echo "Optional skills index:"
@@ -657,17 +670,17 @@ else
 fi
 
 # --------------------------------------------------------------------------
-# Domains index — a flat catalog of the durable knowledge areas (knowledge/*)
+# Knowledge index — a flat catalog of the durable knowledge areas (knowledge/*)
 # --------------------------------------------------------------------------
-# Domains are root-only, unscoped content (no tiers, force, owner, or overlays), so
-# the index is a plain glob of knowledge/*/README.md — name + one-line summary from
-# each README's frontmatter. Auto-loaded like the tools index so the agent knows
-# which areas of *your* world it can draw on instead of answering cold; read the
-# domain's README before reasoning about it. A pure function of committed docs,
-# regenerated on every relink. (Empty in a checkout with no knowledge/.)
-echo ""; echo "Domains index:"
-DOMAINS_TSV="$(domains_resolve "$REPO_DIR")"
-if [[ -n "$DOMAINS_TSV" ]]; then
+# Knowledge domains are root-only, unscoped content (no tiers, force, owner, or
+# overlays), so the index is a plain glob of knowledge/*/README.md — name + one-line
+# summary from each README's frontmatter. Auto-loaded like the tools index so the
+# agent knows which areas of *your* world it can draw on instead of answering cold;
+# read the domain's README before reasoning about it. A pure function of committed
+# docs, regenerated on every relink. (Empty in a checkout with no knowledge/.)
+echo ""; echo "Knowledge index:"
+KNOWLEDGE_TSV="$(knowledge_resolve "$REPO_DIR")"
+if [[ -n "$KNOWLEDGE_TSV" ]]; then
     {
         cat <<'HEADER'
 # Knowledge domains
@@ -683,11 +696,11 @@ HEADER
             summary="$(frontmatter_field "$REPO_DIR/$path" summary)"
             summary="${summary//|/\\|}"
             printf '| %s | %s | %s |\n' "$name" "$path" "$summary"
-        done <<< "$DOMAINS_TSV"
-    } > "$DOMAINS_INDEX_FILE"
+        done <<< "$KNOWLEDGE_TSV"
+    } > "$KNOWLEDGE_INDEX_FILE"
     echo "  ✓ generated"
 else
-    rm -f "$DOMAINS_INDEX_FILE"
+    rm -f "$KNOWLEDGE_INDEX_FILE"
     echo "  SKIP (no knowledge/ in this checkout)"
 fi
 
@@ -715,8 +728,8 @@ compose_context() {
     if [[ -f "$TOOLS_INDEX_FILE" ]]; then
         echo "<!-- tools index -->"; echo ""; cat "$TOOLS_INDEX_FILE"; echo ""
     fi
-    if [[ -f "$DOMAINS_INDEX_FILE" ]]; then
-        echo "<!-- domains index -->"; echo ""; cat "$DOMAINS_INDEX_FILE"; echo ""
+    if [[ -f "$KNOWLEDGE_INDEX_FILE" ]]; then
+        echo "<!-- knowledge index -->"; echo ""; cat "$KNOWLEDGE_INDEX_FILE"; echo ""
     fi
 }
 
@@ -757,16 +770,17 @@ case "$AGENT" in
         # Claude is the one surface that reads the indexes as files: the manifest
         # @-imports them by name, so they need durable copies in the in-repo
         # (gitignored) .claude/ that travels with the checkout.
-        install_index "$INDEX_FILE"         "$TARGET_DIR/optional-skills.md" ".claude/optional-skills.md"
-        install_index "$TOOLS_INDEX_FILE"   "$TARGET_DIR/tools-index.md"     ".claude/tools-index.md"
-        install_index "$DOMAINS_INDEX_FILE" "$TARGET_DIR/domains-index.md"   ".claude/domains-index.md"
+        install_index "$INDEX_FILE"           "$TARGET_DIR/optional-skills.md" ".claude/optional-skills.md"
+        install_index "$TOOLS_INDEX_FILE"     "$TARGET_DIR/tools-index.md"     ".claude/tools-index.md"
+        install_index "$KNOWLEDGE_INDEX_FILE" "$TARGET_DIR/knowledge-index.md" ".claude/knowledge-index.md"
+        prune_renamed_claude_index
         {
             echo "@connected-scopes.md"
             # `if`, not `&& printf`: when an index is absent the trailing conditional
             # would return 1 and trip `set -e` at the `} > file` redirection.
             if [[ -f "$INDEX_FILE" ]]; then echo "@optional-skills.md"; fi
             if [[ -f "$TOOLS_INDEX_FILE" ]]; then echo "@tools-index.md"; fi
-            if [[ -f "$DOMAINS_INDEX_FILE" ]]; then echo "@domains-index.md"; fi
+            if [[ -f "$KNOWLEDGE_INDEX_FILE" ]]; then echo "@knowledge-index.md"; fi
         } > "$TARGET_DIR/CLAUDE.md"
         echo "  ✓ .claude/CLAUDE.md"
         # Supersedes the earlier single inlined file; drop one an old connect left behind.
