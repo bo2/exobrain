@@ -4,7 +4,7 @@
     { "name": "exobrain-evolve",          "owner": "maintainer", "tier": "optional", "force": true },
     { "name": "exobrain-authoring-audit", "owner": "maintainer", "tier": "optional", "force": true },
     { "name": "exobrain-persist",         "owner": "maintainer", "tier": "optional", "force": true },
-    { "name": "exobrain-domains",         "owner": "maintainer", "tier": "optional", "force": true },
+    { "name": "exobrain-knowledge",       "owner": "maintainer", "tier": "optional", "force": true },
     { "name": "exobrain-ab",              "owner": "maintainer", "tier": "optional", "force": true },
     { "name": "exobrain-tools",           "owner": "maintainer", "tier": "optional", "force": true },
     { "name": "exobrain-tests",           "owner": "maintainer", "tier": "optional", "force": true }

@@ -71,7 +71,7 @@ Physical skill directories at any scope, inert until declared in a `skills.json`
 | `scripts/fetch-external-skills.sh` | Fetch external (third-party) skills declared with `source`. |
 | optional-skills index *(generated)* | Index of optional-tier skills, read on demand — `.claude/optional-skills.md` (Claude), or inlined into `AGENTS.override.md` (Codex) / `~/.openclaw/workspace/USER.md` (OpenClaw). |
 
-Global skills the seed ships: `exobrain-ab`, `exobrain-authoring-audit`, `exobrain-domains`, `exobrain-evolve`, `exobrain-persist`, `exobrain-tests`, `exobrain-tools`.
+Global skills the seed ships: `exobrain-ab`, `exobrain-authoring-audit`, `exobrain-knowledge`, `exobrain-evolve`, `exobrain-persist`, `exobrain-tests`, `exobrain-tools`.
 
 ## Tools
 
@@ -94,7 +94,7 @@ The durable knowledge areas — see [`domains.md`](domains.md).
 |---|---|
 | `knowledge/*/README.md` | Each domain's entry point — frontmatter (`name`, `type`, `curator`, `summary`) + TL;DR + file index. The one-line `summary:` is pulled verbatim into the domains index. |
 | domains index *(generated)* | Flat catalog of every domain (name + README path + `summary:`), composed into each agent's surface like the tools index — `.claude/domains-index.md` (Claude), or inlined into `AGENTS.override.md` (Codex) / `~/.openclaw/workspace/USER.md` (OpenClaw). Root-only and unscoped (no tiers/overlays); a pure function of the committed READMEs, regenerated on relink. |
-| `exobrain-domains` skill | Builds and maintains domains (`create` / `distill` / `curate` / `update`), including setting and refreshing each README's `summary:`. |
+| `exobrain-knowledge` skill | Builds and maintains domains (`create` / `distill` / `curate` / `update`), including setting and refreshing each README's `summary:`. |
 
 ## Git workflow
 

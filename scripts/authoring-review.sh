@@ -37,9 +37,10 @@ BASE="${1:-origin/main}"
 # came from (AGENTS.md: links from anything that must stay current go stale silently).
 #
 # Exempt: person and host scopes (per scopes.json), external skills (`source`) and
-# overrides (`from`). Skills already declared at BASE are grandfathered, so adopting
-# this gate never flags an existing corpus. Skipped when BASE doesn't resolve —
-# degrading open like the rest of this script.
+# overrides (`from`). Skills already declared at BASE are grandfathered — under their
+# current name or the one they were renamed from — so adopting this gate never flags
+# an existing corpus and a rename is not read as a fresh declaration. Skipped when
+# BASE doesn't resolve — degrading open like the rest of this script.
 # ---------------------------------------------------------------------------
 
 # Scope collections that are personal rather than shared. Read from scopes.json so
@@ -83,6 +84,27 @@ check_new_skill() {   # $1 = name, $2 = scope label, $3 = skill dir (abs)
 if git -C "$REPO_DIR" rev-parse --verify --quiet "$BASE" >/dev/null 2>&1; then
     _decls='.skills[] | select((has("from") | not) and (has("source") | not)) | .name'
 
+    # A rename changes what a skill is called, not whose chain loads it, so a
+    # renamed skill inherits its old name's standing. Map <new>=<old> from git's
+    # rename detection over SKILL.md paths. The inheritance is granted per registry
+    # (below), so a skill MOVED from a person scope to a shared one — where the
+    # reach genuinely widens — is still gated.
+    _renames=" "
+    while IFS=$'\t' read -r _st _old _new; do
+        case "$_st" in R*) ;; *) continue ;; esac
+        _old="${_old#*skills/}"; _old="${_old%/SKILL.md}"
+        _new="${_new#*skills/}"; _new="${_new%/SKILL.md}"
+        _renames="$_renames$_new=$_old "
+    done < <(git -C "$REPO_DIR" diff --name-status --find-renames "$BASE...HEAD" \
+             -- '*SKILL.md' 2>/dev/null)
+
+    rename_src() {   # $1 = skill name at HEAD — echoes the name it was renamed from
+        local rec
+        for rec in $_renames; do
+            case "$rec" in "$1="*) printf '%s' "${rec#*=}"; return ;; esac
+        done
+    }
+
     # (i) Declarations present at HEAD but not at BASE — the authoritative signal:
     # a skill becomes shared the moment a shared scope's registry names it.
     while IFS= read -r sj; do
@@ -99,6 +121,11 @@ if git -C "$REPO_DIR" rev-parse --verify --quiet "$BASE" >/dev/null 2>&1; then
         while IFS= read -r nm; do
             [[ -n "$nm" ]] || continue
             printf '%s\n' "$base_decls" | grep -qxF -- "$nm" && continue
+            # Declared at BASE under its former name in THIS registry — grandfathered.
+            _from="$(rename_src "$nm")"
+            if [[ -n "$_from" ]] && printf '%s\n' "$base_decls" | grep -qxF -- "$_from"; then
+                continue
+            fi
             check_new_skill "$nm" "$scope_lbl" "$skills_dir/$nm"
         done <<< "$head_decls"
     done < <(git -C "$REPO_DIR" ls-files 'skills.json' '*/skills.json' 2>/dev/null)
@@ -116,7 +143,7 @@ if git -C "$REPO_DIR" rev-parse --verify --quiet "$BASE" >/dev/null 2>&1; then
                 sd="${f%/skills/*}"; nm="${f#*/skills/}"; nm="${nm%/SKILL.md}"
                 check_new_skill "$nm" "$sd" "$REPO_DIR/$sd/skills/$nm" ;;
         esac
-    done < <(git -C "$REPO_DIR" diff --name-only --diff-filter=A "$BASE...HEAD" 2>/dev/null \
+    done < <(git -C "$REPO_DIR" diff --name-only --find-renames --diff-filter=A "$BASE...HEAD" 2>/dev/null \
              | grep 'SKILL\.md$')
 fi
 
