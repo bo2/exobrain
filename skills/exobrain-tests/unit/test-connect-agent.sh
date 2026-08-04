@@ -352,9 +352,8 @@ test_codex_inlines_specs() {
 }
 
 # The indexes are build inputs for the composed surface, not deliverables: Codex
-# reads them inlined in the override, so nothing durable belongs in CODEX_HOME — a
-# shared dir two checkouts would overwrite, and which --render-specs-only must leave
-# untouched but for the memory-disable config.
+# reads them inlined in the override, so nothing belongs in CODEX_HOME — a shared
+# dir two checkouts would overwrite, and which the connector leaves untouched.
 test_codex_indexes_inlined_not_in_home() {
     local r; r="$(setup_fake_exobrain)"; add_person "$r" people/alice
     declare_skill "$r" global optme optional force
@@ -369,8 +368,8 @@ test_codex_indexes_inlined_not_in_home() {
     assert_contains "$a" "optme" "optional skill row inlined" || return 1
     assert_contains "$a" "github" "tool row inlined" || return 1
     assert_contains "$a" "health" "domain row inlined" || return 1
-    assert_eq "config.toml" "$(dir_listing "$TEST_DIR/codex")" \
-        "config.toml is the only thing written to CODEX_HOME"
+    assert_eq "" "$(dir_listing "$TEST_DIR/codex")" \
+        "nothing written to CODEX_HOME"
 }
 
 # COMPAT 0003 (remove after 2026-08-28) — an upgrading instance carries index copies
@@ -392,14 +391,15 @@ test_codex_prunes_legacy_home_indexes() {
 }
 
 # A render advertised as side-effect-free must refuse the one default that isn't:
-# codex/openclaw deliver into the real home config dir when the override is unset.
+# openclaw's USER.md and codex's legacy home-dir cleanups target the real home
+# config dir when the override is unset.
 test_render_codex_refuses_without_codex_home() {
     local r out; r="$(setup_fake_exobrain)"; add_person "$r" people/alice
     write_config "$r" people/alice/hosts/h1 codex
     out="$(cd "$r" && env "HOME=$TEST_DIR/hm" "CODEX_HOME=" "OPENCLAW_WORKSPACE=$TEST_DIR/ocw" \
         bash scripts/connect-agent.sh codex --render-specs-only 2>&1)" && { echo "should refuse"; return 1; }
     assert_contains "$out" "CODEX_HOME" "error names the override" || return 1
-    assert_no_file "$TEST_DIR/hm/.codex/config.toml" "nothing written to home config"
+    assert_no_file "$TEST_DIR/hm/.codex" "home config dir untouched"
 }
 
 test_render_openclaw_refuses_without_workspace() {

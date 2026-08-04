@@ -32,8 +32,8 @@
 # the target dir — no shell-profile edits, no sibling clones, no git hooks, no
 # connect marker. It lets a throwaway copy (a test sandbox, a CI checkout) be
 # wired exactly like a real checkout with zero global side effects. Codex's
-# AGENTS.override.md lands in the checkout itself; codex's config.toml and openclaw's
-# USER.md land in the CODEX_HOME / OPENCLAW_WORKSPACE copy dir, which a render
+# surface lands entirely in the checkout (AGENTS.override.md, .agents/skills);
+# openclaw's USER.md lands in the OPENCLAW_WORKSPACE copy dir, which a render
 # requires to be set — it refuses rather than default to the real home config.
 
 set -euo pipefail
@@ -396,14 +396,15 @@ case "$AGENT" in
               AGENT_SIDECAR="OPENCLAW.md"; AGENT_SIDECAR_BASE="OPENCLAW" ;;
 esac
 
-# --render-specs-only promises no writes outside the checkout, but codex and
-# openclaw deliver part of their surface into TARGET_DIR — the real home config
-# dir when the override isn't set. Refuse up front rather than write into the
-# home dir and call it a render.
+# --render-specs-only promises no writes outside the checkout, but openclaw
+# delivers part of its surface into TARGET_DIR — the real home config dir when
+# the override isn't set — and codex's legacy cleanups (COMPAT 0001/0002/0003)
+# prune connector-written files there. Refuse up front rather than touch the
+# home dir and call it a render. The codex arm retires with those shims.
 if $RENDER_ONLY; then
     case "$AGENT" in
         codex)    [[ -n "${CODEX_HOME:-}" ]] || {
-                      echo "--render-specs-only for codex writes config.toml into CODEX_HOME (default ~/.codex)." >&2
+                      echo "--render-specs-only for codex runs legacy home-dir cleanups against CODEX_HOME (default ~/.codex)." >&2
                       echo "Set CODEX_HOME to a throwaway dir first, e.g.: CODEX_HOME=\$(mktemp -d) $0 codex --render-specs-only" >&2
                       exit 1
                   } ;;
@@ -851,21 +852,6 @@ case "$AGENT" in
             echo "  - removed legacy exobrain block from $TARGET_DIR/AGENTS.md"
         fi
         prune_home_indexes
-
-        # Disable Codex project memory — exobrain supplies context via
-        # AGENTS.override.md, so Codex's separate memory layer just adds drift.
-        # Written to the user-level config.toml Codex always reads; idempotent.
-        mkdir -p "$TARGET_DIR"
-        codex_cfg="$TARGET_DIR/config.toml"
-        if grep -q 'use_memories' "$codex_cfg" 2>/dev/null; then
-            echo "  ✓ config.toml already sets use_memories (left as-is)"
-        elif grep -q '^\[memories\]' "$codex_cfg" 2>/dev/null; then
-            echo "  ! $codex_cfg has a [memories] table without use_memories — add 'use_memories = false' to disable Codex memory"
-        else
-            { echo ""; echo "# Disable Codex project memory — exobrain supplies context via AGENTS.override.md."
-              echo "[memories]"; echo "use_memories = false"; } >> "$codex_cfg"
-            echo "  ✓ Codex memory disabled in $codex_cfg"
-        fi
         ;;
     openclaw)
         # OpenClaw has no import primitive and auto-loads the root AGENTS.md but not
@@ -890,10 +876,10 @@ esac
 
 # --render-specs-only stops here. Everything above writes only inside the checkout
 # (the in-repo .claude surface, or the in-repo AGENTS.override.md for codex) or a
-# *_HOME-overridden copy dir (codex's config.toml, openclaw's USER.md — the guard at
-# TARGET_DIR selection refuses a render without the override); the connect marker and
-# git hooks below are the first writes outside it. Truncating here — not forking a
-# parallel render path — keeps the rendered surface identical to a full connect.
+# *_HOME-overridden copy dir (openclaw's USER.md — the guard at TARGET_DIR selection
+# refuses a render without the override); the connect marker and git hooks below are
+# the first writes outside it. Truncating here — not forking a parallel render
+# path — keeps the rendered surface identical to a full connect.
 if $RENDER_ONLY; then
     echo ""; echo "✓ Rendered $AGENT context surface (no out-of-dir writes)."
     exit 0
