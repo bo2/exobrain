@@ -156,6 +156,18 @@ render_flags() {
         "OPENCLAW_WORKSPACE=$TEST_DIR/ocw" bash scripts/connect-agent.sh "$agent" --render-specs-only "$@")
 }
 
+# connect <repo> <agent> [flag...] — a real connect (writes the marker and the
+# repo's own git hooks), HOME-isolated. Non-interactive, so no config means guest.
+connect() {
+    local repo="$1" agent="$2"; shift 2
+    mkdir -p "$TEST_DIR/home" "$TEST_DIR/codex" "$TEST_DIR/ocw"
+    (cd "$repo" && env "HOME=$TEST_DIR/home" "CODEX_HOME=$TEST_DIR/codex" \
+        "OPENCLAW_WORKSPACE=$TEST_DIR/ocw" bash scripts/connect-agent.sh "$agent" "$@")
+}
+
+# relink <repo> <agent> — what the post-merge hook runs for each agent in turn.
+relink() { connect "$1" "$2" --relink; }
+
 # resolve <repo> <leaf> — TSV of resolved skills (empty agent = no filtering).
 resolve() { skills_resolve "$1" "" "$2"; }
 # tier of <name> in resolved TSV, or "ABSENT".
@@ -533,6 +545,52 @@ test_knowledge_index_empty_skip() {
 }
 
 # ---------------------------------------------------------------------------
+# Tests — connect marker / --relink gating
+# ---------------------------------------------------------------------------
+
+# fresh_clone_claude_dir <repo> — the shape every clone has before anyone
+# connects: .claude/ exists because settings.json is committed, nothing else.
+fresh_clone_claude_dir() {
+    mkdir -p "$1/.claude"
+    printf '{"hooks":{}}\n' > "$1/.claude/settings.json"
+}
+
+# The post-merge hook relinks all three agents and leans entirely on this guard,
+# so a marker a clone carries for free would connect an agent nobody chose.
+test_relink_skips_unconnected_claude() {
+    local r; r="$(setup_fake_exobrain)"; add_person "$r" people/alice
+    write_config "$r" people/alice/hosts/h1
+    fresh_clone_claude_dir "$r"
+    relink "$r" claude >/dev/null 2>&1 || return 1
+    assert_eq "settings.json" "$(dir_listing "$r/.claude")" "relink wrote nothing into .claude/" || return 1
+    assert_no_file "$r/.git/hooks/post-merge" "a skipped relink installs no hooks"
+}
+
+test_relink_skips_unconnected_file_marker_agents() {
+    local r; r="$(setup_fake_exobrain)"; add_person "$r" people/alice
+    write_config "$r" people/alice/hosts/h1
+    relink "$r" codex >/dev/null 2>&1 || return 1
+    relink "$r" openclaw >/dev/null 2>&1 || return 1
+    assert_no_file "$r/AGENTS.override.md" "codex surface absent without a marker" || return 1
+    assert_no_file "$r/.agents/skills" "codex skills unlinked without a marker" || return 1
+    assert_eq "" "$(dir_listing "$TEST_DIR/codex")" "nothing written to CODEX_HOME" || return 1
+    assert_eq "" "$(dir_listing "$TEST_DIR/ocw")" "nothing written to OPENCLAW_WORKSPACE"
+}
+
+# The other half: once connected, a relink must still refresh the surface.
+test_relink_refreshes_connected_claude() {
+    local r; r="$(setup_fake_exobrain)"; add_person "$r" people/alice
+    write_config "$r" people/alice/hosts/h1
+    fresh_clone_claude_dir "$r"
+    connect "$r" claude >/dev/null 2>&1 || return 1
+    assert_file "$r/.claude/CLAUDE.md" "connect writes the marker" || return 1
+    rm -f "$r/.claude/connected-scopes.md"
+    relink "$r" claude >/dev/null 2>&1 || return 1
+    assert_file "$r/.claude/connected-scopes.md" "relink regenerated the surface" || return 1
+    assert_file "$r/.git/hooks/post-merge" "relink refreshed the hooks"
+}
+
+# ---------------------------------------------------------------------------
 # Tests — validator
 # ---------------------------------------------------------------------------
 
@@ -676,6 +734,9 @@ run_test "knowledge index (claude)"              test_knowledge_index_claude
 run_test "renamed index copy pruned"             test_claude_prunes_renamed_index
 run_test "knowledge index empty -> skip"         test_knowledge_index_empty_skip
 run_test "stale claude index cleared"          test_claude_index_removed_when_source_goes
+run_test "relink skips unconnected claude"     test_relink_skips_unconnected_claude
+run_test "relink skips unconnected codex/oc"   test_relink_skips_unconnected_file_marker_agents
+run_test "relink refreshes connected claude"   test_relink_refreshes_connected_claude
 run_test "validate clean"                      test_validate_clean
 run_test "validate dangling override"          test_validate_dangling_override
 run_test "fetcher accepts --leaves"            test_fetcher_accepts_leaves_no_external
