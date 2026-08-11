@@ -387,12 +387,16 @@ if ! command -v jq >/dev/null 2>&1; then
     exit 1
 fi
 
+# Each agent's connect marker is a file this script generates — proof a human
+# connected that agent here. Claude's is its composed surface, not the .claude/
+# directory: that directory ships in every clone (the committed settings.json),
+# so its presence proves nothing. The healthcheck tests the same paths.
 case "$AGENT" in
-    claude)   MARKER="$REPO_DIR/.claude";   MARKER_IS_DIR=true;  TARGET_DIR="$REPO_DIR/.claude"
+    claude)   MARKER="$REPO_DIR/.claude/CLAUDE.md"; TARGET_DIR="$REPO_DIR/.claude"
               AGENT_SIDECAR="CLAUDE.md";   AGENT_SIDECAR_BASE="CLAUDE" ;;
-    codex)    MARKER="$REPO_DIR/.codex";    MARKER_IS_DIR=false; TARGET_DIR="${CODEX_HOME:-$HOME/.codex}"
+    codex)    MARKER="$REPO_DIR/.codex";    TARGET_DIR="${CODEX_HOME:-$HOME/.codex}"
               AGENT_SIDECAR="CODEX.md";    AGENT_SIDECAR_BASE="CODEX" ;;
-    openclaw) MARKER="$REPO_DIR/.openclaw"; MARKER_IS_DIR=false; TARGET_DIR="${OPENCLAW_WORKSPACE:-$HOME/.openclaw/workspace}"
+    openclaw) MARKER="$REPO_DIR/.openclaw"; TARGET_DIR="${OPENCLAW_WORKSPACE:-$HOME/.openclaw/workspace}"
               AGENT_SIDECAR="OPENCLAW.md"; AGENT_SIDECAR_BASE="OPENCLAW" ;;
 esac
 
@@ -429,7 +433,7 @@ SKILLS_OPTIONAL_DIR="$(dirname "$SKILLS_DIR")/skills-optional"
 
 # On --relink, do nothing unless this agent has a marker (the user connected it).
 if $RELINK; then
-    if $MARKER_IS_DIR; then [[ -d "$MARKER" ]] || exit 0; else [[ -e "$MARKER" ]] || exit 0; fi
+    [[ -e "$MARKER" ]] || exit 0
 fi
 
 # --------------------------------------------------------------------------
@@ -893,7 +897,7 @@ fi
 # --------------------------------------------------------------------------
 
 if ! $RELINK; then
-    if $MARKER_IS_DIR; then mkdir -p "$MARKER"; else touch "$MARKER"; fi
+    mkdir -p "$(dirname "$MARKER")"; touch "$MARKER"
 fi
 install_hook
 

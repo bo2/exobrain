@@ -8,11 +8,13 @@ For the skill-loading side of the same machinery, see [`skills.md`](skills.md).
 
 | Agent | CLI | Marker (in repo) | Per-user config dir |
 |---|---|---|---|
-| **Claude Code** | `claude` | `.claude/` (directory) | `~/.claude/` |
-| **OpenClaw** | `openclaw` | `.openclaw` (file) | `~/.openclaw/workspace/` |
-| **Codex** | `codex` | `.codex` (file) | `~/.codex/` |
+| **Claude Code** | `claude` | `.claude/CLAUDE.md` | `~/.claude/` |
+| **OpenClaw** | `openclaw` | `.openclaw` | `~/.openclaw/workspace/` |
+| **Codex** | `codex` | `.codex` | `~/.codex/` |
 
 The marker tells `connect-agent.sh` *"this user wants this agent connected here."* The post-merge git hook re-links each agent that has a marker; agents without one are silently skipped.
+
+Every marker is a **gitignored file the connector generates** — a path that exists only because a human connected this agent in this checkout. That rules out `.claude/`: the directory ships in every clone (it carries the committed `settings.json`), so its presence would pass the check in a checkout nobody ever connected. Claude's composed surface, written on every connect and relink, is the honest signal. `connect-agent.sh` and `exobrain-healthcheck.sh` test the same three paths.
 
 ## Universal-by-default
 

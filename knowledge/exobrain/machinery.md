@@ -16,7 +16,7 @@ The `connect-agent.sh` ecosystem wires repo content into each agent's context �
 | `.claude/optional-skills.md` *(generated)* | The Claude-filtered optional-skills index. |
 | `AGENTS.override.md` *(generated, Codex)* | Codex surface — the full composition (root `AGENTS.md` + root sidecar + deeper-scope specs + index) written to an in-repo, gitignored `AGENTS.override.md`, which Codex reads natively and which outranks `AGENTS.md` at the same directory level (so it must carry the root spec too). |
 | `~/.openclaw/workspace/USER.md` *(generated)* | OpenClaw surface — the same composed context inlined between markers, since OpenClaw has no `@-import` primitive. |
-| `.claude/` · `.codex` · `.openclaw` | Per-agent markers — which agents this checkout connects. `--relink` silently skips agents without a marker. |
+| `.claude/CLAUDE.md` · `.codex` · `.openclaw` | Per-agent markers (generated, gitignored) — which agents this checkout connects. `--relink` silently skips agents without a marker. |
 | `.exobrain.json` *(gitignored)* | Saved config: `connected` scope leaves, `agents`, per-tool state. |
 | `.agents/skills/` *(generated, Codex)* | Repo-local Codex skills dir (real dir, symlinked children) — keeps exobrain skills out of the global `~/.codex/skills`. |
 | `scripts/skills-registry.sh` · `scripts/fetch-external-skills.sh` | Sourced/invoked by the connector — see § Skills system. |
