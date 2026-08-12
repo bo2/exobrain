@@ -168,6 +168,53 @@ connect() {
 # relink <repo> <agent> — what the post-merge hook runs for each agent in turn.
 relink() { connect "$1" "$2" --relink; }
 
+# drive_wizard <repo> <answer>|<answer>|… — run the connector's interactive setup
+# under a pty and feed one answer each time it falls quiet; prints the transcript.
+# The wizard reads /dev/tty and gates on `-t 0 && -t 1`, so a terminal is the only
+# way to reach its prompts at all. python3 supplies the pty; cases self-skip when
+# it is absent, keeping the suite runnable on bash + jq alone. `--configure`
+# performs a real connect, contained to the temp repo and the temp HOME.
+drive_wizard() {
+    local repo="$1" answers="$2"
+    mkdir -p "$TEST_DIR/home" "$TEST_DIR/codex" "$TEST_DIR/ocw"
+    cat > "$TEST_DIR/drive.py" <<'PY'
+import os, pty, select, sys, time
+answers = os.environ["ANSWERS"].split("|")
+pid, fd = pty.fork()
+if pid == 0:
+    os.execv(sys.argv[1], sys.argv[1:])
+out, i, deadline = b"", 0, time.time() + 30
+while time.time() < deadline:
+    ready, _, _ = select.select([fd], [], [], 0.4)
+    if ready:
+        try:
+            chunk = os.read(fd, 4096)
+        except OSError:      # the child closed the pty — it exited
+            break
+        if not chunk:
+            break
+        out += chunk
+    elif i < len(answers):   # quiet: it is waiting on the next prompt
+        os.write(fd, (answers[i] + "\n").encode()); i += 1
+    else:
+        break
+os.close(fd); os.waitpid(pid, 0)
+sys.stdout.write(out.decode(errors="replace").replace("\r\n", "\n"))
+PY
+    env "HOME=$TEST_DIR/home" "CODEX_HOME=$TEST_DIR/codex" \
+        "OPENCLAW_WORKSPACE=$TEST_DIR/ocw" "ANSWERS=$answers" \
+        python3 "$TEST_DIR/drive.py" "$repo/scripts/connect-agent.sh" claude --configure 2>/dev/null
+}
+
+# wizard_fixture — two people, so the scope menu always has an unchecked last row
+# (zoe's host sorts last, and only the connecting person's pair is pre-checked).
+wizard_fixture() {
+    local repo; repo="$(setup_fake_exobrain)"
+    add_person "$repo" people/alice; add_person "$repo" people/zoe
+    git -C "$repo" config user.email dev@example.com
+    echo "$repo"
+}
+
 # resolve <repo> <leaf> — TSV of resolved skills (empty agent = no filtering).
 resolve() { skills_resolve "$1" "" "$2"; }
 # tier of <name> in resolved TSV, or "ABSENT".
@@ -181,6 +228,24 @@ test_scope_chain_shallow_to_deep() {
     local r; r="$(setup_fake_exobrain)"; add_group "$r" acme; add_person "$r" groups/acme/people/alice
     local chain; chain="$(build_scope_chain "$r" groups/acme/people/alice/hosts/h1 | tr '\n' ' ')"
     assert_eq "global groups/acme groups/acme/people/alice groups/acme/people/alice/hosts/h1 " "$chain" "chain shallow->deep"
+}
+
+# ---------------------------------------------------------------------------
+# Tests — the setup wizard, driven over a pty
+# ---------------------------------------------------------------------------
+
+# Regression: the scope menu's last row is unchecked here (zoe's host). A
+# selection loop that ends on a false test returns non-zero, and as a function's
+# last command that aborted the whole wizard under `set -e` — after the human had
+# answered every prompt, and before save_config, so nothing was written.
+test_wizard_completes_with_unchecked_last_row() {
+    command -v python3 >/dev/null 2>&1 || { echo "SKIP: python3 unavailable"; return 0; }
+    local r t; r="$(wizard_fixture)"
+    t="$(drive_wizard "$r" 'alice|h1|')"
+    assert_contains "$t" "✓ Connected claude." "the connect runs to completion" || { echo "$t"; return 1; }
+    assert_file "$r/.exobrain.json" "config is written" || return 1
+    assert_eq "people/alice,people/alice/hosts/h1" \
+        "$(jq -r '.connected_scopes | join(",")' "$r/.exobrain.json")" "person + host connected, zoe's left out"
 }
 
 # ---------------------------------------------------------------------------
@@ -727,6 +792,7 @@ test_seed_scope_in_manifest() {
 # ---------------------------------------------------------------------------
 
 run_test "scope chain shallow->deep"          test_scope_chain_shallow_to_deep
+run_test "wizard completes, last row unchecked" test_wizard_completes_with_unchecked_last_row
 run_test "hooks install into repo, other cwd" test_hooks_install_into_repo_from_other_cwd
 run_test "force reaches non-owner"             test_force_reaches_nonowner
 run_test "owner-gated off for others"          test_owner_gated_off_for_others

@@ -263,7 +263,12 @@ multi_select() {
     declare -A checked=()
     for i in "${items[@]}"; do checked["$i"]=0; done
     IFS=',' read -r -a _pre <<< "$preselect"
-    for p in ${_pre[@]+"${_pre[@]}"}; do [[ -n "$p" ]] && checked["$p"]=1; done
+    # `if` blocks, not a trailing `[[ … ]] && …`: a loop whose final iteration tests
+    # false ends non-zero, and a loop that closes a function's body hands that status
+    # to a `set -e` caller — which aborts the wizard. Same reason below.
+    for p in ${_pre[@]+"${_pre[@]}"}; do
+        if [[ -n "$p" ]]; then checked["$p"]=1; fi
+    done
     while true; do
         echo "" >/dev/tty
         echo "Scopes to connect (type a number to toggle, Enter to accept):" >/dev/tty
@@ -284,7 +289,9 @@ multi_select() {
         fi
     done
     SELECTED=()
-    for i in "${items[@]}"; do [[ "${checked[$i]}" == 1 ]] && SELECTED+=("$i"); done
+    for i in "${items[@]}"; do
+        if [[ "${checked[$i]}" == 1 ]]; then SELECTED+=("$i"); fi
+    done
 }
 
 # run_wizard — interactive first-time setup. Prompt for handle + host, resolve and
@@ -317,7 +324,9 @@ run_wizard() {
     CONNECTED_LEAVES=( ${SELECTED[@]+"${SELECTED[@]}"} )
     # Keep the person id only if the person scope was actually connected.
     PERSON_ID=""
-    for s in ${SELECTED[@]+"${SELECTED[@]}"}; do [[ "$s" == "$PERSON_PATH" ]] && PERSON_ID="$id"; done
+    for s in ${SELECTED[@]+"${SELECTED[@]}"}; do
+        if [[ "$s" == "$PERSON_PATH" ]]; then PERSON_ID="$id"; fi
+    done
     save_config
 }
 
