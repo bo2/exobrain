@@ -500,7 +500,10 @@ GUEST_MODE=false
 # keep going — its AGENTS.md-bearing ancestors still wire in.
 for leaf in "${CONNECTED_LEAVES[@]:-}"; do
     [[ -z "$leaf" ]] && continue
-    [[ -f "$REPO_DIR/$leaf/AGENTS.md" ]] || echo "  ! connected leaf '$leaf' has no AGENTS.md (not a scope) — using its scope ancestors only"
+    if [[ ! -f "$REPO_DIR/$leaf/AGENTS.md" ]]; then
+        echo "  ! connected leaf '$leaf' has no AGENTS.md (not a scope) — using its scope ancestors only"
+        echo "    renamed or removed? re-run identity setup: scripts/connect-agent.sh $AGENT --configure"
+    fi
 done
 
 echo "Agent:     $AGENT"
