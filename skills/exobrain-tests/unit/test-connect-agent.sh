@@ -184,6 +184,23 @@ test_scope_chain_shallow_to_deep() {
 }
 
 # ---------------------------------------------------------------------------
+# Tests — git hooks
+# ---------------------------------------------------------------------------
+
+# The hooks are the only thing keeping a checkout's surface fresh after a pull, and
+# install_hook locates them through git's --git-common-dir, which answers relative
+# to the repo. Resolved against the caller's cwd instead, the hooks land wherever
+# the human was standing and the repo silently gets none.
+test_hooks_install_into_repo_from_other_cwd() {
+    local r; r="$(setup_fake_exobrain)"; add_person "$r" people/alice
+    mkdir -p "$TEST_DIR/elsewhere" "$TEST_DIR/home"
+    (cd "$TEST_DIR/elsewhere" && env "HOME=$TEST_DIR/home" \
+        bash "$r/scripts/connect-agent.sh" claude --handle alice --host h1) >/dev/null 2>&1 || return 1
+    assert_file "$r/.git/hooks/post-merge" "hooks installed in the repo" || return 1
+    assert_no_file "$TEST_DIR/elsewhere/.git" "nothing created in the caller's cwd"
+}
+
+# ---------------------------------------------------------------------------
 # Tests — opt-in resolution (force / owner / override / deepest / off)
 # ---------------------------------------------------------------------------
 
@@ -710,6 +727,7 @@ test_seed_scope_in_manifest() {
 # ---------------------------------------------------------------------------
 
 run_test "scope chain shallow->deep"          test_scope_chain_shallow_to_deep
+run_test "hooks install into repo, other cwd" test_hooks_install_into_repo_from_other_cwd
 run_test "force reaches non-owner"             test_force_reaches_nonowner
 run_test "owner-gated off for others"          test_owner_gated_off_for_others
 run_test "owner-match enables for owner"       test_owner_match_enables_for_owner

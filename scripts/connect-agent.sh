@@ -90,7 +90,12 @@ inject_block() {
 install_hook() {
     echo ""; echo "Installing git hooks..."
     local hooks_dir hook_tmp
-    hooks_dir="$(git -C "$REPO_DIR" rev-parse --git-common-dir)/hooks"
+    # --git-common-dir answers relative to the repo, so anchor it there: resolved
+    # against the caller's cwd instead, a connect run from outside the checkout
+    # writes its hooks into whatever directory the human happened to be standing in.
+    hooks_dir="$(git -C "$REPO_DIR" rev-parse --git-common-dir)"
+    [[ "$hooks_dir" == /* ]] || hooks_dir="$REPO_DIR/$hooks_dir"
+    hooks_dir="$hooks_dir/hooks"
     mkdir -p "$hooks_dir"
 
     # Re-link after pulling new commits. `post-merge` fires on `git pull`
