@@ -176,6 +176,26 @@ if [[ -d "$REPO_DIR/seed/feed" ]]; then
 fi
 
 # ---------------------------------------------------------------------------
+# Shell portability — framework scripts ship into every instance and run under
+# whatever `#!/usr/bin/env bash` resolves to, which on macOS is the stock 3.2 at
+# /bin/bash whenever a newer Homebrew bash isn't first on PATH. Three bash-4-only
+# constructs recur; a published rule alone did not keep them out, so they are
+# checked. Comment lines are exempt (the rule is discussed in prose), as is a
+# script that opts out with `# exobrain-allow-bash4` and says why.
+# ---------------------------------------------------------------------------
+
+while IFS= read -r f; do
+    [[ -n "$f" ]] || continue
+    grep -qF 'exobrain-allow-bash4' "$f" 2>/dev/null && continue
+    rel="${f#"$REPO_DIR"/}"
+    while IFS= read -r hit; do
+        [[ -n "$hit" ]] || continue
+        record "bash 4 construct in $rel:${hit%%:*} — macOS ships bash 3.2; see seed/feed/0061"
+    done < <(grep -nE '(^|[;&|(`]|[[:space:]])(mapfile|readarray)[[:space:]]|declare[[:space:]]+-A' "$f" 2>/dev/null \
+             | grep -vE '^[0-9]+:[[:space:]]*#')
+done < <(find_repo -type f -name '*.sh' -not -path '*/_raw/*')
+
+# ---------------------------------------------------------------------------
 # Compatibility-shim ledger — transitional code carries a `COMPAT <id> (remove
 # after <date>)` marker at the code site and a row in knowledge/exobrain/compat.md.
 # Checked both ways: a row's files must carry its marker, and every marked file must

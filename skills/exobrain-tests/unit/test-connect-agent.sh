@@ -830,6 +830,28 @@ test_validate_clean() {
     assert_eq "0" "$?" "valid registry passes validation"
 }
 
+# The portability gate. A published rule did not keep bash-4 constructs out of the
+# framework, so the constructs themselves are checked — while the prose that
+# discusses them stays writable.
+test_validate_flags_bash4_constructs() {
+    local r; r="$(setup_fake_exobrain)"; add_person "$r" people/alice
+    cp "$SCRIPTS_DIR/validate-exobrain.sh" "$r/scripts/"
+    printf '#!/usr/bin/env bash\ndeclare -A m=()\n# a comment naming mapfile and declare -A\n' \
+        > "$r/scripts/probe.sh"
+    local o; o="$(cd "$r" && bash scripts/validate-exobrain.sh 2>&1)"
+    assert_contains "$o" "bash 4 construct in scripts/probe.sh:2" "flagged with its line" || return 1
+    assert_not_contains "$o" "scripts/probe.sh:3" "a comment mentioning one is not flagged"
+}
+
+test_validate_bash4_optout_honored() {
+    local r; r="$(setup_fake_exobrain)"; add_person "$r" people/alice
+    cp "$SCRIPTS_DIR/validate-exobrain.sh" "$r/scripts/"
+    printf '#!/usr/bin/env bash\n# exobrain-allow-bash4 — deliberately bash 4 only\nmapfile -t a < <(echo hi)\n' \
+        > "$r/scripts/probe.sh"
+    local o; o="$(cd "$r" && bash scripts/validate-exobrain.sh 2>&1)"
+    assert_not_contains "$o" "bash 4 construct" "an opted-out script is skipped"
+}
+
 test_validate_dangling_override() {
     local r; r="$(setup_fake_exobrain)"; add_person "$r" people/alice
     override_skill "$r" people/alice ghost global always   # no 'ghost' declaration anywhere
@@ -983,6 +1005,8 @@ run_test "relink skips unconnected claude"     test_relink_skips_unconnected_cla
 run_test "relink skips unconnected codex/oc"   test_relink_skips_unconnected_file_marker_agents
 run_test "relink refreshes connected claude"   test_relink_refreshes_connected_claude
 run_test "validate clean"                      test_validate_clean
+run_test "validate flags bash 4 constructs"    test_validate_flags_bash4_constructs
+run_test "validate honors bash 4 opt-out"      test_validate_bash4_optout_honored
 run_test "validate dangling override"          test_validate_dangling_override
 run_test "fetcher accepts --leaves"            test_fetcher_accepts_leaves_no_external
 run_test "external resolve plan"               test_external_resolve_plan
