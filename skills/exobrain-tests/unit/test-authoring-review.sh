@@ -162,6 +162,36 @@ test_renamed_shared_skill_grandfathered() {
     assert_eq 0 "$rc" "a renamed shared skill does not trip the proof gate" || { echo "$o"; return 1; }
 }
 
+# The rename that rewords as it moves. A skill renamed *and* substantially
+# rewritten leaves its SKILL.md below git's similarity threshold, so the one file
+# that would prove the rename is exactly the one that fails to pair. A sibling
+# file carried across is the same evidence, and the gate has to accept it —
+# otherwise "rename a shared skill freely" holds only for renames that change
+# nothing else.
+test_reworded_rename_grandfathered() {
+    local r; r="$(setup_skill_repo)"; make_fake_engine
+    printf 'Shared reference text that pairs cleanly across the rename.\n' \
+        > "$r/skills/demo-alpha/reference.md"
+    git -C "$r" add -A; git -C "$r" commit -q -m sibling --no-gpg-sign
+    git -C "$r" branch -f base HEAD
+
+    git -C "$r" mv skills/demo-alpha skills/demo-beta
+    # Rewrite the doc past recognition; only the sibling still pairs.
+    printf -- '---\nname: demo-beta\ndescription: "Wholly different prose."\n---\n\n# demo-beta\n\n%s\n' \
+        "$(for i in 1 2 3 4 5 6 7 8; do echo "Unrelated paragraph $i about something else entirely."; done)" \
+        > "$r/skills/demo-beta/SKILL.md"
+    declare_skills "$r" demo-beta
+    git -C "$r" add -A; git -C "$r" commit -q -m rename --no-gpg-sign
+
+    assert_eq "A" "$(git -C "$r" diff --name-status --find-renames base...HEAD -- '*SKILL.md' \
+        | awk '$2 ~ /demo-beta/ {print substr($1,1,1)}')" \
+        "fixture is honest: the SKILL.md itself does not pair" || return 1
+
+    local o rc
+    o="$(run_review "$r" "AUTHORING-OK" 2>&1)" && rc=0 || rc=$?
+    assert_eq 0 "$rc" "a reworded rename is grandfathered via its sibling files" || { echo "$o"; return 1; }
+}
+
 # The counterpart guard: grandfathering a rename must not blunt the gate for a
 # genuinely new, unproven shared skill.
 test_new_shared_skill_still_blocked() {
@@ -184,6 +214,7 @@ echo ""; echo "${BOLD}authoring-review.sh test suite${RESET}"; echo ""
 run_test "proxy env stripped from engine call"  test_proxy_stripped_from_engine
 run_test "reported violation exits non-zero"    test_violation_exits_nonzero
 run_test "renamed shared skill grandfathered"   test_renamed_shared_skill_grandfathered
+run_test "reworded rename grandfathered"        test_reworded_rename_grandfathered
 run_test "new unproven shared skill blocked"    test_new_shared_skill_still_blocked
 
 echo ""; echo "─────────────────────────────────────────────"

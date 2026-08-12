@@ -101,23 +101,45 @@ if git -C "$REPO_DIR" rev-parse --verify --quiet "$BASE" >/dev/null 2>&1; then
 
     # A rename changes what a skill is called, not whose chain loads it, so a
     # renamed skill inherits its old name's standing. Map <new>=<old> from git's
-    # rename detection over SKILL.md paths. The inheritance is granted per registry
-    # (below), so a skill MOVED from a person scope to a shared one — where the
-    # reach genuinely widens — is still gated.
+    # rename detection over every file under a skills/ dir, not SKILL.md alone: a
+    # rename that also rewords the doc can fall under git's similarity threshold,
+    # and then the one file that would prove the rename is the one that fails to
+    # pair. Any file carried from the old skill dir to the new one is the same
+    # evidence. The inheritance is granted per registry (below), so a skill MOVED
+    # from a person scope to a shared one — where the reach genuinely widens — is
+    # still gated.
     _renames=" "
+    _skill_seg() {   # $1 = repo-relative path under a skills/ dir — echoes the skill name
+        local p="$1"
+        case "$p" in skills/*|*/skills/*) ;; *) return 1 ;; esac
+        p="${p#*skills/}"
+        printf '%s' "${p%%/*}"
+    }
     while IFS=$'\t' read -r _st _old _new; do
         case "$_st" in R*) ;; *) continue ;; esac
-        _old="${_old#*skills/}"; _old="${_old%/SKILL.md}"
-        _new="${_new#*skills/}"; _new="${_new%/SKILL.md}"
+        _old="$(_skill_seg "$_old")" || continue
+        _new="$(_skill_seg "$_new")" || continue
+        [[ -n "$_old" && -n "$_new" && "$_old" != "$_new" ]] || continue
+        case "$_renames" in *" $_new=$_old "*) continue ;; esac
         _renames="$_renames$_new=$_old "
     done < <(git -C "$REPO_DIR" diff --name-status --find-renames "$BASE...HEAD" \
-             -- '*SKILL.md' 2>/dev/null)
+             -- '*skills/*' 2>/dev/null)
 
     rename_src() {   # $1 = skill name at HEAD — echoes the name it was renamed from
         local rec
         for rec in $_renames; do
             case "$rec" in "$1="*) printf '%s' "${rec#*=}"; return ;; esac
         done
+    }
+
+    # renamed_from_declared <registry path> <name at HEAD> — 0 when the name is a
+    # rename of one THIS registry already declared at BASE. Per-registry, so a
+    # person→shared move (a path rename that does widen reach) still faces the gate.
+    renamed_from_declared() {
+        local from; from="$(rename_src "$2")"
+        [[ -n "$from" ]] || return 1
+        git -C "$REPO_DIR" show "$BASE:$1" 2>/dev/null | jq -r "$_decls" 2>/dev/null \
+            | grep -qxF -- "$from"
     }
 
     # (i) Declarations present at HEAD but not at BASE — the authoritative signal:
@@ -146,16 +168,20 @@ if git -C "$REPO_DIR" rev-parse --verify --quiet "$BASE" >/dev/null 2>&1; then
     done < <(git -C "$REPO_DIR" ls-files 'skills.json' '*/skills.json' 2>/dev/null)
 
     # (ii) Newly added SKILL.md files — belt-and-suspenders for a skill dropped in a
-    # shared scope's skills/ whose declaration lands in a later commit.
+    # shared scope's skills/ whose declaration lands in a later commit. A rename that
+    # reworded the doc arrives here as an addition (the doc missed git's similarity
+    # threshold), so this path consults the rename map exactly as (i) does.
     while IFS= read -r f; do
         [[ -n "$f" ]] || continue
         is_personal_path "$f" && continue
         case "$f" in
             skills/*/SKILL.md)
                 nm="${f#skills/}"; nm="${nm%/SKILL.md}"
+                renamed_from_declared "skills.json" "$nm" && continue
                 check_new_skill "$nm" "global" "$REPO_DIR/skills/$nm" ;;
             */skills/*/SKILL.md)
                 sd="${f%/skills/*}"; nm="${f#*/skills/}"; nm="${nm%/SKILL.md}"
+                renamed_from_declared "$sd/skills.json" "$nm" && continue
                 check_new_skill "$nm" "$sd" "$REPO_DIR/$sd/skills/$nm" ;;
         esac
     done < <(git -C "$REPO_DIR" diff --name-only --find-renames --diff-filter=A "$BASE...HEAD" 2>/dev/null \
