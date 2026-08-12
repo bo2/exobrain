@@ -929,4 +929,39 @@ if ! $RELINK; then
 fi
 install_hook
 
+# --------------------------------------------------------------------------
+# Scope hooks — a connected scope extending the connect with its own setup
+# --------------------------------------------------------------------------
+# Each scope in the chain carrying an executable scripts/connect-agent.sh (every
+# agent) or scripts/connect-agent.<agent>.sh (that agent alone) gets it run,
+# shallow→deep, as: <hook> <agent> <target-dir> <scope-dir>. Both run when both
+# exist, universal first. The global scope is skipped — its scripts/connect-agent.sh
+# is this connector, so running it as a hook would recurse.
+#
+# They run below the --render-specs-only cutoff because a hook is arbitrary code
+# with its own write surface, and a render promises none. A failing hook is
+# reported with its output and the connect carries on: one scope's extra must not
+# cost the human their wiring.
+run_scope_hooks() {
+    local scope hook output line status announced=false
+    for scope in ${CHAIN[@]+"${CHAIN[@]}"}; do
+        if [[ "$scope" == "global" ]]; then continue; fi
+        for hook in "$REPO_DIR/$scope/scripts/connect-agent.sh" \
+                    "$REPO_DIR/$scope/scripts/connect-agent.$AGENT.sh"; do
+            [[ -x "$hook" ]] || continue
+            if ! $announced; then echo ""; echo "Scope hooks:"; announced=true; fi
+            output="$("$hook" "$AGENT" "$TARGET_DIR" "$REPO_DIR/$scope" 2>&1)" && status=0 || status=$?
+            if [[ $status -eq 0 ]]; then
+                echo "  ✓ $scope/scripts/$(basename "$hook")"
+            else
+                echo "  ! $scope/scripts/$(basename "$hook") failed (exit $status) — connect continues"
+                while IFS= read -r line; do
+                    [[ -n "$line" ]] && echo "      $line"
+                done <<< "$output"
+            fi
+        done
+    done
+}
+run_scope_hooks
+
 echo ""; echo "✓ Connected $AGENT."

@@ -168,6 +168,23 @@ connect() {
 # relink <repo> <agent> — what the post-merge hook runs for each agent in turn.
 relink() { connect "$1" "$2" --relink; }
 
+# add_scope_hook <repo> <scope> <agent-suffix|""> [exit-code] — an executable connect
+# hook in <scope>/scripts that appends its argv to <repo>/hook-calls.txt.
+add_scope_hook() {
+    local repo="$1" scope="$2" suffix="$3" rc="${4:-0}" name="connect-agent"
+    [[ -n "$suffix" ]] && name="connect-agent.$suffix"
+    mkdir -p "$repo/$scope/scripts"
+    cat > "$repo/$scope/scripts/$name.sh" <<EOF
+#!/usr/bin/env bash
+echo "$name|\$1|\$2|\$3" >> "$repo/hook-calls.txt"
+[[ $rc -eq 0 ]] || echo "hook is unhappy" >&2
+exit $rc
+EOF
+    chmod +x "$repo/$scope/scripts/$name.sh"
+}
+
+hook_calls() { cat "$1/hook-calls.txt" 2>/dev/null; }
+
 # drive_wizard <repo> <answer>|<answer>|… — run the connector's interactive setup
 # under a pty and feed one answer each time it falls quiet; prints the transcript.
 # The wizard reads /dev/tty and gates on `-t 0 && -t 1`, so a terminal is the only
@@ -246,6 +263,74 @@ test_wizard_completes_with_unchecked_last_row() {
     assert_file "$r/.exobrain.json" "config is written" || return 1
     assert_eq "people/alice,people/alice/hosts/h1" \
         "$(jq -r '.connected_scopes | join(",")' "$r/.exobrain.json")" "person + host connected, zoe's left out"
+}
+
+# ---------------------------------------------------------------------------
+# Tests — scope hooks
+# ---------------------------------------------------------------------------
+
+test_scope_hook_runs_with_scope_args() {
+    local r; r="$(setup_fake_exobrain)"; add_person "$r" people/alice
+    add_scope_hook "$r" people/alice ""
+    connect "$r" claude --handle alice --host h1 >/dev/null 2>&1 || return 1
+    assert_eq "connect-agent|claude|$r/.claude|$r/people/alice" "$(hook_calls "$r")" \
+        "the hook gets agent, target dir, and its own scope dir"
+}
+
+# Every scope in the chain runs, shallow→deep — not just the connected leaf.
+test_scope_hooks_run_shallow_to_deep() {
+    local r; r="$(setup_fake_exobrain)"; add_person "$r" people/alice
+    add_scope_hook "$r" people/alice ""
+    add_scope_hook "$r" people/alice/hosts/h1 ""
+    connect "$r" claude --handle alice --host h1 >/dev/null 2>&1 || return 1
+    assert_eq "people/alice people/alice/hosts/h1" \
+        "$(hook_calls "$r" | sed "s|.*$r/||" | tr '\n' ' ' | sed 's/ $//')" \
+        "person hook runs before its host's"
+}
+
+test_scope_hook_agent_specific_is_filtered() {
+    local r; r="$(setup_fake_exobrain)"; add_person "$r" people/alice
+    add_scope_hook "$r" people/alice codex
+    connect "$r" claude --handle alice --host h1 >/dev/null 2>&1 || return 1
+    assert_eq "" "$(hook_calls "$r")" "another agent's hook is not run" || return 1
+    connect "$r" codex --handle alice --host h1 >/dev/null 2>&1 || return 1
+    assert_contains "$(hook_calls "$r")" "connect-agent.codex|codex|" "its own agent runs it"
+}
+
+# The universal hook and this agent's hook both run, universal first.
+test_scope_hook_both_variants_run() {
+    local r; r="$(setup_fake_exobrain)"; add_person "$r" people/alice
+    add_scope_hook "$r" people/alice ""
+    add_scope_hook "$r" people/alice claude
+    connect "$r" claude --handle alice --host h1 >/dev/null 2>&1 || return 1
+    assert_eq "connect-agent connect-agent.claude" \
+        "$(hook_calls "$r" | cut -d'|' -f1 | tr '\n' ' ' | sed 's/ $//')" "universal first, then agent-specific"
+}
+
+# A scope's own extra must never cost the human their wiring.
+test_scope_hook_failure_is_reported_not_fatal() {
+    local r out; r="$(setup_fake_exobrain)"; add_person "$r" people/alice
+    add_scope_hook "$r" people/alice "" 3
+    out="$(connect "$r" claude --handle alice --host h1 2>&1)" || return 1
+    assert_contains "$out" "failed (exit 3) — connect continues" "the failure is named" || return 1
+    assert_contains "$out" "hook is unhappy" "its output is surfaced" || return 1
+    assert_contains "$out" "✓ Connected claude." "the connect still completes"
+}
+
+# A render promises no writes outside the target dir; a hook is arbitrary code.
+test_scope_hooks_skipped_on_render() {
+    local r; r="$(setup_fake_exobrain)"; add_person "$r" people/alice
+    add_scope_hook "$r" people/alice ""
+    render_flags "$r" claude --handle alice --host h1 >/dev/null 2>&1 || return 1
+    assert_eq "" "$(hook_calls "$r")" "no hook runs under --render-specs-only"
+}
+
+# The repo root's scripts/connect-agent.sh is the connector itself: running it as
+# a scope hook would recurse.
+test_global_connector_is_not_a_scope_hook() {
+    local r out; r="$(setup_fake_exobrain)"; add_person "$r" people/alice
+    out="$(connect "$r" claude --handle alice --host h1 2>&1)" || return 1
+    assert_eq "1" "$(grep -c '✓ Connected claude.' <<< "$out")" "the connector runs once, not recursively"
 }
 
 # ---------------------------------------------------------------------------
@@ -793,6 +878,13 @@ test_seed_scope_in_manifest() {
 
 run_test "scope chain shallow->deep"          test_scope_chain_shallow_to_deep
 run_test "wizard completes, last row unchecked" test_wizard_completes_with_unchecked_last_row
+run_test "scope hook runs with scope args"     test_scope_hook_runs_with_scope_args
+run_test "scope hooks run shallow->deep"       test_scope_hooks_run_shallow_to_deep
+run_test "scope hook agent-specific filtered"  test_scope_hook_agent_specific_is_filtered
+run_test "scope hook both variants run"        test_scope_hook_both_variants_run
+run_test "scope hook failure not fatal"        test_scope_hook_failure_is_reported_not_fatal
+run_test "scope hooks skipped on render"       test_scope_hooks_skipped_on_render
+run_test "global connector is not a hook"      test_global_connector_is_not_a_scope_hook
 run_test "hooks install into repo, other cwd" test_hooks_install_into_repo_from_other_cwd
 run_test "force reaches non-owner"             test_force_reaches_nonowner
 run_test "owner-gated off for others"          test_owner_gated_off_for_others

@@ -10,7 +10,7 @@ The `connect-agent.sh` ecosystem wires repo content into each agent's context �
 
 | Artifact | Role |
 |---|---|
-| `scripts/connect-agent.sh` | The connector. Resolves identity by name-match from one of four sources — flags (`--handle`/`--host`/`--scope`/`--guest`), existing config, the interactive wizard (checkbox menu, person/host pre-checked), or guest; `--relink` / `--configure` / `--render-specs-only` thereafter. Resolves the skills registry, links always-tier skills, fetches external skills, composes each agent's own context surface, installs the git hooks. |
+| `scripts/connect-agent.sh` | The connector. Resolves identity by name-match from one of four sources — flags (`--handle`/`--host`/`--scope`/`--guest`), existing config, the interactive wizard (checkbox menu, person/host pre-checked), or guest; `--relink` / `--configure` / `--render-specs-only` thereafter. Resolves the skills registry, links always-tier skills, fetches external skills, composes each agent's own context surface, installs the git hooks, runs each connected scope's own connect hook. |
 | `.claude/CLAUDE.md` *(generated)* | Claude's generated entry point — `@-import`s `.claude/connected-scopes.md` + `.claude/optional-skills.md`. (The handcrafted root `CLAUDE.md` is separate and loads the global scope via `@AGENTS.md`.) |
 | `.claude/connected-scopes.md` *(generated)* | A manifest of `@-import`s to each connected deeper scope's source `AGENTS.md`/`CLAUDE.md`, shallow→deep — referenced by relative path, not copied, so scope edits show up without a recompose. |
 | `.claude/optional-skills.md` *(generated)* | The Claude-filtered optional-skills index. |
