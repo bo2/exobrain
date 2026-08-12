@@ -10,7 +10,7 @@
 # before a substantial spec/domain edit. Not wired into the pre-push hook — that
 # gate stays fast and deterministic (validate-exobrain.sh only), so ordinary pushes
 # aren't taxed by a per-push model round-trip.
-#   scripts/authoring-review.sh [<base-ref>]   # default base: origin/main
+#   scripts/authoring-review.sh [<base-ref>]   # default base: origin's default branch
 #
 # Engine: claude (headless, read-only) if installed, else codex; if neither is
 # available — or the checker errors/times out — it DEGRADES OPEN (exit 0), so a
@@ -24,7 +24,22 @@ set -uo pipefail
 [[ "${EXOBRAIN_SKIP_AUTHORING_REVIEW:-}" == "1" ]] && exit 0
 
 REPO_DIR="$(cd "$(dirname "$0")/.." && pwd)"
-BASE="${1:-origin/main}"
+
+# Default base: this instance's default branch on origin, resolved the same way
+# validate-exobrain.sh and create-worktree.sh resolve it. An instance whose trunk
+# isn't named "main" would otherwise be reviewed against a ref that doesn't exist.
+BASE="${1:-}"
+if [[ -z "$BASE" ]]; then
+    BASE="$(git -C "$REPO_DIR" symbolic-ref --quiet --short refs/remotes/origin/HEAD 2>/dev/null || true)"
+    if [[ -z "$BASE" ]]; then
+        for cand in origin/main origin/trunk origin/master; do
+            if git -C "$REPO_DIR" rev-parse --verify --quiet "$cand" >/dev/null 2>&1; then
+                BASE="$cand"; break
+            fi
+        done
+    fi
+    BASE="${BASE:-origin/main}"
+fi
 
 # ---------------------------------------------------------------------------
 # 0. New-shared-skill proof gate — deterministic, runs before the model pass.
