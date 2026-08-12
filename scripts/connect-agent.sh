@@ -196,41 +196,9 @@ scaffold_scope() {
     fi
 }
 
-# Dirs the scope search never descends into.
-SCOPE_FIND_PRUNE=( -path '*/.git' -o -path '*/node_modules' -o -path '*/tmp' -o -path '*/src' -o -path '*/.src' )
-
-# find_scope_by_name <repo_dir> <name> [keyword] — repo-relative paths of every
-# AGENTS.md-bearing dir whose basename is <name>, anywhere in the tree. Identity is
-# matched by name, not by a fixed parent-collection path. When several match and
-# <keyword> is given (the person/host collection name), the ones whose parent dir
-# is named <keyword> win — a tiebreaker, not a requirement. One path per line.
-find_scope_by_name() {
-    local repo_dir="$1" name="$2" keyword="${3:-}" d rel parent matches=() kept=()
-    while IFS= read -r d; do
-        [[ -f "$d/AGENTS.md" ]] || continue
-        matches+=("${d#"$repo_dir"/}")
-    done < <(find "$repo_dir" \( "${SCOPE_FIND_PRUNE[@]}" \) -prune -o -type d -name "$name" -print 2>/dev/null)
-    if [[ ${#matches[@]} -gt 1 && -n "$keyword" ]]; then
-        for rel in "${matches[@]}"; do
-            parent="${rel%/*}"
-            [[ "${parent##*/}" == "$keyword" ]] && kept+=("$rel")
-        done
-        [[ ${#kept[@]} -gt 0 ]] && matches=("${kept[@]}")
-    fi
-    if [[ ${#matches[@]} -gt 0 ]]; then printf '%s\n' "${matches[@]}" | sort; fi
-}
-
-# list_connectable_scopes <repo_dir> — every scope (AGENTS.md dir) except the
-# global root, repo-relative, one per line: the menu of what can be connected.
-list_connectable_scopes() {
-    local repo_dir="$1" f d
-    find "$repo_dir" \( "${SCOPE_FIND_PRUNE[@]}" \) -prune -o -name AGENTS.md -print 2>/dev/null \
-        | while IFS= read -r f; do
-            d="${f%/AGENTS.md}"
-            [[ "$d" == "$repo_dir" ]] && continue
-            echo "${d#"$repo_dir"/}"
-        done | sort
-}
+# Scope discovery (find_scope_by_name, list_connectable_scopes) and handle
+# classification (person_scope_ids, handle_taken_by, is_generic_handle) come from
+# skills-registry.sh.
 
 # resolve_identity <handle> <host> — set PERSON_PATH, HOST_PATH, PERSON_ID by
 # name-match (person anywhere; host within the person's subtree), falling back to
@@ -301,6 +269,47 @@ multi_select() {
     done
 }
 
+# prompt_handle <default> — ask on /dev/tty until the answer is a usable person id,
+# then echo it. Three gates, because identity is name-matched and the id sticks:
+#   - a machine login (admin, root, ubuntu, …) is never offered as the default and
+#     is confirmed before it is accepted — it names a role, not a person;
+#   - an id an existing person scope holds is confirmed too, since connecting joins
+#     that person's scope rather than making one;
+#   - an id a non-person scope holds is refused: name-match would wire that scope in.
+prompt_handle() {
+    local default="$1" id ans taken type path
+    is_generic_handle "$default" && default=""
+    while true; do
+        if [[ -n "$default" ]]; then
+            printf 'Your handle (a short id for your person scope) [%s]: ' "$default" >/dev/tty
+        else
+            printf 'Your handle (a short id naming you, not your machine login): ' >/dev/tty
+        fi
+        read -r id </dev/tty || true
+        id="$(sanitize_id "${id:-$default}")"
+        [[ -n "$id" ]] || { echo "  ? a handle is required" >/dev/tty; continue; }
+        default=""
+        if is_generic_handle "$id"; then
+            printf "  ! '%s' is a machine login, not a person — it names nobody and collides on the next machine.\n" "$id" >/dev/tty
+            printf "    Use it anyway? [y/N]: " >/dev/tty
+            read -r ans </dev/tty || true
+            [[ "$ans" =~ ^[Yy] ]] || continue
+        fi
+        taken="$(handle_taken_by "$REPO_DIR" "$id")"
+        [[ -n "$taken" ]] || { printf '%s' "$id"; return; }
+        type="${taken%% *}"; path="${taken#* }"
+        if [[ "$type" == person ]]; then
+            printf "  ! '%s' is an existing person scope (%s) — connecting joins it.\n" "$id" "$path" >/dev/tty
+            printf "    Is that you? [y/N]: " >/dev/tty
+            read -r ans </dev/tty || true
+            [[ "$ans" =~ ^[Yy] ]] && { printf '%s' "$id"; return; }
+        else
+            printf "  ! '%s' already names a %s scope (%s) — that handle would connect it. Pick another.\n" \
+                "$id" "$type" "$path" >/dev/tty
+        fi
+    done
+}
+
 # run_wizard — interactive first-time setup. Prompt for handle + host, resolve and
 # scaffold the person/host scopes by name, then present every connectable scope as a
 # checkbox menu with person + host pre-checked. The connector treats whatever is
@@ -310,13 +319,15 @@ run_wizard() {
     echo ""
     echo "First-time setup for this exobrain."
 
-    local default_id default_host id host
+    local default_id default_host id host existing
     default_id="$(git -C "$REPO_DIR" config user.email 2>/dev/null | sed 's/@.*//' || true)"
     [[ -z "$default_id" ]] && default_id="${USER:-me}"
     default_host="$(hostname -s 2>/dev/null || echo localhost)"
 
-    printf 'Your handle (a short id for your person scope) [%s]: ' "$default_id" >/dev/tty
-    read -r id </dev/tty || true; id="$(sanitize_id "${id:-$default_id}")"
+    existing="$(person_scope_ids "$REPO_DIR" | tr '\n' ' ')"
+    [[ -n "$existing" ]] && echo "People already here: ${existing% }" >/dev/tty
+
+    id="$(prompt_handle "$default_id")"
     printf 'This machine name (host scope) [%s]: ' "$default_host" >/dev/tty
     read -r host </dev/tty || true; host="$(sanitize_id "${host:-$default_host}")"
 

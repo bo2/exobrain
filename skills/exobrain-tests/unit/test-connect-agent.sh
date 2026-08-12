@@ -248,6 +248,45 @@ test_scope_chain_shallow_to_deep() {
 }
 
 # ---------------------------------------------------------------------------
+# Tests — handle classification (what the setup wizard gates on)
+# ---------------------------------------------------------------------------
+
+test_person_scope_ids_lists_people_only() {
+    local r; r="$(setup_fake_exobrain)"; add_person "$r" people/alice; add_group "$r" acme
+    add_person "$r" groups/acme/people/bob
+    mkdir -p "$r/lab"; printf '# lab\n' > "$r/lab/AGENTS.md"   # standalone scope, not a person
+    assert_eq "alice bob" "$(person_scope_ids "$r" | tr '\n' ' ' | sed 's/ $//')" \
+        "person scopes at any depth, nothing else"
+}
+
+test_handle_free_when_unused() {
+    local r; r="$(setup_fake_exobrain)"; add_person "$r" people/alice
+    assert_eq "" "$(handle_taken_by "$r" carol)" "an unused id is free"
+}
+
+test_handle_taken_by_person() {
+    local r; r="$(setup_fake_exobrain)"; add_person "$r" people/alice
+    assert_eq "person people/alice" "$(handle_taken_by "$r" alice)" "an existing person is reported as such"
+}
+
+# The gate that matters: hosts (and any other scope type) share the handle
+# namespace, because identity is name-matched. `--handle h1` would otherwise
+# connect alice's host scope as if it were a person.
+test_handle_taken_by_non_person_scope() {
+    local r; r="$(setup_fake_exobrain)"; add_person "$r" people/alice
+    assert_eq "host people/alice/hosts/h1" "$(handle_taken_by "$r" h1)" \
+        "a host name collides with the handle namespace"
+}
+
+test_generic_handles_flagged() {
+    is_generic_handle admin   || { echo "admin not flagged"; return 1; }
+    is_generic_handle ADMIN   || { echo "uppercase not flagged"; return 1; }
+    is_generic_handle root    || { echo "root not flagged"; return 1; }
+    is_generic_handle alice   && { echo "a real name was flagged"; return 1; }
+    return 0
+}
+
+# ---------------------------------------------------------------------------
 # Tests — the setup wizard, driven over a pty
 # ---------------------------------------------------------------------------
 
@@ -255,10 +294,33 @@ test_scope_chain_shallow_to_deep() {
 # selection loop that ends on a false test returns non-zero, and as a function's
 # last command that aborted the whole wizard under `set -e` — after the human had
 # answered every prompt, and before save_config, so nothing was written.
+test_wizard_gates_generic_and_taken_handles() {
+    command -v python3 >/dev/null 2>&1 || { echo "SKIP: python3 unavailable"; return 0; }
+    local r t; r="$(wizard_fixture)"
+    t="$(drive_wizard "$r" 'admin|n|alice|n|h1|carol|mbp|||')"
+    assert_contains "$t" "People already here: alice zoe" "existing people are listed up front" || { echo "$t"; return 1; }
+    assert_contains "$t" "'admin' is a machine login" "a machine login is challenged" || return 1
+    assert_contains "$t" "'alice' is an existing person scope" "an existing person is challenged" || return 1
+    assert_contains "$t" "'h1' already names a host scope" "a non-person scope name is refused" || return 1
+    assert_eq "carol" "$(jq -r '.person' "$r/.exobrain.json")" "the accepted handle is stored" || return 1
+    assert_file "$r/people/carol/AGENTS.md" "the new person scope is scaffolded"
+}
+
+# A generic default is never offered for a bare Enter — the prompt drops its
+# "[default]" and asks outright.
+test_wizard_withholds_generic_default() {
+    command -v python3 >/dev/null 2>&1 || { echo "SKIP: python3 unavailable"; return 0; }
+    local r t; r="$(wizard_fixture)"
+    git -C "$r" config user.email admin@example.com
+    t="$(drive_wizard "$r" 'carol|mbp|||')"
+    assert_not_contains "$t" "[admin]" "a machine login is not offered as the default" || return 1
+    assert_eq "carol" "$(jq -r '.person' "$r/.exobrain.json")" "the typed handle is stored"
+}
+
 test_wizard_completes_with_unchecked_last_row() {
     command -v python3 >/dev/null 2>&1 || { echo "SKIP: python3 unavailable"; return 0; }
     local r t; r="$(wizard_fixture)"
-    t="$(drive_wizard "$r" 'alice|h1|')"
+    t="$(drive_wizard "$r" 'alice|y|h1|')"   # y = "yes, alice is me"
     assert_contains "$t" "✓ Connected claude." "the connect runs to completion" || { echo "$t"; return 1; }
     assert_file "$r/.exobrain.json" "config is written" || return 1
     assert_eq "people/alice,people/alice/hosts/h1" \
@@ -877,6 +939,13 @@ test_seed_scope_in_manifest() {
 # ---------------------------------------------------------------------------
 
 run_test "scope chain shallow->deep"          test_scope_chain_shallow_to_deep
+run_test "person scope ids list people only"   test_person_scope_ids_lists_people_only
+run_test "unused handle is free"               test_handle_free_when_unused
+run_test "handle taken by a person"            test_handle_taken_by_person
+run_test "handle taken by a non-person scope"  test_handle_taken_by_non_person_scope
+run_test "generic handles flagged"             test_generic_handles_flagged
+run_test "wizard gates generic + taken ids"    test_wizard_gates_generic_and_taken_handles
+run_test "wizard withholds generic default"    test_wizard_withholds_generic_default
 run_test "wizard completes, last row unchecked" test_wizard_completes_with_unchecked_last_row
 run_test "scope hook runs with scope args"     test_scope_hook_runs_with_scope_args
 run_test "scope hooks run shallow->deep"       test_scope_hooks_run_shallow_to_deep
