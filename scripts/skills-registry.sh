@@ -68,6 +68,11 @@
 #   skills_link_suffix <home-scope> <owner>  — filename suffix for the symlink
 #   scope_type_for <repo_dir> <scope>        — human type label for a scope
 #   scopes_collection_for_type <repo_dir> <type> — collection dir for a scope type
+#   find_scope_by_name <repo_dir> <name> [keyword] — scope paths matching a leaf name
+#   list_connectable_scopes <repo_dir>       — every scope path but the global root
+#   person_scope_ids <repo_dir>              — leaf basename of each person scope
+#   handle_taken_by <repo_dir> <id>          — "<type> <path>" a handle collides with
+#   is_generic_handle <id>                   — is the id a machine login, not a person
 #   sanitize_suffix <path>                   — filename-safe form of a scope path
 #   skills_resolve_external_json <repo_dir> <agent> <leaf...>
 #                                            — JSON array of resolved external skills
@@ -127,6 +132,86 @@ scopes_collection_for_type() {
         esac
     fi
     printf '%s' "$coll"
+}
+
+# Dirs the scope search never descends into.
+SCOPE_FIND_PRUNE=( -path '*/.git' -o -path '*/node_modules' -o -path '*/tmp' -o -path '*/src' -o -path '*/.src' )
+
+# find_scope_by_name <repo_dir> <name> [keyword] — repo-relative paths of every
+# AGENTS.md-bearing dir whose basename is <name>, anywhere in the tree. Identity is
+# matched by name, not by a fixed parent-collection path. When several match and
+# <keyword> is given (the person/host collection name), the ones whose parent dir
+# is named <keyword> win — a tiebreaker, not a requirement. One path per line.
+find_scope_by_name() {
+    local repo_dir="$1" name="$2" keyword="${3:-}" d rel parent matches=() kept=()
+    while IFS= read -r d; do
+        [[ -f "$d/AGENTS.md" ]] || continue
+        matches+=("${d#"$repo_dir"/}")
+    done < <(find "$repo_dir" \( "${SCOPE_FIND_PRUNE[@]}" \) -prune -o -type d -name "$name" -print 2>/dev/null)
+    if [[ ${#matches[@]} -gt 1 && -n "$keyword" ]]; then
+        for rel in "${matches[@]}"; do
+            parent="${rel%/*}"
+            [[ "${parent##*/}" == "$keyword" ]] && kept+=("$rel")
+        done
+        [[ ${#kept[@]} -gt 0 ]] && matches=("${kept[@]}")
+    fi
+    if [[ ${#matches[@]} -gt 0 ]]; then printf '%s\n' "${matches[@]}" | sort; fi
+}
+
+# list_connectable_scopes <repo_dir> — every scope (AGENTS.md dir) except the
+# global root, repo-relative, one per line: the menu of what can be connected.
+# The trailing `true` closes the group on success: a read loop ends non-zero at
+# EOF, which under the callers' `set -o pipefail` would fail an assignment from
+# this function and, under `set -e`, abort the run.
+list_connectable_scopes() {
+    local repo_dir="$1" f d
+    {
+        find "$repo_dir" \( "${SCOPE_FIND_PRUNE[@]}" \) -prune -o -name AGENTS.md -print 2>/dev/null \
+            | while IFS= read -r f; do
+                d="${f%/AGENTS.md}"
+                [[ "$d" == "$repo_dir" ]] && continue
+                echo "${d#"$repo_dir"/}"
+            done
+        true
+    } | sort
+}
+
+# person_scope_ids <repo_dir> — leaf basename of every existing person-type scope,
+# one per line, sorted: who this exobrain already has, and the ids a new handle
+# must not silently join.
+person_scope_ids() {
+    local repo_dir="$1" s
+    {
+        while IFS= read -r s; do
+            [[ -n "$s" ]] || continue
+            if [[ "$(scope_type_for "$repo_dir" "$s")" == "person" ]]; then echo "${s##*/}"; fi
+        done < <(list_connectable_scopes "$repo_dir")
+        true
+    } | sort -u
+}
+
+# handle_taken_by <repo_dir> <id> — what an id would collide with, as
+# "<type> <scope-path>"; empty when it is free. Identity is name-matched, so an id
+# an existing scope already carries connects that scope rather than creating one:
+# for a person scope that means adopting someone's identity, and for any other
+# type it means connecting a scope that isn't a person at all.
+handle_taken_by() {
+    local repo_dir="$1" id="$2" first
+    first="$(find_scope_by_name "$repo_dir" "$id" "$(scopes_collection_for_type "$repo_dir" person)")"
+    first="${first%%$'\n'*}"
+    [[ -n "$first" ]] || return 0
+    printf '%s %s\n' "$(scope_type_for "$repo_dir" "$first")" "$first"
+}
+
+# Login names a machine hands out that name a role, not a person. A person id
+# derived from one is nobody's identity — and collides on the next machine that
+# issues the same login.
+GENERIC_HANDLES=$'\nadmin\nadministrator\nsysadmin\nroot\nuser\nusers\nguest\nowner\nme\nmyself\ndefault\nlocaladmin\nubuntu\ndebian\ncentos\nfedora\npi\nec2-user\nvagrant\ndocker\nrunner\nbuild\nci\ntest\n'
+
+# is_generic_handle <id> — true when <id> is one of those login names.
+is_generic_handle() {
+    local id; id="$(printf '%s' "$1" | tr '[:upper:]' '[:lower:]')"
+    case "$GENERIC_HANDLES" in *$'\n'"$id"$'\n'*) return 0 ;; *) return 1 ;; esac
 }
 
 # build_scope_chain <repo_dir> <leaf...>

@@ -90,7 +90,12 @@ inject_block() {
 install_hook() {
     echo ""; echo "Installing git hooks..."
     local hooks_dir hook_tmp
-    hooks_dir="$(git -C "$REPO_DIR" rev-parse --git-common-dir)/hooks"
+    # --git-common-dir answers relative to the repo, so anchor it there: resolved
+    # against the caller's cwd instead, a connect run from outside the checkout
+    # writes its hooks into whatever directory the human happened to be standing in.
+    hooks_dir="$(git -C "$REPO_DIR" rev-parse --git-common-dir)"
+    [[ "$hooks_dir" == /* ]] || hooks_dir="$REPO_DIR/$hooks_dir"
+    hooks_dir="$hooks_dir/hooks"
     mkdir -p "$hooks_dir"
 
     # Re-link after pulling new commits. `post-merge` fires on `git pull`
@@ -191,41 +196,9 @@ scaffold_scope() {
     fi
 }
 
-# Dirs the scope search never descends into.
-SCOPE_FIND_PRUNE=( -path '*/.git' -o -path '*/node_modules' -o -path '*/tmp' -o -path '*/src' -o -path '*/.src' )
-
-# find_scope_by_name <repo_dir> <name> [keyword] — repo-relative paths of every
-# AGENTS.md-bearing dir whose basename is <name>, anywhere in the tree. Identity is
-# matched by name, not by a fixed parent-collection path. When several match and
-# <keyword> is given (the person/host collection name), the ones whose parent dir
-# is named <keyword> win — a tiebreaker, not a requirement. One path per line.
-find_scope_by_name() {
-    local repo_dir="$1" name="$2" keyword="${3:-}" d rel parent matches=() kept=()
-    while IFS= read -r d; do
-        [[ -f "$d/AGENTS.md" ]] || continue
-        matches+=("${d#"$repo_dir"/}")
-    done < <(find "$repo_dir" \( "${SCOPE_FIND_PRUNE[@]}" \) -prune -o -type d -name "$name" -print 2>/dev/null)
-    if [[ ${#matches[@]} -gt 1 && -n "$keyword" ]]; then
-        for rel in "${matches[@]}"; do
-            parent="${rel%/*}"
-            [[ "${parent##*/}" == "$keyword" ]] && kept+=("$rel")
-        done
-        [[ ${#kept[@]} -gt 0 ]] && matches=("${kept[@]}")
-    fi
-    if [[ ${#matches[@]} -gt 0 ]]; then printf '%s\n' "${matches[@]}" | sort; fi
-}
-
-# list_connectable_scopes <repo_dir> — every scope (AGENTS.md dir) except the
-# global root, repo-relative, one per line: the menu of what can be connected.
-list_connectable_scopes() {
-    local repo_dir="$1" f d
-    find "$repo_dir" \( "${SCOPE_FIND_PRUNE[@]}" \) -prune -o -name AGENTS.md -print 2>/dev/null \
-        | while IFS= read -r f; do
-            d="${f%/AGENTS.md}"
-            [[ "$d" == "$repo_dir" ]] && continue
-            echo "${d#"$repo_dir"/}"
-        done | sort
-}
+# Scope discovery (find_scope_by_name, list_connectable_scopes) and handle
+# classification (person_scope_ids, handle_taken_by, is_generic_handle) come from
+# skills-registry.sh.
 
 # resolve_identity <handle> <host> — set PERSON_PATH, HOST_PATH, PERSON_ID by
 # name-match (person anywhere; host within the person's subtree), falling back to
@@ -254,32 +227,87 @@ sanitize_id() { printf '%s' "$1" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9.
 # variable (a local declared by the caller) to the checked items, in listed order.
 multi_select() {
     local preselect="$1"; shift
-    local items=("$@") i key input n mark _pre p
-    declare -A checked=()
-    for i in "${items[@]}"; do checked["$i"]=0; done
+    # `checked` is an indexed array parallel to `items` (0/1 per position), not an
+    # associative array keyed by path: bash 3.2 has no `declare -A`. The loops count
+    # positions rather than expanding `${!items[@]}`, which errors on an empty array
+    # under `set -u` in that same shell.
+    local items=("$@") idx input n mark _pre p
+    local checked=()
+    for ((idx = 0; idx < ${#items[@]}; idx++)); do checked[$idx]=0; done
     IFS=',' read -r -a _pre <<< "$preselect"
-    for p in ${_pre[@]+"${_pre[@]}"}; do [[ -n "$p" ]] && checked["$p"]=1; done
+    # `if` blocks, not a trailing `[[ … ]] && …`: a loop whose final iteration tests
+    # false ends non-zero, and a loop that closes a function's body hands that status
+    # to a `set -e` caller — which aborts the wizard. Same reason below.
+    for p in ${_pre[@]+"${_pre[@]}"}; do
+        [[ -n "$p" ]] || continue
+        for ((idx = 0; idx < ${#items[@]}; idx++)); do
+            if [[ "${items[$idx]}" == "$p" ]]; then checked[$idx]=1; fi
+        done
+    done
     while true; do
         echo "" >/dev/tty
         echo "Scopes to connect (type a number to toggle, Enter to accept):" >/dev/tty
         n=1
-        for i in "${items[@]}"; do
-            mark="[ ]"; [[ "${checked[$i]}" == 1 ]] && mark="[x]"
-            printf '  %2d. %s %s\n' "$n" "$mark" "$i" >/dev/tty
+        for ((idx = 0; idx < ${#items[@]}; idx++)); do
+            mark="[ ]"; [[ "${checked[$idx]}" == 1 ]] && mark="[x]"
+            printf '  %2d. %s %s\n' "$n" "$mark" "${items[$idx]}" >/dev/tty
             n=$((n + 1))
         done
         printf 'Toggle # (Enter to accept): ' >/dev/tty
         read -r input </dev/tty || true
         [[ -z "$input" ]] && break
         if [[ "$input" =~ ^[0-9]+$ ]] && (( input >= 1 && input <= ${#items[@]} )); then
-            key="${items[$((input - 1))]}"
-            checked["$key"]=$(( 1 - ${checked["$key"]} ))
+            idx=$((input - 1))
+            checked[$idx]=$(( 1 - ${checked[$idx]} ))
         else
             echo "  ? enter a listed number, or Enter to accept" >/dev/tty
         fi
     done
     SELECTED=()
-    for i in "${items[@]}"; do [[ "${checked[$i]}" == 1 ]] && SELECTED+=("$i"); done
+    for ((idx = 0; idx < ${#items[@]}; idx++)); do
+        if [[ "${checked[$idx]}" == 1 ]]; then SELECTED+=("${items[$idx]}"); fi
+    done
+}
+
+# prompt_handle <default> — ask on /dev/tty until the answer is a usable person id,
+# then echo it. Three gates, because identity is name-matched and the id sticks:
+#   - a machine login (admin, root, ubuntu, …) is never offered as the default and
+#     is confirmed before it is accepted — it names a role, not a person;
+#   - an id an existing person scope holds is confirmed too, since connecting joins
+#     that person's scope rather than making one;
+#   - an id a non-person scope holds is refused: name-match would wire that scope in.
+prompt_handle() {
+    local default="$1" id ans taken type path
+    is_generic_handle "$default" && default=""
+    while true; do
+        if [[ -n "$default" ]]; then
+            printf 'Your handle (a short id for your person scope) [%s]: ' "$default" >/dev/tty
+        else
+            printf 'Your handle (a short id naming you, not your machine login): ' >/dev/tty
+        fi
+        read -r id </dev/tty || true
+        id="$(sanitize_id "${id:-$default}")"
+        [[ -n "$id" ]] || { echo "  ? a handle is required" >/dev/tty; continue; }
+        default=""
+        if is_generic_handle "$id"; then
+            printf "  ! '%s' is a machine login, not a person — it names nobody and collides on the next machine.\n" "$id" >/dev/tty
+            printf "    Use it anyway? [y/N]: " >/dev/tty
+            read -r ans </dev/tty || true
+            [[ "$ans" =~ ^[Yy] ]] || continue
+        fi
+        taken="$(handle_taken_by "$REPO_DIR" "$id")"
+        [[ -n "$taken" ]] || { printf '%s' "$id"; return; }
+        type="${taken%% *}"; path="${taken#* }"
+        if [[ "$type" == person ]]; then
+            printf "  ! '%s' is an existing person scope (%s) — connecting joins it.\n" "$id" "$path" >/dev/tty
+            printf "    Is that you? [y/N]: " >/dev/tty
+            read -r ans </dev/tty || true
+            [[ "$ans" =~ ^[Yy] ]] && { printf '%s' "$id"; return; }
+        else
+            printf "  ! '%s' already names a %s scope (%s) — that handle would connect it. Pick another.\n" \
+                "$id" "$type" "$path" >/dev/tty
+        fi
+    done
 }
 
 # run_wizard — interactive first-time setup. Prompt for handle + host, resolve and
@@ -291,13 +319,15 @@ run_wizard() {
     echo ""
     echo "First-time setup for this exobrain."
 
-    local default_id default_host id host
+    local default_id default_host id host existing
     default_id="$(git -C "$REPO_DIR" config user.email 2>/dev/null | sed 's/@.*//' || true)"
     [[ -z "$default_id" ]] && default_id="${USER:-me}"
     default_host="$(hostname -s 2>/dev/null || echo localhost)"
 
-    printf 'Your handle (a short id for your person scope) [%s]: ' "$default_id" >/dev/tty
-    read -r id </dev/tty || true; id="$(sanitize_id "${id:-$default_id}")"
+    existing="$(person_scope_ids "$REPO_DIR" | tr '\n' ' ')"
+    [[ -n "$existing" ]] && echo "People already here: ${existing% }" >/dev/tty
+
+    id="$(prompt_handle "$default_id")"
     printf 'This machine name (host scope) [%s]: ' "$default_host" >/dev/tty
     read -r host </dev/tty || true; host="$(sanitize_id "${host:-$default_host}")"
 
@@ -312,7 +342,9 @@ run_wizard() {
     CONNECTED_LEAVES=( ${SELECTED[@]+"${SELECTED[@]}"} )
     # Keep the person id only if the person scope was actually connected.
     PERSON_ID=""
-    for s in ${SELECTED[@]+"${SELECTED[@]}"}; do [[ "$s" == "$PERSON_PATH" ]] && PERSON_ID="$id"; done
+    for s in ${SELECTED[@]+"${SELECTED[@]}"}; do
+        if [[ "$s" == "$PERSON_PATH" ]]; then PERSON_ID="$id"; fi
+    done
     save_config
 }
 
@@ -468,7 +500,10 @@ GUEST_MODE=false
 # keep going — its AGENTS.md-bearing ancestors still wire in.
 for leaf in "${CONNECTED_LEAVES[@]:-}"; do
     [[ -z "$leaf" ]] && continue
-    [[ -f "$REPO_DIR/$leaf/AGENTS.md" ]] || echo "  ! connected leaf '$leaf' has no AGENTS.md (not a scope) — using its scope ancestors only"
+    if [[ ! -f "$REPO_DIR/$leaf/AGENTS.md" ]]; then
+        echo "  ! connected leaf '$leaf' has no AGENTS.md (not a scope) — using its scope ancestors only"
+        echo "    renamed or removed? re-run identity setup: scripts/connect-agent.sh $AGENT --configure"
+    fi
 done
 
 echo "Agent:     $AGENT"
@@ -504,7 +539,11 @@ REGISTRY_ACTIVE=false
 
 echo ""; echo "Skills:"
 linked_any=false
-declare -A _EXPECT_SKILL=()
+# The set of expected skill-link basenames, held as a newline-delimited string and
+# membership-tested below rather than as an associative array — bash 3.2, which
+# macOS ships, has no `declare -A`. Basenames carry no newlines, so the delimiter
+# is unambiguous.
+_EXPECT_SKILL=$'\n'
 # Parse tab fields by hand: `IFS=$'\t' read` collapses consecutive tabs (tab is
 # IFS whitespace), dropping the empty owner of a global-scope row and shifting tier.
 while IFS= read -r _row; do
@@ -520,7 +559,7 @@ while IFS= read -r _row; do
     suffix="$(skills_link_suffix "$scope" "$owner")"
     dst="$SKILLS_DIR/${name}${suffix:+.$suffix}"
     link_path "$src" "$dst" "skills/${name}${suffix:+.$suffix}"
-    _EXPECT_SKILL["${name}${suffix:+.$suffix}"]=1
+    _EXPECT_SKILL="${_EXPECT_SKILL}${name}${suffix:+.$suffix}"$'\n'
     linked_any=true
 done <<< "$RESOLVED_TSV"
 $linked_any || echo "  (no always-tier skills)"
@@ -542,7 +581,10 @@ fi
 for d in "$SKILLS_DIR"/*; do
     [[ -L "$d" ]] || continue
     bn="$(basename "$d")"
-    [[ -n "${_EXPECT_SKILL[$bn]:-}" ]] || { rm "$d"; echo "  - removed stale skill $bn"; }
+    case "$_EXPECT_SKILL" in
+        *$'\n'"$bn"$'\n'*) ;;
+        *) rm "$d"; echo "  - removed stale skill $bn" ;;
+    esac
 done
 
 # COMPAT 0001 (remove after 2026-08-28) — codex skills used to link under
@@ -900,5 +942,40 @@ if ! $RELINK; then
     mkdir -p "$(dirname "$MARKER")"; touch "$MARKER"
 fi
 install_hook
+
+# --------------------------------------------------------------------------
+# Scope hooks — a connected scope extending the connect with its own setup
+# --------------------------------------------------------------------------
+# Each scope in the chain carrying an executable scripts/connect-agent.sh (every
+# agent) or scripts/connect-agent.<agent>.sh (that agent alone) gets it run,
+# shallow→deep, as: <hook> <agent> <target-dir> <scope-dir>. Both run when both
+# exist, universal first. The global scope is skipped — its scripts/connect-agent.sh
+# is this connector, so running it as a hook would recurse.
+#
+# They run below the --render-specs-only cutoff because a hook is arbitrary code
+# with its own write surface, and a render promises none. A failing hook is
+# reported with its output and the connect carries on: one scope's extra must not
+# cost the human their wiring.
+run_scope_hooks() {
+    local scope hook output line status announced=false
+    for scope in ${CHAIN[@]+"${CHAIN[@]}"}; do
+        if [[ "$scope" == "global" ]]; then continue; fi
+        for hook in "$REPO_DIR/$scope/scripts/connect-agent.sh" \
+                    "$REPO_DIR/$scope/scripts/connect-agent.$AGENT.sh"; do
+            [[ -x "$hook" ]] || continue
+            if ! $announced; then echo ""; echo "Scope hooks:"; announced=true; fi
+            output="$("$hook" "$AGENT" "$TARGET_DIR" "$REPO_DIR/$scope" 2>&1)" && status=0 || status=$?
+            if [[ $status -eq 0 ]]; then
+                echo "  ✓ $scope/scripts/$(basename "$hook")"
+            else
+                echo "  ! $scope/scripts/$(basename "$hook") failed (exit $status) — connect continues"
+                while IFS= read -r line; do
+                    [[ -n "$line" ]] && echo "      $line"
+                done <<< "$output"
+            fi
+        done
+    done
+}
+run_scope_hooks
 
 echo ""; echo "✓ Connected $AGENT."

@@ -176,6 +176,26 @@ if [[ -d "$REPO_DIR/seed/feed" ]]; then
 fi
 
 # ---------------------------------------------------------------------------
+# Shell portability — framework scripts ship into every instance and run under
+# whatever `#!/usr/bin/env bash` resolves to, which on macOS is the stock 3.2 at
+# /bin/bash whenever a newer Homebrew bash isn't first on PATH. Three bash-4-only
+# constructs recur; a published rule alone did not keep them out, so they are
+# checked. Comment lines are exempt (the rule is discussed in prose), as is a
+# script that opts out with `# exobrain-allow-bash4` and says why.
+# ---------------------------------------------------------------------------
+
+while IFS= read -r f; do
+    [[ -n "$f" ]] || continue
+    grep -qF 'exobrain-allow-bash4' "$f" 2>/dev/null && continue
+    rel="${f#"$REPO_DIR"/}"
+    while IFS= read -r hit; do
+        [[ -n "$hit" ]] || continue
+        record "bash 4 construct in $rel:${hit%%:*} — macOS ships bash 3.2; see seed/feed/0061"
+    done < <(grep -nE '(^|[;&|(`]|[[:space:]])(mapfile|readarray)[[:space:]]|declare[[:space:]]+-A' "$f" 2>/dev/null \
+             | grep -vE '^[0-9]+:[[:space:]]*#')
+done < <(find_repo -type f -name '*.sh' -not -path '*/_raw/*')
+
+# ---------------------------------------------------------------------------
 # Compatibility-shim ledger — transitional code carries a `COMPAT <id> (remove
 # after <date>)` marker at the code site and a row in knowledge/exobrain/compat.md.
 # Checked both ways: a row's files must carry its marker, and every marked file must
@@ -188,21 +208,28 @@ fi
 COMPAT_LEDGER="$REPO_DIR/knowledge/exobrain/compat.md"
 if [[ -f "$COMPAT_LEDGER" ]]; then
     compat_trim() { local s="$1"; s="${s#"${s%%[![:space:]]*}"}"; printf '%s' "${s%"${s##*[![:space:]]}"}"; }
-    declare -A COMPAT_DUE=() COMPAT_FILES=()
+    # Newline-delimited tables, membership-tested by pattern, rather than
+    # associative arrays: bash 3.2 — the interpreter macOS ships at /bin/bash — has
+    # no `declare -A`. The ids seen, then "<id> <remove-date>" and "<id> <file>" rows.
+    COMPAT_IDS=$'\n'; COMPAT_DUE=$'\n'; COMPAT_FILES=$'\n'
+    compat_has_id()    { case "$COMPAT_IDS"   in *$'\n'"$1"$'\n'*)    return 0 ;; esac; return 1; }
+    compat_row_lists() { case "$COMPAT_FILES" in *$'\n'"$1 $2"$'\n'*) return 0 ;; esac; return 1; }
+    compat_due_for()   { printf '%s' "$COMPAT_DUE" | awk -v i="$1" '$1==i{print $2; exit}'; }
 
     while IFS='|' read -r _lead id _heals files added remove _rest; do
         id="$(compat_trim "$id")"
-        [[ -n "${COMPAT_DUE[$id]:-}" ]] && { record "compat.md: duplicate shim id $id (ids are never reused)"; continue; }
+        compat_has_id "$id" && { record "compat.md: duplicate shim id $id (ids are never reused)"; continue; }
+        COMPAT_IDS="${COMPAT_IDS}${id}"$'\n'
         added="$(compat_trim "$added")"; remove="$(compat_trim "$remove")"
         [[ "$added"  =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]] || record "compat.md: shim $id has a malformed 'Added' date: '$added'"
         [[ "$remove" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]] || record "compat.md: shim $id has a malformed 'Remove after' date: '$remove'"
-        COMPAT_DUE["$id"]="$remove"
+        COMPAT_DUE="${COMPAT_DUE}${id} ${remove}"$'\n'
 
         files="$(compat_trim "$files")"; files="${files//\`/}"
         IFS=',' read -ra _shim_files <<< "$files"
         for cf in ${_shim_files[@]+"${_shim_files[@]}"}; do
             cf="$(compat_trim "$cf")"; [[ -z "$cf" ]] && continue
-            COMPAT_FILES["$id"]="${COMPAT_FILES[$id]:-} $cf"
+            COMPAT_FILES="${COMPAT_FILES}${id} ${cf}"$'\n'
             if [[ ! -f "$REPO_DIR/$cf" ]]; then
                 record "compat.md: shim $id lists a file that doesn't exist: $cf"
             elif ! grep -qF "COMPAT $id" "$REPO_DIR/$cf" 2>/dev/null; then
@@ -221,21 +248,20 @@ if [[ -f "$COMPAT_LEDGER" ]]; then
             [[ "$marker" =~ COMPAT[[:space:]]+([0-9]{4}) ]] || continue
             mid="${BASH_REMATCH[1]}"
             rel="${f#"$REPO_DIR"/}"
-            if [[ -z "${COMPAT_DUE[$mid]:-}" ]]; then
+            if ! compat_has_id "$mid"; then
                 record "COMPAT $mid marker with no row in knowledge/exobrain/compat.md: $rel"
             else
+                due="$(compat_due_for "$mid")"
                 if [[ "$marker" =~ \(remove\ after\ ([0-9]{4}-[0-9]{2}-[0-9]{2})\) ]]; then
-                    [[ "${BASH_REMATCH[1]}" == "${COMPAT_DUE[$mid]}" ]] || \
-                        record "COMPAT $mid marker date ${BASH_REMATCH[1]} disagrees with the ledger (${COMPAT_DUE[$mid]}): $rel"
+                    [[ "${BASH_REMATCH[1]}" == "$due" ]] || \
+                        record "COMPAT $mid marker date ${BASH_REMATCH[1]} disagrees with the ledger ($due): $rel"
                 else
                     record "COMPAT $mid marker missing its '(remove after YYYY-MM-DD)' date: $rel"
                 fi
                 # A marked site the row doesn't name is a site the retirement misses —
                 # the shim's tests are the ones that go missing most easily.
-                case " ${COMPAT_FILES[$mid]:-} " in
-                    *" $rel "*) ;;
-                    *) record "COMPAT $mid marker in a file its ledger row doesn't list: $rel" ;;
-                esac
+                compat_row_lists "$mid" "$rel" || \
+                    record "COMPAT $mid marker in a file its ledger row doesn't list: $rel"
             fi
         done < <(grep -IhE '^[[:space:]]*(#|//|--|/\*|\*|<!--)[[:space:]]*COMPAT [0-9]{4}' "$f" 2>/dev/null)
     done < <(find_repo -type f -not -path '*/_raw/*')

@@ -40,7 +40,7 @@ Links the right scopes into the agent's space and installs a post-merge hook to 
 
 ## Setup and relink safety
 
-- `scripts/connect-agent.sh` writes outside the tracked tree — git hooks, and (for codex/openclaw) per-agent config under your home dir. Don't run it during routine work; run it only when the user explicitly asks to set up, reconnect, or refresh links, and state that write surface first.
+- `scripts/connect-agent.sh` writes outside the tracked tree — git hooks, (for codex/openclaw) per-agent config under your home dir, and whatever each connected scope's own `scripts/connect-agent[.<agent>].sh` hook writes. Don't run it during routine work; run it only when the user explicitly asks to set up, reconnect, or refresh links, and state that write surface first.
 - A Claude `SessionStart` hook runs `scripts/exobrain-healthcheck.sh` (read-only, advisory). When it warns that the agent isn't connected or its links are stale, relay its suggested command — `scripts/connect-agent.sh <agent>` to connect, `--relink` to refresh — and let the human run it. When it warns the trunk is behind, `git pull --ff-only` in the main checkout is the fix.
 
 ## Skills
@@ -103,7 +103,7 @@ Before writing anything — doc, commit, message — name who reads it and what 
 
 ## Validation
 
-- `scripts/validate-exobrain.sh` — deterministic checks (naming, JSON syntax, `scopes.json` shape, the skills registry, agent-neutral outgoing commit messages, machine-specific paths in changed files outside host scope, compat markers against their ledger rows), plus each connected scope's own validator hook: a scope carrying `scripts/validate-exobrain.sh` extends the gate with its own checks (e.g. the gitignored `local/` scope's private leak scan). Fast; run before committing structural changes.
+- `scripts/validate-exobrain.sh` — deterministic checks (naming, JSON syntax, `scopes.json` shape, the skills registry, agent-neutral outgoing commit messages, machine-specific paths in changed files outside host scope, compat markers against their ledger rows, bash-4-only constructs in shell scripts), plus each connected scope's own validator hook: a scope carrying `scripts/validate-exobrain.sh` extends the gate with its own checks (e.g. the gitignored `local/` scope's private leak scan). Fast; run before committing structural changes.
 - `scripts/authoring-review.sh` — an LLM judgment layer that reviews changed specs and knowledge-domain files against the authoring rules. The `exobrain-persist` flow runs it automatically (after commit, before push); you can also run it by hand before a substantial spec or domain edit. It self-skips when no spec/domain file changed, degrades open when no agent CLI is installed, and is skippable with `EXOBRAIN_SKIP_AUTHORING_REVIEW=1`. The pre-push hook runs only the deterministic validator above.
 - **Transitional code carries a removal date** — a shim that exists only to heal checkouts crossing a change gets a `COMPAT <id> (remove after <date>)` marker at the code site and a row in `knowledge/exobrain/compat.md`; the validator keeps marker and row in sync, and the healthcheck names each shim past its date. Retire one by deleting the code, the tests covering it, and the row in a single change.
 - **A skill newly declared at a shared scope must carry committed proof it earns that reach** — otherwise it belongs under a person scope's `skills/`, where it imposes on no one. `authoring-review.sh` blocks the land and names what counts as proof; the criteria live in `knowledge/exobrain/skills.md`.
