@@ -8,11 +8,17 @@ INST="$1"; TRANSCRIPT="$2"
 # Where did the fact land? Scope to files the AGENT changed (vs the pinned base), not
 # all instance content: an instance can ship real knowledge/workspaces where 'fidelity'/
 # 'brokerage' already appear in unrelated prose, which a blanket grep would false-match.
-mapfile -t hits < <(changed_run "$INST" | grep -iE '\.md$' | while IFS= read -r f; do
+# while-read rather than `mapfile` (a bash 4 builtin), and a guarded expansion of a
+# possibly-empty array, so this runs under the bash 3.2 macOS ships.
+hits=()
+while IFS= read -r _h; do
+    [[ -n "$_h" ]] || continue
+    hits+=("$_h")
+done < <(changed_run "$INST" | grep -iE '\.md$' | while IFS= read -r f; do
     grep -ilE 'fidelity|brokerage' "$f" 2>/dev/null
 done)
-fin="$(printf '%s\n' "${hits[@]}" | grep -iE '/knowledge/finance' | head -1)"
-ws="$(printf '%s\n' "${hits[@]}" | grep -iE '/workspaces/' | head -1)"
+fin="$(printf '%s\n' ${hits[@]+"${hits[@]}"} | grep -iE '/knowledge/finance' | head -1)"
+ws="$(printf '%s\n' ${hits[@]+"${hits[@]}"} | grep -iE '/workspaces/' | head -1)"
 
 [[ -z "$ws" ]] || fail "fact filed into a workspace ($ws) — workspaces outdate; durable facts go in knowledge/"
 [[ -n "$fin" ]] || fail "fact not found in a finance domain file (mis-routed or not recorded)"

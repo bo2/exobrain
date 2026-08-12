@@ -259,38 +259,45 @@ sanitize_id() { printf '%s' "$1" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9.
 # variable (a local declared by the caller) to the checked items, in listed order.
 multi_select() {
     local preselect="$1"; shift
-    local items=("$@") i key input n mark _pre p
-    declare -A checked=()
-    for i in "${items[@]}"; do checked["$i"]=0; done
+    # `checked` is an indexed array parallel to `items` (0/1 per position), not an
+    # associative array keyed by path: bash 3.2 has no `declare -A`. The loops count
+    # positions rather than expanding `${!items[@]}`, which errors on an empty array
+    # under `set -u` in that same shell.
+    local items=("$@") idx input n mark _pre p
+    local checked=()
+    for ((idx = 0; idx < ${#items[@]}; idx++)); do checked[$idx]=0; done
     IFS=',' read -r -a _pre <<< "$preselect"
     # `if` blocks, not a trailing `[[ … ]] && …`: a loop whose final iteration tests
     # false ends non-zero, and a loop that closes a function's body hands that status
     # to a `set -e` caller — which aborts the wizard. Same reason below.
     for p in ${_pre[@]+"${_pre[@]}"}; do
-        if [[ -n "$p" ]]; then checked["$p"]=1; fi
+        [[ -n "$p" ]] || continue
+        for ((idx = 0; idx < ${#items[@]}; idx++)); do
+            if [[ "${items[$idx]}" == "$p" ]]; then checked[$idx]=1; fi
+        done
     done
     while true; do
         echo "" >/dev/tty
         echo "Scopes to connect (type a number to toggle, Enter to accept):" >/dev/tty
         n=1
-        for i in "${items[@]}"; do
-            mark="[ ]"; [[ "${checked[$i]}" == 1 ]] && mark="[x]"
-            printf '  %2d. %s %s\n' "$n" "$mark" "$i" >/dev/tty
+        for ((idx = 0; idx < ${#items[@]}; idx++)); do
+            mark="[ ]"; [[ "${checked[$idx]}" == 1 ]] && mark="[x]"
+            printf '  %2d. %s %s\n' "$n" "$mark" "${items[$idx]}" >/dev/tty
             n=$((n + 1))
         done
         printf 'Toggle # (Enter to accept): ' >/dev/tty
         read -r input </dev/tty || true
         [[ -z "$input" ]] && break
         if [[ "$input" =~ ^[0-9]+$ ]] && (( input >= 1 && input <= ${#items[@]} )); then
-            key="${items[$((input - 1))]}"
-            checked["$key"]=$(( 1 - ${checked["$key"]} ))
+            idx=$((input - 1))
+            checked[$idx]=$(( 1 - ${checked[$idx]} ))
         else
             echo "  ? enter a listed number, or Enter to accept" >/dev/tty
         fi
     done
     SELECTED=()
-    for i in "${items[@]}"; do
-        if [[ "${checked[$i]}" == 1 ]]; then SELECTED+=("$i"); fi
+    for ((idx = 0; idx < ${#items[@]}; idx++)); do
+        if [[ "${checked[$idx]}" == 1 ]]; then SELECTED+=("${items[$idx]}"); fi
     done
 }
 
@@ -518,7 +525,11 @@ REGISTRY_ACTIVE=false
 
 echo ""; echo "Skills:"
 linked_any=false
-declare -A _EXPECT_SKILL=()
+# The set of expected skill-link basenames, held as a newline-delimited string and
+# membership-tested below rather than as an associative array — bash 3.2, which
+# macOS ships, has no `declare -A`. Basenames carry no newlines, so the delimiter
+# is unambiguous.
+_EXPECT_SKILL=$'\n'
 # Parse tab fields by hand: `IFS=$'\t' read` collapses consecutive tabs (tab is
 # IFS whitespace), dropping the empty owner of a global-scope row and shifting tier.
 while IFS= read -r _row; do
@@ -534,7 +545,7 @@ while IFS= read -r _row; do
     suffix="$(skills_link_suffix "$scope" "$owner")"
     dst="$SKILLS_DIR/${name}${suffix:+.$suffix}"
     link_path "$src" "$dst" "skills/${name}${suffix:+.$suffix}"
-    _EXPECT_SKILL["${name}${suffix:+.$suffix}"]=1
+    _EXPECT_SKILL="${_EXPECT_SKILL}${name}${suffix:+.$suffix}"$'\n'
     linked_any=true
 done <<< "$RESOLVED_TSV"
 $linked_any || echo "  (no always-tier skills)"
@@ -556,7 +567,10 @@ fi
 for d in "$SKILLS_DIR"/*; do
     [[ -L "$d" ]] || continue
     bn="$(basename "$d")"
-    [[ -n "${_EXPECT_SKILL[$bn]:-}" ]] || { rm "$d"; echo "  - removed stale skill $bn"; }
+    case "$_EXPECT_SKILL" in
+        *$'\n'"$bn"$'\n'*) ;;
+        *) rm "$d"; echo "  - removed stale skill $bn" ;;
+    esac
 done
 
 # COMPAT 0001 (remove after 2026-08-28) — codex skills used to link under

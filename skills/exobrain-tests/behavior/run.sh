@@ -65,7 +65,13 @@ command -v jq >/dev/null 2>&1 || { err "jq not on PATH"; exit 2; }
 meta_field() { jq -r --arg k "$2" --arg d "$3" '.[$k] // $d' "$1"; }
 
 # ---- discover cases -------------------------------------------------------
-mapfile -t ALL_CASES < <(find "$CASES_DIR" -mindepth 1 -maxdepth 1 -type d -exec test -f '{}/meta.json' ';' -print 2>/dev/null | xargs -n1 basename 2>/dev/null | sort)
+# while-read rather than `mapfile`, a bash 4 builtin absent from the bash 3.2 macOS
+# ships at /bin/bash.
+ALL_CASES=()
+while IFS= read -r _c; do
+    [[ -n "$_c" ]] || continue
+    ALL_CASES+=("$_c")
+done < <(find "$CASES_DIR" -mindepth 1 -maxdepth 1 -type d -exec test -f '{}/meta.json' ';' -print 2>/dev/null | xargs -n1 basename 2>/dev/null | sort)
 
 if [[ $LIST -eq 1 ]]; then
     for c in "${ALL_CASES[@]}"; do
