@@ -81,6 +81,6 @@ done
 
 echo "─────────────────────────────────────────────"
 printf '%s%d passed · %d failed · %d skipped%s\n' "$BOLD" "$PASS" "$FAIL" "$SKIP" "$RESET"
-[[ $FAIL -gt 0 ]] && printf '  - %s\n' "${FAILED[@]}"
+[[ $FAIL -gt 0 ]] && printf '  - %s\n' ${FAILED[@]+"${FAILED[@]}"}
 echo "─────────────────────────────────────────────"
 [[ $FAIL -eq 0 ]] && exit 0 || exit 1

@@ -868,6 +868,32 @@ test_validate_bash4_optout_honored() {
     assert_not_contains "$o" "bash 4 construct" "an opted-out script is skipped"
 }
 
+# The same interpreter, its other trap: an empty array is unset, so a bare
+# expansion aborts under `set -u`. The array that is empty most often is assigned
+# in a sourced lib and expanded by its caller, so the names are collected across
+# the whole tree — a per-file check would miss exactly that case.
+test_validate_flags_unguarded_array_expansion() {
+    local r; r="$(setup_fake_exobrain)"; add_person "$r" people/alice
+    cp "$SCRIPTS_DIR/validate-exobrain.sh" "$r/scripts/"
+    printf '#!/usr/bin/env bash\nopts=()\n' > "$r/scripts/lib.sh"
+    printf '#!/usr/bin/env bash\nrun "${opts[@]}"\nrun ${opts[@]+"${opts[@]}"}\n# prose about "${opts[@]}"\n' \
+        > "$r/scripts/probe.sh"
+    local o; o="$(cd "$r" && bash scripts/validate-exobrain.sh 2>&1)"
+    assert_contains "$o" "unguarded array expansion in scripts/probe.sh:2" "flagged across files, with its line" || return 1
+    assert_not_contains "$o" "scripts/probe.sh:3" "the guarded form passes" || return 1
+    assert_not_contains "$o" "scripts/probe.sh:4" "a comment mentioning one is not flagged"
+}
+
+# An array nobody assigns empty is left alone — the gate names a hazard it can
+# demonstrate, not every array expansion in the tree.
+test_validate_ignores_never_empty_array() {
+    local r; r="$(setup_fake_exobrain)"; add_person "$r" people/alice
+    cp "$SCRIPTS_DIR/validate-exobrain.sh" "$r/scripts/"
+    printf '#!/usr/bin/env bash\nfixed=(one two)\nrun "${fixed[@]}"\n' > "$r/scripts/probe.sh"
+    local o; o="$(cd "$r" && bash scripts/validate-exobrain.sh 2>&1)"
+    assert_not_contains "$o" "unguarded array expansion" "a never-empty array is not flagged"
+}
+
 test_validate_dangling_override() {
     local r; r="$(setup_fake_exobrain)"; add_person "$r" people/alice
     override_skill "$r" people/alice ghost global always   # no 'ghost' declaration anywhere
@@ -1024,6 +1050,8 @@ run_test "relink refreshes connected claude"   test_relink_refreshes_connected_c
 run_test "validate clean"                      test_validate_clean
 run_test "validate flags bash 4 constructs"    test_validate_flags_bash4_constructs
 run_test "validate honors bash 4 opt-out"      test_validate_bash4_optout_honored
+run_test "validate flags unguarded arrays"     test_validate_flags_unguarded_array_expansion
+run_test "validate spares never-empty arrays"  test_validate_ignores_never_empty_array
 run_test "validate dangling override"          test_validate_dangling_override
 run_test "fetcher accepts --leaves"            test_fetcher_accepts_leaves_no_external
 run_test "external resolve plan"               test_external_resolve_plan
@@ -1041,5 +1069,5 @@ run_test "seed scope in manifest"              test_seed_scope_in_manifest
 
 echo ""
 printf "Ran %d  ${GREEN}passed %d${RESET}  ${RED}failed %d${RESET}\n" "$TESTS_RUN" "$TESTS_PASSED" "$TESTS_FAILED"
-if [[ $TESTS_FAILED -gt 0 ]]; then printf 'Failures: %s\n' "${FAILURES[*]}"; exit 1; fi
+if [[ $TESTS_FAILED -gt 0 ]]; then printf 'Failures: %s\n' ${FAILURES[@]+"${FAILURES[*]}"}; exit 1; fi
 exit 0

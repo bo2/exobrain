@@ -36,7 +36,7 @@ EOF
 
     make_timeout 180
     local out rc
-    out="$(printf '%s' "$prompt" | "${NOPROXY[@]}" "${TIMEOUT[@]}" \
+    out="$(printf '%s' "$prompt" | ${NOPROXY[@]+"${NOPROXY[@]}"} ${TIMEOUT[@]+"${TIMEOUT[@]}"} \
         claude -p --permission-mode plan --model "$JUDGE_MODEL" 2>/dev/null)"
     rc=$?
 

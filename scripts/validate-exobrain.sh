@@ -176,12 +176,12 @@ if [[ -d "$REPO_DIR/seed/feed" ]]; then
 fi
 
 # ---------------------------------------------------------------------------
-# Shell portability — framework scripts ship into every instance and run under
-# whatever `#!/usr/bin/env bash` resolves to, which on macOS is the stock 3.2 at
-# /bin/bash whenever a newer Homebrew bash isn't first on PATH. Three bash-4-only
-# constructs recur; a published rule alone did not keep them out, so they are
-# checked. Comment lines are exempt (the rule is discussed in prose), as is a
-# script that opts out with `# exobrain-allow-bash4` and says why.
+# Shell portability — a script here runs under whatever `#!/usr/bin/env bash`
+# resolves to, which on macOS is the stock 3.2 at /bin/bash whenever a newer
+# Homebrew bash isn't first on PATH. Three bash-4-only constructs recur; a
+# written rule alone did not keep them out, so they are checked. Comment lines
+# are exempt (the rule is discussed in prose), as is a script that opts out with
+# `# exobrain-allow-bash4` and says why.
 # ---------------------------------------------------------------------------
 
 while IFS= read -r f; do
@@ -190,10 +190,47 @@ while IFS= read -r f; do
     rel="${f#"$REPO_DIR"/}"
     while IFS= read -r hit; do
         [[ -n "$hit" ]] || continue
-        record "bash 4 construct in $rel:${hit%%:*} — macOS ships bash 3.2; see seed/feed/0061"
+        record "bash 4 construct in $rel:${hit%%:*} — macOS ships bash 3.2 at /bin/bash"
     done < <(grep -nE '(^|[;&|(`]|[[:space:]])(mapfile|readarray)[[:space:]]|declare[[:space:]]+-A' "$f" 2>/dev/null \
              | grep -vE '^[0-9]+:[[:space:]]*#')
 done < <(find_repo -type f -name '*.sh' -not -path '*/_raw/*')
+
+# ---------------------------------------------------------------------------
+# Empty-array expansion — the same bash 3.2, which treats an empty array as
+# unset: a bare `"${arr[@]}"` aborts the script under `set -u`. The guarded form
+# `${arr[@]+"${arr[@]}"}` is correct whether or not the array is empty, so it is
+# required of every array some script assigns an empty literal. Names are
+# collected across the whole repo because the array that is empty most often is
+# assigned in one file and expanded in another (a sourced lib and its caller).
+# Comment lines are exempt.
+# ---------------------------------------------------------------------------
+
+_empty_arrays="$(
+    while IFS= read -r f; do
+        [[ -n "$f" ]] || continue
+        grep -oE '[A-Za-z_][A-Za-z0-9_]*=\(\)' "$f" 2>/dev/null
+    done < <(find_repo -type f -name '*.sh' -not -path '*/_raw/*') | sed 's/=()$//' | sort -u
+)"
+
+if [[ -n "$_empty_arrays" ]]; then
+    # NAME|NAME|… — every array seen assigned empty anywhere in the repo.
+    _array_re="$(printf '%s' "$_empty_arrays" | tr '\n' '|' | sed 's/|$//')"
+    _bare_re="\"\\\$\{!?($_array_re)\[[@*]\]\}\""
+    # A guarded expansion contains the bare form as a substring, so strip the
+    # guards from the line before looking for what is left.
+    _guard_re='\$\{[A-Za-z_][A-Za-z0-9_]*\[[@*]\]\+"\$\{!?[A-Za-z_][A-Za-z0-9_]*\[[@*]\]\}"\}'
+    while IFS= read -r f; do
+        [[ -n "$f" ]] || continue
+        rel="${f#"$REPO_DIR"/}"
+        while IFS= read -r hit; do
+            [[ -n "$hit" ]] || continue
+            record "unguarded array expansion in $rel:${hit%%:*} — write \${name[@]+\"\${name[@]}\"}; bash 3.2 errors on an empty array under set -u"
+        done < <(grep -nE "$_bare_re" "$f" 2>/dev/null \
+                 | sed -E "s/$_guard_re//g" \
+                 | grep -E "$_bare_re" \
+                 | grep -vE '^[0-9]+:[[:space:]]*#')
+    done < <(find_repo -type f -name '*.sh' -not -path '*/_raw/*')
+fi
 
 # ---------------------------------------------------------------------------
 # Compatibility-shim ledger — transitional code carries a `COMPAT <id> (remove
@@ -411,7 +448,7 @@ fi
 
 if ! $QUIET; then
     echo "exobrain validation: ${#VIOLATIONS[@]} violation(s):"
-    for v in "${VIOLATIONS[@]}"; do
+    for v in ${VIOLATIONS[@]+"${VIOLATIONS[@]}"}; do
         echo "  - $v"
     done
     echo ""

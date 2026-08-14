@@ -149,13 +149,13 @@ find_scope_by_name() {
         matches+=("${d#"$repo_dir"/}")
     done < <(find "$repo_dir" \( "${SCOPE_FIND_PRUNE[@]}" \) -prune -o -type d -name "$name" -print 2>/dev/null)
     if [[ ${#matches[@]} -gt 1 && -n "$keyword" ]]; then
-        for rel in "${matches[@]}"; do
+        for rel in ${matches[@]+"${matches[@]}"}; do
             parent="${rel%/*}"
             [[ "${parent##*/}" == "$keyword" ]] && kept+=("$rel")
         done
-        [[ ${#kept[@]} -gt 0 ]] && matches=("${kept[@]}")
+        [[ ${#kept[@]} -gt 0 ]] && matches=(${kept[@]+"${kept[@]}"})
     fi
-    if [[ ${#matches[@]} -gt 0 ]]; then printf '%s\n' "${matches[@]}" | sort; fi
+    if [[ ${#matches[@]} -gt 0 ]]; then printf '%s\n' ${matches[@]+"${matches[@]}"} | sort; fi
 }
 
 # list_connectable_scopes <repo_dir> — every scope (AGENTS.md dir) except the
@@ -265,7 +265,7 @@ owner_self_ids() {
         [[ -z "$s" || "$s" == "global" ]] && continue
         [[ "$(scope_type_for "$repo_dir" "$s")" == "person" ]] && ids+=("${s##*/}")
     done < <(build_scope_chain "$repo_dir" "$@")
-    if [[ ${#ids[@]} -eq 0 ]]; then echo '[]'; else printf '%s\n' "${ids[@]}" | jq -R . | jq -cs .; fi
+    if [[ ${#ids[@]} -eq 0 ]]; then echo '[]'; else printf '%s\n' ${ids[@]+"${ids[@]}"} | jq -R . | jq -cs .; fi
 }
 
 # skills_resolve <repo_dir> <agent> <leaf...>

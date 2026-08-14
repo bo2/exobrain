@@ -40,7 +40,7 @@ fi
 # Two slugs from different owners can share a repo name and would then resolve to
 # the same src/ cache dir — silently harvesting one repo twice. Refuse rather than
 # guess which was meant.
-dupes="$(for e in "${entries[@]}"; do printf '%s\n' "$(entry_local_path "$REPO_DIR" "$e" 2>/dev/null)"; done | sort | uniq -d)"
+dupes="$(for e in ${entries[@]+"${entries[@]}"}; do printf '%s\n' "$(entry_local_path "$REPO_DIR" "$e" 2>/dev/null)"; done | sort | uniq -d)"
 if [[ -n "$dupes" ]]; then
     echo "seed-harvest: these instances resolve to the same local path:" >&2
     printf '  %s\n' $dupes >&2
@@ -58,7 +58,7 @@ state_of() {
 
 do_fetch() {
     local e kind path url
-    for e in "${entries[@]}"; do
+    for e in ${entries[@]+"${entries[@]}"}; do
         kind="$(entry_kind "$e")"
         [[ "$kind" == slug ]] || { printf 'skip\t%s\t(local path — left untouched)\n' "$(entry_name "$e")"; continue; }
         path="$(entry_local_path "$REPO_DIR" "$e")"
@@ -83,7 +83,7 @@ do_fetch() {
 do_list() {
     local e path
     printf '%s\t%s\t%s\t%s\n' NAME KIND STATE PATH
-    for e in "${entries[@]}"; do
+    for e in ${entries[@]+"${entries[@]}"}; do
         path="$(entry_local_path "$REPO_DIR" "$e" 2>/dev/null || echo '-')"
         printf '%s\t%s\t%s\t%s\n' "$(entry_name "$e")" "$(entry_kind "$e")" "$(state_of "$path")" "$path"
     done
@@ -113,7 +113,7 @@ report_diff() {
 do_drift() {
     local e name path meta seed_meta f rel
     seed_meta="$(instance_meta_dir "$REPO_DIR" || echo knowledge/exobrain)"
-    for e in "${entries[@]}"; do
+    for e in ${entries[@]+"${entries[@]}"}; do
         name="$(entry_name "$e")"
         [[ -n "$want" && "$want" != "$name" ]] && continue
         path="$(entry_local_path "$REPO_DIR" "$e" 2>/dev/null || true)"

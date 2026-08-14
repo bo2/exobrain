@@ -29,6 +29,9 @@ NOPROXY=(env -u ALL_PROXY -u HTTPS_PROXY -u HTTP_PROXY -u all_proxy -u https_pro
 
 # make_timeout <seconds> — set the global TIMEOUT array to a timeout/gtimeout
 # invocation, or empty if neither is on PATH (then the command runs unbounded).
+# Expand it as `${TIMEOUT[@]+"${TIMEOUT[@]}"}`: bash 3.2, the interpreter macOS
+# ships at /bin/bash, treats an empty array as unset and errors on the bare form
+# under `set -u` — and a machine without coreutils leaves it empty every run.
 make_timeout() {
     local secs="$1" t
     TIMEOUT=()

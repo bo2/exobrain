@@ -287,7 +287,7 @@ if [[ $TESTS_FAILED -eq 0 ]]; then
     echo -e "${GREEN}${BOLD}All $TESTS_PASSED tests passed${RESET}"
 else
     echo -e "${RED}${BOLD}$TESTS_FAILED of $TESTS_RUN failed${RESET}"
-    for f in "${FAILURES[@]}"; do echo "  - $f"; done
+    for f in ${FAILURES[@]+"${FAILURES[@]}"}; do echo "  - $f"; done
 fi
 echo ""
 exit $(( TESTS_FAILED > 0 ? 1 : 0 ))

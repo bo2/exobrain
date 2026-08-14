@@ -107,7 +107,7 @@ if [ -n "${BUILD_ONLY:-}" ]; then
 fi
 
 # --- Run the matrix --------------------------------------------------------------
-for entry in "${TASKS[@]}"; do
+for entry in ${TASKS[@]+"${TASKS[@]}"}; do
   IFS='|' read -r id set grade correct wrong prompt <<< "$entry"
   in_filter "$set" "$id" || continue
   for arm in control treatment; do
@@ -123,7 +123,7 @@ done
 echo
 echo "================ SUMMARY (agent=$AGENT, model=$MODEL, N=$N, filter=$FILTER) ================"
 printf '%-18s %-8s %-18s %-18s %s\n' "task" "set" "control correct" "treatment correct" ""
-for entry in "${TASKS[@]}"; do
+for entry in ${TASKS[@]+"${TASKS[@]}"}; do
   IFS='|' read -r id set grade correct wrong prompt <<< "$entry"
   in_filter "$set" "$id" || continue
   cc=$(grep -c ',correct,' "$OUTDIR/${AGENT}-${MODEL}-${id}-control.csv" 2>/dev/null); cc=${cc:-0}

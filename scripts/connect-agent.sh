@@ -173,7 +173,7 @@ save_config() {
     if [[ ${#CONNECTED_LEAVES[@]} -eq 0 ]]; then
         leaves_json='[]'
     else
-        leaves_json="$(printf '%s\n' "${CONNECTED_LEAVES[@]}" | jq -R . | jq -s .)"
+        leaves_json="$(printf '%s\n' ${CONNECTED_LEAVES[@]+"${CONNECTED_LEAVES[@]}"} | jq -R . | jq -s .)"
     fi
     agents_json="$(jq -r '(.agents // [])' <<< "$existing" 2>/dev/null || echo '[]')"
     agents_json="$(jq --arg a "$AGENT" '. as $cur | ($cur + [$a]) | unique' <<< "$agents_json")"
@@ -783,7 +783,7 @@ fi
 # + root sidecar) is auto-loaded by the agent and is deliberately omitted. Shared by
 # all backends so the composition lives in one place; only the delivery below differs.
 compose_context() {
-    for scope in "${CHAIN[@]}"; do
+    for scope in ${CHAIN[@]+"${CHAIN[@]}"}; do
         [[ "$scope" == "global" ]] && continue
         if [[ -f "$REPO_DIR/$scope/AGENTS.md" ]]; then
             echo "<!-- scope: $scope -->"; echo ""; cat "$REPO_DIR/$scope/AGENTS.md"; echo ""
@@ -819,7 +819,7 @@ compose_scope_manifest() {
     # returns 1, which under `set -e` aborts at the `… > file` call site whenever the
     # last scope lacks a sidecar. An `if` whose test fails returns 0, so the function
     # always succeeds (matching compose_context's style).
-    for scope in "${CHAIN[@]}"; do
+    for scope in ${CHAIN[@]+"${CHAIN[@]}"}; do
         [[ "$scope" == "global" ]] && continue
         if [[ -f "$REPO_DIR/$scope/AGENTS.md" ]];      then echo "@../$scope/AGENTS.md"; fi
         if [[ -f "$REPO_DIR/$scope/$AGENT_SIDECAR" ]]; then echo "@../$scope/$AGENT_SIDECAR"; fi

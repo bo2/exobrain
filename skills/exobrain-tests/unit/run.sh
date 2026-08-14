@@ -74,7 +74,7 @@ done <<< "$HARNESSES"
 if [[ $ran -eq 0 ]]; then echo "no harnesses selected" >&2; exit 2; fi
 plural=""; [[ $ran -ne 1 ]] && plural="es"
 if [[ $failed -gt 0 ]]; then
-    printf "${RED}${BOLD}%d/%d harness%s failed${RESET}: %s\n" "$failed" "$ran" "$plural" "${FAILED_NAMES[*]}"
+    printf "${RED}${BOLD}%d/%d harness%s failed${RESET}: %s\n" "$failed" "$ran" "$plural" ${FAILED_NAMES[@]+"${FAILED_NAMES[*]}"}
     exit 1
 fi
 printf "${GREEN}${BOLD}All %d harness%s passed${RESET}\n" "$ran" "$plural"
