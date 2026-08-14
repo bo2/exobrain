@@ -8,7 +8,7 @@ When `AGENTS.md` or a skill refers to "the agent's primitive for X", map it to t
 
 ## Git history hygiene
 
-Keep this repo's history agent-neutral — omit Codex's default attribution from commit messages and PR bodies. (`validate-exobrain.sh` gates outgoing commit messages for agent-attribution trailers and footers regardless of which agent authored them.)
+Keep this repo's history agent-neutral — omit Codex's default attribution from commit messages and PR bodies.
 
 ## Auto-loading
 

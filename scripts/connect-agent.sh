@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # connect-agent.sh — wire exobrain scope content into an AI agent's surface.
 #
-#   connect-agent.sh <claude|codex|openclaw> [--relink] [--configure] [--render-specs-only]
+#   connect-agent.sh <claude|codex|openclaw> [--relink] [--configure] [--wire-sandbox]
 #                     [--handle <id>] [--host <name>] [--scope <path>]... [--guest]
 #
 # A scope is any directory containing an AGENTS.md. The connected scopes (recorded
@@ -27,14 +27,15 @@
 #              same dir level); skills in repo-local .agents/skills/
 #   openclaw → ~/.openclaw/workspace/USER.md, marker-block injection
 #
-# --render-specs-only builds the in-repo context surface (scope specs, skills,
+# --wire-sandbox builds the in-repo context surface (scope specs, skills,
 # optional-skills index, per-agent injection) and stops before any write outside
 # the target dir — no shell-profile edits, no sibling clones, no git hooks, no
-# connect marker. It lets a throwaway copy (a test sandbox, a CI checkout) be
-# wired exactly like a real checkout with zero global side effects. Codex's
-# surface lands entirely in the checkout (AGENTS.override.md, .agents/skills);
-# openclaw's USER.md lands in the OPENCLAW_WORKSPACE copy dir, which a render
-# requires to be set — it refuses rather than default to the real home config.
+# connect marker, no scope hooks. It lets a throwaway copy (a test sandbox, a CI
+# checkout) be wired exactly like a real checkout with zero global side effects.
+# Codex's surface lands entirely in the checkout (AGENTS.override.md,
+# .agents/skills); openclaw's USER.md lands in the OPENCLAW_WORKSPACE copy dir,
+# which the mode requires to be set — it refuses rather than default to the real
+# home config.
 
 set -euo pipefail
 
@@ -173,7 +174,7 @@ save_config() {
     if [[ ${#CONNECTED_LEAVES[@]} -eq 0 ]]; then
         leaves_json='[]'
     else
-        leaves_json="$(printf '%s\n' "${CONNECTED_LEAVES[@]}" | jq -R . | jq -s .)"
+        leaves_json="$(printf '%s\n' ${CONNECTED_LEAVES[@]+"${CONNECTED_LEAVES[@]}"} | jq -R . | jq -s .)"
     fi
     agents_json="$(jq -r '(.agents // [])' <<< "$existing" 2>/dev/null || echo '[]')"
     agents_json="$(jq --arg a "$AGENT" '. as $cur | ($cur + [$a]) | unique' <<< "$agents_json")"
@@ -385,16 +386,19 @@ resolve_from_flags() {
 # Argument parsing + agent setup
 # --------------------------------------------------------------------------
 
-AGENT="" ; RELINK=false ; CONFIGURE=false ; RENDER_ONLY=false
+AGENT="" ; RELINK=false ; CONFIGURE=false ; WIRE_SANDBOX=false
 FLAG_HANDLE="" ; FLAG_HOST="" ; FLAG_SCOPES=() ; FLAG_GUEST=false
-USAGE="Usage: $0 <claude|codex|openclaw> [--relink] [--configure] [--render-specs-only]
+USAGE="Usage: $0 <claude|codex|openclaw> [--relink] [--configure] [--wire-sandbox]
               [--handle <id>] [--host <name>] [--scope <path>]... [--guest]"
 while [[ $# -gt 0 ]]; do
     case "$1" in
         claude|codex|openclaw) AGENT="$1" ;;
         --relink)             RELINK=true ;;
         --configure)          CONFIGURE=true ;;
-        --render-specs-only)  RENDER_ONLY=true ;;
+        --wire-sandbox)       WIRE_SANDBOX=true ;;
+        # COMPAT 0005 (remove after 2026-09-13) — the flag's name before --wire-sandbox.
+        --render-specs-only)  WIRE_SANDBOX=true
+                              echo "warning: --render-specs-only is now --wire-sandbox" >&2 ;;
         --handle)             FLAG_HANDLE="${2:-}"; shift ;;
         --handle=*)           FLAG_HANDLE="${1#*=}" ;;
         --host)               FLAG_HOST="${2:-}"; shift ;;
@@ -432,21 +436,21 @@ case "$AGENT" in
               AGENT_SIDECAR="OPENCLAW.md"; AGENT_SIDECAR_BASE="OPENCLAW" ;;
 esac
 
-# --render-specs-only promises no writes outside the checkout, but openclaw
+# --wire-sandbox promises no writes outside the checkout, but openclaw
 # delivers part of its surface into TARGET_DIR — the real home config dir when
 # the override isn't set — and codex's legacy cleanups (COMPAT 0001/0002/0003)
 # prune connector-written files there. Refuse up front rather than touch the
-# home dir and call it a render. The codex arm retires with those shims.
-if $RENDER_ONLY; then
+# home dir and call it a sandbox. The codex arm retires with those shims.
+if $WIRE_SANDBOX; then
     case "$AGENT" in
         codex)    [[ -n "${CODEX_HOME:-}" ]] || {
-                      echo "--render-specs-only for codex runs legacy home-dir cleanups against CODEX_HOME (default ~/.codex)." >&2
-                      echo "Set CODEX_HOME to a throwaway dir first, e.g.: CODEX_HOME=\$(mktemp -d) $0 codex --render-specs-only" >&2
+                      echo "--wire-sandbox for codex runs legacy home-dir cleanups against CODEX_HOME (default ~/.codex)." >&2
+                      echo "Set CODEX_HOME to a throwaway dir first, e.g.: CODEX_HOME=\$(mktemp -d) $0 codex --wire-sandbox" >&2
                       exit 1
                   } ;;
         openclaw) [[ -n "${OPENCLAW_WORKSPACE:-}" ]] || {
-                      echo "--render-specs-only for openclaw writes USER.md into OPENCLAW_WORKSPACE (default ~/.openclaw/workspace)." >&2
-                      echo "Set OPENCLAW_WORKSPACE to a throwaway dir first, e.g.: OPENCLAW_WORKSPACE=\$(mktemp -d) $0 openclaw --render-specs-only" >&2
+                      echo "--wire-sandbox for openclaw writes USER.md into OPENCLAW_WORKSPACE (default ~/.openclaw/workspace)." >&2
+                      echo "Set OPENCLAW_WORKSPACE to a throwaway dir first, e.g.: OPENCLAW_WORKSPACE=\$(mktemp -d) $0 openclaw --wire-sandbox" >&2
                       exit 1
                   } ;;
     esac
@@ -482,10 +486,10 @@ fi
 if $flags_given; then
     resolve_from_flags
 elif $CONFIGURE || ! load_config; then
-    # --relink / --render-specs-only never prompt or write config: with no config
-    # they render as guest (global scope only). A real first-time setup is
+    # --relink / --wire-sandbox never prompt or write config: with no config
+    # they wire as guest (global scope only). A real first-time setup is
     # interactive; a headless run with no flags and no config is guest.
-    if ! $RELINK && ! $RENDER_ONLY && is_interactive; then
+    if ! $RELINK && ! $WIRE_SANDBOX && is_interactive; then
         run_wizard
     else
         CONNECTED_LEAVES=()
@@ -783,7 +787,7 @@ fi
 # + root sidecar) is auto-loaded by the agent and is deliberately omitted. Shared by
 # all backends so the composition lives in one place; only the delivery below differs.
 compose_context() {
-    for scope in "${CHAIN[@]}"; do
+    for scope in ${CHAIN[@]+"${CHAIN[@]}"}; do
         [[ "$scope" == "global" ]] && continue
         if [[ -f "$REPO_DIR/$scope/AGENTS.md" ]]; then
             echo "<!-- scope: $scope -->"; echo ""; cat "$REPO_DIR/$scope/AGENTS.md"; echo ""
@@ -819,7 +823,7 @@ compose_scope_manifest() {
     # returns 1, which under `set -e` aborts at the `… > file` call site whenever the
     # last scope lacks a sidecar. An `if` whose test fails returns 0, so the function
     # always succeeds (matching compose_context's style).
-    for scope in "${CHAIN[@]}"; do
+    for scope in ${CHAIN[@]+"${CHAIN[@]}"}; do
         [[ "$scope" == "global" ]] && continue
         if [[ -f "$REPO_DIR/$scope/AGENTS.md" ]];      then echo "@../$scope/AGENTS.md"; fi
         if [[ -f "$REPO_DIR/$scope/$AGENT_SIDECAR" ]]; then echo "@../$scope/$AGENT_SIDECAR"; fi
@@ -920,14 +924,14 @@ case "$AGENT" in
         ;;
 esac
 
-# --render-specs-only stops here. Everything above writes only inside the checkout
+# --wire-sandbox stops here. Everything above writes only inside the checkout
 # (the in-repo .claude surface, or the in-repo AGENTS.override.md for codex) or a
 # *_HOME-overridden copy dir (openclaw's USER.md — the guard at TARGET_DIR selection
-# refuses a render without the override); the connect marker and git hooks below are
-# the first writes outside it. Truncating here — not forking a parallel render
-# path — keeps the rendered surface identical to a full connect.
-if $RENDER_ONLY; then
-    echo ""; echo "✓ Rendered $AGENT context surface (no out-of-dir writes)."
+# refuses to run without the override); the connect marker and git hooks below are
+# the first writes outside it. Truncating here — not forking a parallel wiring
+# path — keeps a sandbox's surface identical to a full connect's.
+if $WIRE_SANDBOX; then
+    echo ""; echo "✓ Wired $AGENT context surface (no out-of-dir writes)."
     exit 0
 fi
 
@@ -952,10 +956,13 @@ install_hook
 # exist, universal first. The global scope is skipped — its scripts/connect-agent.sh
 # is this connector, so running it as a hook would recurse.
 #
-# They run below the --render-specs-only cutoff because a hook is arbitrary code
-# with its own write surface, and a render promises none. A failing hook is
+# They run below the --wire-sandbox cutoff because a hook is arbitrary code
+# with its own write surface, and a sandbox wiring promises none. A failing hook is
 # reported with its output and the connect carries on: one scope's extra must not
-# cost the human their wiring.
+# cost the human their wiring — which is why every loop tail below is an `if`
+# block rather than a trailing `[[ … ]] && …`, whose false status would become
+# the loop's, ride both loops out of the function, and abort the connect at the
+# bare call site under `set -e`.
 run_scope_hooks() {
     local scope hook output line status announced=false
     for scope in ${CHAIN[@]+"${CHAIN[@]}"}; do
@@ -970,7 +977,7 @@ run_scope_hooks() {
             else
                 echo "  ! $scope/scripts/$(basename "$hook") failed (exit $status) — connect continues"
                 while IFS= read -r line; do
-                    [[ -n "$line" ]] && echo "      $line"
+                    if [[ -n "$line" ]]; then echo "      $line"; fi
                 done <<< "$output"
             fi
         done

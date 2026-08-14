@@ -74,7 +74,7 @@ while IFS= read -r _c; do
 done < <(find "$CASES_DIR" -mindepth 1 -maxdepth 1 -type d -exec test -f '{}/meta.json' ';' -print 2>/dev/null | xargs -n1 basename 2>/dev/null | sort)
 
 if [[ $LIST -eq 1 ]]; then
-    for c in "${ALL_CASES[@]}"; do
+    for c in ${ALL_CASES[@]+"${ALL_CASES[@]}"}; do
         printf '%-32s %s\n' "$c" "$(meta_field "$CASES_DIR/$c/meta.json" description '')"
     done
     exit 0
@@ -102,7 +102,7 @@ if [[ $SMOKE -eq 1 ]]; then
 elif [[ -n "$SEL_CASES" ]]; then
     IFS=',' read -r -a CASES <<<"$SEL_CASES"
 else
-    CASES=("${ALL_CASES[@]}")
+    CASES=(${ALL_CASES[@]+"${ALL_CASES[@]}"})
 fi
 [[ ${#CASES[@]} -eq 0 ]] && { err "no cases selected"; exit 2; }
 
@@ -154,7 +154,7 @@ provision_instance() {
 summary_init "$RUN_ROOT"
 overall_setup_error=0
 
-for agent in "${AGENTS[@]}"; do
+for agent in ${AGENTS[@]+"${AGENTS[@]}"}; do
   log "######## agent: $agent ########"
   for case in "${CASES[@]}"; do
     cdir="$CASES_DIR/$case"

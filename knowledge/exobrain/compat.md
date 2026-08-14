@@ -28,3 +28,4 @@ Delete the marked block, the tests that cover it, and the row — in one change.
 | 0002 | The `<!-- BEGIN exobrain -->` marker block in the Codex home `AGENTS.md`, superseded by the in-repo `AGENTS.override.md`. | `scripts/connect-agent.sh` | 2026-07-11 | 2026-08-28 |
 | 0003 | Generated index copies in the agent's home config dir, from when that dir was the delivery transport. | `scripts/connect-agent.sh`, `skills/exobrain-tests/unit/test-connect-agent.sh` | 2026-07-28 | 2026-08-28 |
 | 0004 | `.claude/domains-index.md`, the knowledge index under the name it carried before it was named after its tree. | `scripts/connect-agent.sh`, `skills/exobrain-tests/unit/test-connect-agent.sh` | 2026-07-31 | 2026-08-30 |
+| 0005 | Callers still passing `--render-specs-only`, the sandbox-wiring flag's name before `--wire-sandbox`. | `scripts/connect-agent.sh`, `skills/exobrain-tests/unit/test-connect-agent.sh` | 2026-08-13 | 2026-09-13 |

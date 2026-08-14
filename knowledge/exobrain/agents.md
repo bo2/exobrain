@@ -12,9 +12,9 @@ For the skill-loading side of the same machinery, see [`skills.md`](skills.md).
 | **OpenClaw** | `openclaw` | `.openclaw` | `~/.openclaw/workspace/` |
 | **Codex** | `codex` | `.codex` | `~/.codex/` |
 
-The marker tells `connect-agent.sh` *"this user wants this agent connected here."* The post-merge git hook re-links each agent that has a marker; agents without one are silently skipped.
+A marker is the agent's generated surface (or a file beside it), and its presence means *"this agent is wired here — keep it maintained."* Connecting is the human act; from then on the post-merge git hook re-links each agent whose marker exists and silently skips the rest. Disconnecting an agent is removing its marker.
 
-Every marker is a **gitignored file the connector generates** — a path that exists only because a human connected this agent in this checkout. That rules out `.claude/`: the directory ships in every clone (it carries the committed `settings.json`), so its presence would pass the check in a checkout nobody ever connected. Claude's composed surface, written on every connect and relink, is the honest signal. `connect-agent.sh` and `exobrain-healthcheck.sh` test the same three paths.
+Every marker is therefore a **gitignored file the connector generates**, never a committed path like the `.claude/` directory — that ships in every clone for its `settings.json`, so it proves the clone rather than the choice. `connect-agent.sh` and `exobrain-healthcheck.sh` test the same three paths.
 
 ## Universal-by-default
 
@@ -64,7 +64,7 @@ A single run:
 7. **Install the git hooks** — rewritten on every run, `--relink` included, so a template change reaches a checkout that connected long ago. What each hook runs: [`machinery.md`](machinery.md) § Git hooks.
 8. **Run scope hooks** — a connected scope extends the connect with setup of its own. Each scope in the chain carrying an executable `scripts/connect-agent.sh` (every agent) or `scripts/connect-agent.<agent>.sh` (that agent alone) gets it run, shallow→deep, as `<hook> <agent> <target-dir> <scope-dir>`; both run when both exist, universal first. The global scope is skipped — its `scripts/connect-agent.sh` is the connector. A hook that fails is reported and the connect carries on.
 
-`--relink` repeats steps 2–8 without prompting and writes no marker (the marker records that a human connected this agent, so a `--relink` for an unmarked agent exits before any of this); `--configure` re-resolves identity (the wizard, or the identity flags); `--render-specs-only` runs steps 2–6 and stops before any write outside the target dir (no marker, no hooks) — for wiring a throwaway copy; for codex/openclaw it refuses to run unless `CODEX_HOME` / `OPENCLAW_WORKSPACE` points the target dir away from the real home config.
+`--relink` repeats steps 2–8 without prompting and writes neither marker nor config (a `--relink` for an unmarked agent exits before any of this); `--configure` re-resolves identity (the wizard, or the identity flags); `--wire-sandbox` runs steps 2–6 and stops before hooks and scope hooks — real wiring for a throwaway copy (a test sandbox, a CI checkout), so a wire-sandboxed checkout counts as connected for claude. For codex/openclaw the mode refuses to run unless `CODEX_HOME` / `OPENCLAW_WORKSPACE` is set, so the real home config is never the implicit target — the guard checks that the variable is set, not where it points, so point it at a throwaway dir.
 
 ## Adding a new agent
 

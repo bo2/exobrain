@@ -89,7 +89,7 @@ compat_due_report() {
     done < <(grep -E '^\|[[:space:]]*[0-9]{4}[[:space:]]*\|' "$ledger" 2>/dev/null)
     [[ ${#due[@]} -eq 0 ]] && return 0
     echo "⚠ ${#due[@]} compatibility shim(s) past the removal date:"
-    for d in "${due[@]}"; do echo "  - $d"; done
+    for d in ${due[@]+"${due[@]}"}; do echo "  - $d"; done
     echo "  Remove the marked code, the tests covering it, and the ledger row (knowledge/exobrain/compat.md)."
 }
 
@@ -121,7 +121,7 @@ if [[ ${#agents[@]} -eq 0 ]]; then
 fi
 
 # 3. Per agent: connected? then check its links for staleness.
-for a in "${agents[@]}"; do
+for a in ${agents[@]+"${agents[@]}"}; do
     if ! connected "$a"; then
         problems+=("$a: not connected — run: scripts/connect-agent.sh $a")
         continue
@@ -169,7 +169,7 @@ compat="$(compat_due_report)"
 
 if [[ ${#problems[@]} -gt 0 ]]; then
     echo "⚠ exobrain connection needs attention:"
-    for p in "${problems[@]}"; do echo "  - $p"; done
+    for p in ${problems[@]+"${problems[@]}"}; do echo "  - $p"; done
     echo "  Suggestions only — connect-agent.sh is run by you, the human, not the agent."
 fi
 

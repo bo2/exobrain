@@ -37,7 +37,7 @@ render() {
     local n=1 i h
     echo "" >"$out"
     echo "Harvest candidates (type a number to toggle, 'a' all, 'n' none, Enter to accept):" >"$out"
-    for i in "${!ids[@]}"; do
+    for i in ${ids[@]+"${!ids[@]}"}; do
         for h in ${headers[@]+"${headers[@]}"}; do
             [[ "${h%%:*}" == "$i" ]] && printf '\n  %s\n' "${h#*:}" >"$out"
         done
@@ -52,8 +52,8 @@ while true; do
     read -r input <&3 || break
     case "$input" in
         "") break ;;
-        a|A) for i in "${!marks[@]}"; do marks[$i]=1; done ;;
-        n|N) for i in "${!marks[@]}"; do marks[$i]=0; done ;;
+        a|A) for i in ${marks[@]+"${!marks[@]}"}; do marks[$i]=1; done ;;
+        n|N) for i in ${marks[@]+"${!marks[@]}"}; do marks[$i]=0; done ;;
         q|Q) echo "  aborted" >"$out"; exit 4 ;;
         *)
             if [[ "$input" =~ ^[0-9]+$ ]] && (( input >= 1 && input <= ${#ids[@]} )); then
@@ -65,7 +65,7 @@ while true; do
     esac
 done
 
-for i in "${!ids[@]}"; do
+for i in ${ids[@]+"${!ids[@]}"}; do
     [[ "${marks[$i]}" == 1 ]] && printf '%s\n' "${ids[$i]}"
 done
 exit 0

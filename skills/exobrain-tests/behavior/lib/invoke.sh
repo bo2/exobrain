@@ -99,8 +99,8 @@ JSON
             export EGRESS_LOG="$egress"; : >"$EGRESS_LOG"
             export PATH="$STUB_DIR:$PATH"
         fi
-        "${NOPROXY[@]}" "${TIMEOUT[@]}" claude -p \
-            "${perm[@]}" "${model_flag[@]}" \
+        ${NOPROXY[@]+"${NOPROXY[@]}"} ${TIMEOUT[@]+"${TIMEOUT[@]}"} claude -p \
+            ${perm[@]+"${perm[@]}"} ${model_flag[@]+"${model_flag[@]}"} \
             --add-dir "$inst" --add-dir "$rundir" \
             --output-format "$ofmt" \
             <"$prompt_file"
@@ -171,8 +171,8 @@ _invoke_codex() {
             export EGRESS_LOG="$egress"; : >"$EGRESS_LOG"
             export PATH="$STUB_DIR:$PATH"
         fi
-        "${NOPROXY[@]}" "${TIMEOUT[@]}" codex exec \
-            -s "$sandbox" "${extra[@]}" "${sec[@]}" "${model_flag[@]}" - \
+        ${NOPROXY[@]+"${NOPROXY[@]}"} ${TIMEOUT[@]+"${TIMEOUT[@]}"} codex exec \
+            -s "$sandbox" ${extra[@]+"${extra[@]}"} ${sec[@]+"${sec[@]}"} ${model_flag[@]+"${model_flag[@]}"} - \
             <"$prompt_file"
     ) >"$out" 2>"$out.err"
 }

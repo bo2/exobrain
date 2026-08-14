@@ -6,10 +6,9 @@
 #   skills/exobrain-tests/unit/test-connect-agent.sh            # run all
 #   skills/exobrain-tests/unit/test-connect-agent.sh <pattern>  # filter by name
 #
-# Each test builds an isolated fake exobrain in a temp dir and renders the agent
-# surface side-effect-free (connect-agent.sh --render-specs-only with HOME /
-# CODEX_HOME / OPENCLAW_WORKSPACE pointed at temp dirs), so nothing touches the
-# real repo or ~/. Function-level checks source skills-registry.sh directly.
+# Each test builds an isolated fake exobrain in a temp dir and wires the agent
+# surface into it (connect-agent.sh --wire-sandbox with HOME / CODEX_HOME /
+# OPENCLAW_WORKSPACE pointed at temp dirs), so nothing touches the real repo or ~/. Function-level checks source skills-registry.sh directly.
 
 set -uo pipefail
 
@@ -139,21 +138,21 @@ add_domain() {
 
 write_config() { printf '{"connected_scopes":["%s"],"agents":["%s"]}\n' "$2" "${3:-claude}" > "$1/.exobrain.json"; }
 
-# render <repo> <agent> — render the agent surface side-effect-free, HOME-isolated.
-render() {
+# wire_sandbox <repo> <agent> — wire the agent surface into the fixture, HOME-isolated.
+wire_sandbox() {
     local repo="$1" agent="$2"
     mkdir -p "$TEST_DIR/home" "$TEST_DIR/codex" "$TEST_DIR/ocw"
     (cd "$repo" && env "HOME=$TEST_DIR/home" "CODEX_HOME=$TEST_DIR/codex" \
-        "OPENCLAW_WORKSPACE=$TEST_DIR/ocw" bash scripts/connect-agent.sh "$agent" --render-specs-only)
+        "OPENCLAW_WORKSPACE=$TEST_DIR/ocw" bash scripts/connect-agent.sh "$agent" --wire-sandbox)
 }
 
-# render_flags <repo> <agent> <flag...> — render with explicit identity flags, so
+# wire_sandbox_flags <repo> <agent> <flag...> — wire with explicit identity flags, so
 # resolve_from_flags runs and writes .exobrain.json into the sandbox.
-render_flags() {
+wire_sandbox_flags() {
     local repo="$1" agent="$2"; shift 2
     mkdir -p "$TEST_DIR/home" "$TEST_DIR/codex" "$TEST_DIR/ocw"
     (cd "$repo" && env "HOME=$TEST_DIR/home" "CODEX_HOME=$TEST_DIR/codex" \
-        "OPENCLAW_WORKSPACE=$TEST_DIR/ocw" bash scripts/connect-agent.sh "$agent" --render-specs-only "$@")
+        "OPENCLAW_WORKSPACE=$TEST_DIR/ocw" bash scripts/connect-agent.sh "$agent" --wire-sandbox "$@")
 }
 
 # connect <repo> <agent> [flag...] — a real connect (writes the marker and the
@@ -379,12 +378,28 @@ test_scope_hook_failure_is_reported_not_fatal() {
     assert_contains "$out" "✓ Connected claude." "the connect still completes"
 }
 
-# A render promises no writes outside the target dir; a hook is arbitrary code.
-test_scope_hooks_skipped_on_render() {
+# The same guarantee for a hook that fails **silently** — the case the loop tails
+# decide, and the one an output-producing fixture never reaches. Printing the
+# hook's (empty) output runs a read loop whose body ends on a false test; that
+# status is the loop's, then both enclosing loops' and finally run_scope_hooks',
+# whose bare call site aborts the connect under `set -e` — after the surface is
+# written, and before "✓ Connected".
+test_scope_hook_silent_failure_is_not_fatal() {
+    local r out; r="$(setup_fake_exobrain)"; add_person "$r" people/alice
+    mkdir -p "$r/people/alice/hosts/h1/scripts"
+    printf '#!/usr/bin/env bash\nexit 4\n' > "$r/people/alice/hosts/h1/scripts/connect-agent.claude.sh"
+    chmod +x "$r/people/alice/hosts/h1/scripts/connect-agent.claude.sh"
+    out="$(connect "$r" claude --handle alice --host h1 2>&1)" || return 1
+    assert_contains "$out" "failed (exit 4) — connect continues" "the failure is named" || return 1
+    assert_contains "$out" "✓ Connected claude." "the connect still completes"
+}
+
+# Wiring a sandbox promises no writes outside the target dir; a hook is arbitrary code.
+test_scope_hooks_skipped_on_wire_sandbox() {
     local r; r="$(setup_fake_exobrain)"; add_person "$r" people/alice
     add_scope_hook "$r" people/alice ""
-    render_flags "$r" claude --handle alice --host h1 >/dev/null 2>&1 || return 1
-    assert_eq "" "$(hook_calls "$r")" "no hook runs under --render-specs-only"
+    wire_sandbox_flags "$r" claude --handle alice --host h1 >/dev/null 2>&1 || return 1
+    assert_eq "" "$(hook_calls "$r")" "no hook runs under --wire-sandbox"
 }
 
 # The repo root's scripts/connect-agent.sh is the connector itself: running it as
@@ -512,7 +527,7 @@ test_tools_resolve_excludes_template() {
 test_claude_manifest_relative_and_resolves() {
     local r; r="$(setup_fake_exobrain)"; add_group "$r" acme; add_person "$r" groups/acme/people/alice
     write_config "$r" groups/acme/people/alice/hosts/h1
-    render "$r" claude >/dev/null 2>&1 || return 1
+    wire_sandbox "$r" claude >/dev/null 2>&1 || return 1
     local m; m="$(claude_manifest "$r")"
     assert_contains "$m" "@../groups/acme/AGENTS.md" "group spec imported (relative)" || return 1
     assert_contains "$m" "@../groups/acme/people/alice/AGENTS.md" "person spec imported" || return 1
@@ -536,7 +551,7 @@ test_claude_index_imports_resolve() {
     add_tool "$r" global github "Read and act on GitHub via the gh CLI."
     add_domain "$r" health "Conditions, meds, providers, and insurance."
     write_config "$r" people/alice/hosts/h1
-    render "$r" claude >/dev/null 2>&1 || return 1
+    wire_sandbox "$r" claude >/dev/null 2>&1 || return 1
     local c; c="$(cat "$r/.claude/CLAUDE.md")"
     assert_contains "$c" "@optional-skills.md" "CLAUDE.md imports the optional-skills index" || return 1
     assert_contains "$c" "@tools-index.md" "CLAUDE.md imports the tools index" || return 1
@@ -552,12 +567,12 @@ test_claude_index_imports_resolve() {
 }
 
 # Regression for the set -e abort: a connected scope with no per-agent sidecar must
-# still render cleanly (the manifest emitter's last branch returns 0).
-test_render_no_sidecar_exit0() {
+# still wire cleanly (the manifest emitter's last branch returns 0).
+test_wire_no_sidecar_exit0() {
     local r; r="$(setup_fake_exobrain)"; add_person "$r" people/alice  # no CLAUDE.md sidecars
     write_config "$r" people/alice/hosts/h1
-    render "$r" claude >/dev/null 2>&1
-    assert_eq "0" "$?" "render exits 0 when scopes lack sidecars"
+    wire_sandbox "$r" claude >/dev/null 2>&1
+    assert_eq "0" "$?" "wiring exits 0 when scopes lack sidecars"
 }
 
 test_always_skill_linked_unlisted_not() {
@@ -566,7 +581,7 @@ test_always_skill_linked_unlisted_not() {
     declare_skill "$r" global hideme unlisted force
     declare_skill "$r" global optme optional force
     write_config "$r" people/alice/hosts/h1
-    render "$r" claude >/dev/null 2>&1 || return 1
+    wire_sandbox "$r" claude >/dev/null 2>&1 || return 1
     assert_symlink "$r/.claude/skills/linkme" "always skill linked" || return 1
     assert_no_file "$r/.claude/skills/hideme" "unlisted skill not linked" || return 1
     local idx; idx="$(claude_index "$r")"
@@ -581,7 +596,7 @@ test_always_skill_linked_unlisted_not() {
 test_codex_inlines_specs() {
     local r; r="$(setup_fake_exobrain)"; add_person "$r" people/alice
     write_config "$r" people/alice/hosts/h1 codex
-    render "$r" codex >/dev/null 2>&1 || return 1
+    wire_sandbox "$r" codex >/dev/null 2>&1 || return 1
     assert_file "$r/AGENTS.override.md" "codex override generated in-repo" || return 1
     local a; a="$(cat "$r/AGENTS.override.md")"
     # The override supersedes the bare AGENTS.md, so it must carry the root spec…
@@ -601,7 +616,7 @@ test_codex_indexes_inlined_not_in_home() {
     add_tool "$r" global github "Read and act on GitHub via the gh CLI."
     add_domain "$r" health "Conditions, meds, providers, and insurance."
     write_config "$r" people/alice/hosts/h1 codex
-    render "$r" codex >/dev/null 2>&1 || return 1
+    wire_sandbox "$r" codex >/dev/null 2>&1 || return 1
     local a; a="$(cat "$r/AGENTS.override.md")"
     assert_contains "$a" "<!-- optional-skills index -->" "optional-skills index inlined" || return 1
     assert_contains "$a" "<!-- tools index -->" "tools index inlined" || return 1
@@ -624,32 +639,43 @@ test_codex_prunes_legacy_home_indexes() {
     printf '# Tools\n\nstale\n'   > "$TEST_DIR/codex/tools-index.md"
     printf '# Domains\n\nstale\n' > "$TEST_DIR/codex/domains-index.md"
     printf '# My own notes\n'     > "$TEST_DIR/codex/optional-skills.md"   # not ours
-    render "$r" codex >/dev/null 2>&1 || return 1
+    wire_sandbox "$r" codex >/dev/null 2>&1 || return 1
     assert_no_file "$TEST_DIR/codex/tools-index.md" "legacy tools index removed" || return 1
     assert_no_file "$TEST_DIR/codex/domains-index.md" "legacy domains index removed" || return 1
     assert_file "$TEST_DIR/codex/optional-skills.md" "foreign same-named file left alone" || return 1
     assert_eq "# My own notes" "$(head -n 1 "$TEST_DIR/codex/optional-skills.md")" "foreign file unmodified"
 }
 
-# A render advertised as side-effect-free must refuse the one default that isn't:
+# A mode advertised as side-effect-free must refuse the one default that isn't:
 # openclaw's USER.md and codex's legacy home-dir cleanups target the real home
 # config dir when the override is unset.
-test_render_codex_refuses_without_codex_home() {
+test_wire_codex_refuses_without_codex_home() {
     local r out; r="$(setup_fake_exobrain)"; add_person "$r" people/alice
     write_config "$r" people/alice/hosts/h1 codex
     out="$(cd "$r" && env "HOME=$TEST_DIR/hm" "CODEX_HOME=" "OPENCLAW_WORKSPACE=$TEST_DIR/ocw" \
-        bash scripts/connect-agent.sh codex --render-specs-only 2>&1)" && { echo "should refuse"; return 1; }
+        bash scripts/connect-agent.sh codex --wire-sandbox 2>&1)" && { echo "should refuse"; return 1; }
     assert_contains "$out" "CODEX_HOME" "error names the override" || return 1
     assert_no_file "$TEST_DIR/hm/.codex" "home config dir untouched"
 }
 
-test_render_openclaw_refuses_without_workspace() {
+test_wire_openclaw_refuses_without_workspace() {
     local r out; r="$(setup_fake_exobrain)"; add_person "$r" people/alice
     write_config "$r" people/alice/hosts/h1 openclaw
     out="$(cd "$r" && env "HOME=$TEST_DIR/hm" "CODEX_HOME=$TEST_DIR/codex" "OPENCLAW_WORKSPACE=" \
-        bash scripts/connect-agent.sh openclaw --render-specs-only 2>&1)" && { echo "should refuse"; return 1; }
+        bash scripts/connect-agent.sh openclaw --wire-sandbox 2>&1)" && { echo "should refuse"; return 1; }
     assert_contains "$out" "OPENCLAW_WORKSPACE" "error names the override" || return 1
     assert_no_file "$TEST_DIR/hm/.openclaw/workspace/USER.md" "nothing written to home workspace"
+}
+
+# COMPAT 0005 (remove after 2026-09-13) — the old flag name still wires a sandbox,
+# with a deprecation warning, so a caller mid-upgrade is told rather than broken.
+test_legacy_render_flag_alias() {
+    local r out; r="$(setup_fake_exobrain)"; add_person "$r" people/alice
+    mkdir -p "$TEST_DIR/home" "$TEST_DIR/codex" "$TEST_DIR/ocw"
+    out="$( (cd "$r" && env "HOME=$TEST_DIR/home" "CODEX_HOME=$TEST_DIR/codex" \
+        "OPENCLAW_WORKSPACE=$TEST_DIR/ocw" bash scripts/connect-agent.sh claude --render-specs-only) 2>&1 )" || return 1
+    assert_contains "$out" "--render-specs-only is now --wire-sandbox" "the old name is called out" || return 1
+    assert_file "$r/.claude/CLAUDE.md" "the surface is still wired"
 }
 
 # ---------------------------------------------------------------------------
@@ -662,7 +688,7 @@ test_openclaw_indexes_inlined_not_in_home() {
     add_tool "$r" global github "Read and act on GitHub via the gh CLI."
     add_domain "$r" health "Conditions, meds, providers, and insurance."
     write_config "$r" people/alice/hosts/h1 openclaw
-    render "$r" openclaw >/dev/null 2>&1 || return 1
+    wire_sandbox "$r" openclaw >/dev/null 2>&1 || return 1
     local u; u="$(cat "$TEST_DIR/ocw/USER.md")"
     assert_contains "$u" "<!-- optional-skills index -->" "optional-skills index inlined" || return 1
     assert_contains "$u" "<!-- tools index -->" "tools index inlined" || return 1
@@ -687,7 +713,7 @@ test_tools_index_claude() {
     local r; r="$(setup_fake_exobrain)"; add_person "$r" people/alice
     add_tool "$r" global github "Read and act on GitHub via the gh CLI."
     write_config "$r" people/alice/hosts/h1
-    render "$r" claude >/dev/null 2>&1 || return 1
+    wire_sandbox "$r" claude >/dev/null 2>&1 || return 1
     assert_file "$r/.claude/tools-index.md" "tools-index.md generated" || return 1
     local t; t="$(claude_tools "$r")"
     assert_contains "$t" "github" "tool row present" || return 1
@@ -699,7 +725,7 @@ test_tools_index_claude() {
 test_tools_index_empty_skip() {
     local r; r="$(setup_fake_exobrain)"; add_person "$r" people/alice  # no tool docs
     write_config "$r" people/alice/hosts/h1
-    render "$r" claude >/dev/null 2>&1 || return 1
+    wire_sandbox "$r" claude >/dev/null 2>&1 || return 1
     assert_no_file "$r/.claude/tools-index.md" "no tools-index.md when no tool docs" || return 1
     local c; c="$(cat "$r/.claude/CLAUDE.md")"
     assert_not_contains "$c" "@tools-index.md" "CLAUDE.md does not import a missing tools index"
@@ -713,7 +739,7 @@ test_knowledge_index_claude() {
     local r; r="$(setup_fake_exobrain)"; add_person "$r" people/alice
     add_domain "$r" health "Conditions, meds, providers, and insurance."
     write_config "$r" people/alice/hosts/h1
-    render "$r" claude >/dev/null 2>&1 || return 1
+    wire_sandbox "$r" claude >/dev/null 2>&1 || return 1
     assert_file "$r/.claude/knowledge-index.md" "knowledge-index.md generated" || return 1
     local d; d="$(claude_knowledge "$r")"
     # Both dead-copy prunes identify a stale index by this heading rather than by
@@ -733,10 +759,10 @@ test_claude_index_removed_when_source_goes() {
     add_domain "$r" health "Conditions, meds, providers, and insurance."
     add_tool "$r" global github "Read and act on GitHub via the gh CLI."
     write_config "$r" people/alice/hosts/h1
-    render "$r" claude >/dev/null 2>&1 || return 1
+    wire_sandbox "$r" claude >/dev/null 2>&1 || return 1
     assert_file "$r/.claude/knowledge-index.md" "knowledge index present while the domain exists" || return 1
     rm -rf "$r/knowledge" "$r/tools"
-    render "$r" claude >/dev/null 2>&1 || return 1
+    wire_sandbox "$r" claude >/dev/null 2>&1 || return 1
     assert_no_file "$r/.claude/knowledge-index.md" "stale knowledge index cleared on relink" || return 1
     assert_no_file "$r/.claude/tools-index.md" "stale tools index cleared on relink" || return 1
     local c; c="$(cat "$r/.claude/CLAUDE.md")"
@@ -754,12 +780,12 @@ test_claude_prunes_renamed_index() {
     write_config "$r" people/alice/hosts/h1
     mkdir -p "$r/.claude"
     printf '# Knowledge domains\n\nstale\n' > "$r/.claude/domains-index.md"
-    render "$r" claude >/dev/null 2>&1 || return 1
+    wire_sandbox "$r" claude >/dev/null 2>&1 || return 1
     assert_no_file "$r/.claude/domains-index.md" "renamed index copy removed" || return 1
     assert_file "$r/.claude/knowledge-index.md" "the current index is in place" || return 1
 
     printf '# My own notes\n' > "$r/.claude/domains-index.md"   # not ours
-    render "$r" claude >/dev/null 2>&1 || return 1
+    wire_sandbox "$r" claude >/dev/null 2>&1 || return 1
     assert_file "$r/.claude/domains-index.md" "foreign same-named file left alone" || return 1
     assert_eq "# My own notes" "$(head -n 1 "$r/.claude/domains-index.md")" "foreign file unmodified"
 }
@@ -767,7 +793,7 @@ test_claude_prunes_renamed_index() {
 test_knowledge_index_empty_skip() {
     local r; r="$(setup_fake_exobrain)"; add_person "$r" people/alice  # no knowledge/
     write_config "$r" people/alice/hosts/h1
-    render "$r" claude >/dev/null 2>&1 || return 1
+    wire_sandbox "$r" claude >/dev/null 2>&1 || return 1
     assert_no_file "$r/.claude/knowledge-index.md" "no knowledge-index.md when no knowledge/" || return 1
     local c; c="$(cat "$r/.claude/CLAUDE.md")"
     assert_not_contains "$c" "@knowledge-index.md" "CLAUDE.md does not import a missing knowledge index"
@@ -852,6 +878,32 @@ test_validate_bash4_optout_honored() {
     assert_not_contains "$o" "bash 4 construct" "an opted-out script is skipped"
 }
 
+# The same interpreter, its other trap: an empty array is unset, so a bare
+# expansion aborts under `set -u`. The array that is empty most often is assigned
+# in a sourced lib and expanded by its caller, so the names are collected across
+# the whole tree — a per-file check would miss exactly that case.
+test_validate_flags_unguarded_array_expansion() {
+    local r; r="$(setup_fake_exobrain)"; add_person "$r" people/alice
+    cp "$SCRIPTS_DIR/validate-exobrain.sh" "$r/scripts/"
+    printf '#!/usr/bin/env bash\nopts=()\n' > "$r/scripts/lib.sh"
+    printf '#!/usr/bin/env bash\nrun "${opts[@]}"\nrun ${opts[@]+"${opts[@]}"}\n# prose about "${opts[@]}"\n' \
+        > "$r/scripts/probe.sh"
+    local o; o="$(cd "$r" && bash scripts/validate-exobrain.sh 2>&1)"
+    assert_contains "$o" "unguarded array expansion in scripts/probe.sh:2" "flagged across files, with its line" || return 1
+    assert_not_contains "$o" "scripts/probe.sh:3" "the guarded form passes" || return 1
+    assert_not_contains "$o" "scripts/probe.sh:4" "a comment mentioning one is not flagged"
+}
+
+# An array nobody assigns empty is left alone — the gate names a hazard it can
+# demonstrate, not every array expansion in the tree.
+test_validate_ignores_never_empty_array() {
+    local r; r="$(setup_fake_exobrain)"; add_person "$r" people/alice
+    cp "$SCRIPTS_DIR/validate-exobrain.sh" "$r/scripts/"
+    printf '#!/usr/bin/env bash\nfixed=(one two)\nrun "${fixed[@]}"\n' > "$r/scripts/probe.sh"
+    local o; o="$(cd "$r" && bash scripts/validate-exobrain.sh 2>&1)"
+    assert_not_contains "$o" "unguarded array expansion" "a never-empty array is not flagged"
+}
+
 test_validate_dangling_override() {
     local r; r="$(setup_fake_exobrain)"; add_person "$r" people/alice
     override_skill "$r" people/alice ghost global always   # no 'ghost' declaration anywhere
@@ -891,7 +943,7 @@ test_external_resolve_plan() {
 
 test_flags_connect_existing_host() {
     local r; r="$(setup_fake_exobrain)"; add_person "$r" people/alice
-    render_flags "$r" claude --handle alice --host h1 >/dev/null 2>&1 || return 1
+    wire_sandbox_flags "$r" claude --handle alice --host h1 >/dev/null 2>&1 || return 1
     assert_eq "alice" "$(jq -r '.person' "$r/.exobrain.json")" "person stored from --handle" || return 1
     assert_eq "true" "$(jq '(.connected_scopes // []) | index("people/alice/hosts/h1") != null' "$r/.exobrain.json")" "existing host leaf connected"
 }
@@ -899,14 +951,14 @@ test_flags_connect_existing_host() {
 test_flags_person_only_when_host_missing() {
     local r; r="$(setup_fake_exobrain)"
     mkdir -p "$r/people/carol"; printf '# person scope\n' > "$r/people/carol/AGENTS.md"
-    render_flags "$r" claude --handle carol --host h9 >/dev/null 2>&1 || return 1
+    wire_sandbox_flags "$r" claude --handle carol --host h9 >/dev/null 2>&1 || return 1
     assert_eq "true" "$(jq '(.connected_scopes // []) | index("people/carol") != null' "$r/.exobrain.json")" "falls back to the person scope" || return 1
     assert_no_file "$r/people/carol/hosts/h9/AGENTS.md" "missing host dir not scaffolded"
 }
 
 test_flags_no_scaffold_unknown_handle() {
     local r; r="$(setup_fake_exobrain)"
-    render_flags "$r" claude --handle bob --host h9 >/dev/null 2>&1 || return 1
+    wire_sandbox_flags "$r" claude --handle bob --host h9 >/dev/null 2>&1 || return 1
     assert_eq "[]" "$(jq -c '.connected_scopes' "$r/.exobrain.json")" "unknown handle connects nothing" || return 1
     assert_eq "null" "$(jq -r '.person // "null"' "$r/.exobrain.json")" "no person stored without a scope" || return 1
     assert_no_file "$r/people/bob/AGENTS.md" "flags never scaffold"
@@ -914,7 +966,7 @@ test_flags_no_scaffold_unknown_handle() {
 
 test_flags_guest() {
     local r; r="$(setup_fake_exobrain)"
-    render_flags "$r" claude --guest >/dev/null 2>&1 || return 1
+    wire_sandbox_flags "$r" claude --guest >/dev/null 2>&1 || return 1
     assert_eq "[]" "$(jq -c '.connected_scopes' "$r/.exobrain.json")" "guest connects nothing" || return 1
     assert_eq "null" "$(jq -r '.person // "null"' "$r/.exobrain.json")" "guest stores no person"
 }
@@ -922,13 +974,13 @@ test_flags_guest() {
 test_flags_extra_scope() {
     local r; r="$(setup_fake_exobrain)"; add_person "$r" people/alice
     mkdir -p "$r/lab"; printf '# lab scope\n' > "$r/lab/AGENTS.md"
-    render_flags "$r" claude --handle alice --host h1 --scope lab >/dev/null 2>&1 || return 1
+    wire_sandbox_flags "$r" claude --handle alice --host h1 --scope lab >/dev/null 2>&1 || return 1
     assert_eq "true" "$(jq '(.connected_scopes // []) | index("lab") != null' "$r/.exobrain.json")" "standalone --scope connected"
 }
 
 test_flags_name_match_nested() {
     local r; r="$(setup_fake_exobrain)"; add_group "$r" acme; add_person "$r" groups/acme/people/alice
-    render_flags "$r" claude --handle alice --host h1 >/dev/null 2>&1 || return 1
+    wire_sandbox_flags "$r" claude --handle alice --host h1 >/dev/null 2>&1 || return 1
     assert_eq "true" "$(jq '(.connected_scopes // []) | index("groups/acme/people/alice/hosts/h1") != null' "$r/.exobrain.json")" "name-match found the nested person/host" || return 1
     assert_no_file "$r/people/alice/AGENTS.md" "did not scaffold a duplicate top-level person"
 }
@@ -954,7 +1006,7 @@ test_seed_scope_in_manifest() {
     local r; r="$(setup_fake_exobrain)"; add_person "$r" people/alice
     mkdir -p "$r/seed"; printf '# seed scope\n' > "$r/seed/AGENTS.md"
     write_config "$r" people/alice/hosts/h1
-    render "$r" claude >/dev/null 2>&1 || return 1
+    wire_sandbox "$r" claude >/dev/null 2>&1 || return 1
     assert_contains "$(claude_manifest "$r")" "@../seed/AGENTS.md" "seed scope wired into the Claude manifest"
 }
 
@@ -974,7 +1026,8 @@ run_test "scope hooks run shallow->deep"       test_scope_hooks_run_shallow_to_d
 run_test "scope hook agent-specific filtered"  test_scope_hook_agent_specific_is_filtered
 run_test "scope hook both variants run"        test_scope_hook_both_variants_run
 run_test "scope hook failure not fatal"        test_scope_hook_failure_is_reported_not_fatal
-run_test "scope hooks skipped on render"       test_scope_hooks_skipped_on_render
+run_test "silent hook failure not fatal"       test_scope_hook_silent_failure_is_not_fatal
+run_test "scope hooks skipped on wiring"       test_scope_hooks_skipped_on_wire_sandbox
 run_test "global connector is not a hook"      test_global_connector_is_not_a_scope_hook
 run_test "hooks install into repo, other cwd" test_hooks_install_into_repo_from_other_cwd
 run_test "force reaches non-owner"             test_force_reaches_nonowner
@@ -988,7 +1041,7 @@ run_test "unlisted resolves"                   test_unlisted_resolves
 run_test "tools resolve deepest wins"          test_tools_resolve_deepest_wins
 run_test "tools resolve excludes template"     test_tools_resolve_excludes_template
 run_test "claude manifest relative + resolves" test_claude_manifest_relative_and_resolves
-run_test "render no-sidecar exits 0"           test_render_no_sidecar_exit0
+run_test "wiring no-sidecar exits 0"           test_wire_no_sidecar_exit0
 run_test "always linked, unlisted not"         test_always_skill_linked_unlisted_not
 run_test "claude index imports resolve"        test_claude_index_imports_resolve
 run_test "codex inlines specs"                 test_codex_inlines_specs
@@ -1007,6 +1060,8 @@ run_test "relink refreshes connected claude"   test_relink_refreshes_connected_c
 run_test "validate clean"                      test_validate_clean
 run_test "validate flags bash 4 constructs"    test_validate_flags_bash4_constructs
 run_test "validate honors bash 4 opt-out"      test_validate_bash4_optout_honored
+run_test "validate flags unguarded arrays"     test_validate_flags_unguarded_array_expansion
+run_test "validate spares never-empty arrays"  test_validate_ignores_never_empty_array
 run_test "validate dangling override"          test_validate_dangling_override
 run_test "fetcher accepts --leaves"            test_fetcher_accepts_leaves_no_external
 run_test "external resolve plan"               test_external_resolve_plan
@@ -1016,13 +1071,14 @@ run_test "flags never scaffold"                test_flags_no_scaffold_unknown_ha
 run_test "flags guest connects nothing"        test_flags_guest
 run_test "flags extra --scope"                 test_flags_extra_scope
 run_test "flags name-match nested"             test_flags_name_match_nested
-run_test "render codex refuses without CODEX_HOME" test_render_codex_refuses_without_codex_home
-run_test "render openclaw refuses without workspace" test_render_openclaw_refuses_without_workspace
+run_test "wiring codex refuses without CODEX_HOME" test_wire_codex_refuses_without_codex_home
+run_test "wiring openclaw refuses without workspace" test_wire_openclaw_refuses_without_workspace
+run_test "legacy render flag still wires"      test_legacy_render_flag_alias
 run_test "seed scope auto-joins chain"         test_seed_scope_auto_joins_chain
 run_test "no seed scope without seed/"         test_no_seed_scope_without_seed_dir
 run_test "seed scope in manifest"              test_seed_scope_in_manifest
 
 echo ""
 printf "Ran %d  ${GREEN}passed %d${RESET}  ${RED}failed %d${RESET}\n" "$TESTS_RUN" "$TESTS_PASSED" "$TESTS_FAILED"
-if [[ $TESTS_FAILED -gt 0 ]]; then printf 'Failures: %s\n' "${FAILURES[*]}"; exit 1; fi
+if [[ $TESTS_FAILED -gt 0 ]]; then printf 'Failures: %s\n' ${FAILURES[@]+"${FAILURES[*]}"}; exit 1; fi
 exit 0

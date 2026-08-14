@@ -226,7 +226,7 @@ if [[ $TESTS_FAILED -eq 0 ]]; then
     printf "${GREEN}${BOLD}All %d tests passed${RESET}\n" "$TESTS_RUN"
 else
     printf "${RED}${BOLD}%d of %d tests failed${RESET}\n" "$TESTS_FAILED" "$TESTS_RUN"
-    printf '  - %s\n' "${FAILURES[@]}"
+    printf '  - %s\n' ${FAILURES[@]+"${FAILURES[@]}"}
 fi
 echo "─────────────────────────────────────────────"
 exit "$TESTS_FAILED"

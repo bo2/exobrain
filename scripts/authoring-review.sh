@@ -197,7 +197,7 @@ if [[ ${#unproven[@]} -gt 0 ]]; then
         echo "For each, either PROVE it — commit the test run, eval, or exobrain-ab result into"
         echo "the skill's own directory, so the proof travels with the skill — or RELOCATE it"
         echo "under a person scope's skills/, which imposes on no one and is exempt:"
-        printf '  - %s\n' "${unproven[@]}"
+        printf '  - %s\n' ${unproven[@]+"${unproven[@]}"}
         echo ""
         echo "Then re-run scripts/authoring-review.sh."
         echo ""
@@ -221,7 +221,7 @@ while IFS= read -r f; do
 done < <(git -C "$REPO_DIR" diff --name-only "$BASE...HEAD" -- '*.md' 2>/dev/null)
 [[ ${#files[@]} -eq 0 ]] && exit 0
 
-diff_text="$(git -C "$REPO_DIR" diff "$BASE...HEAD" -- "${files[@]}" 2>/dev/null)"
+diff_text="$(git -C "$REPO_DIR" diff "$BASE...HEAD" -- ${files[@]+"${files[@]}"} 2>/dev/null)"
 [[ -z "$diff_text" ]] && exit 0
 # Bound the prompt size; very large diffs get truncated (the deterministic hook
 # still covers the whole change).
@@ -319,15 +319,9 @@ elif t="$(command -v gtimeout 2>/dev/null)"; then TIMEOUT=("$t" 240); fi
 # this is safe whether or not a proxy is set.
 NOPROXY=(env -u ALL_PROXY -u HTTPS_PROXY -u HTTP_PROXY -u all_proxy -u https_proxy -u http_proxy)
 
-# Build the command, appending TIMEOUT only when present — expanding an empty
-# array under `set -u` errors on bash 3.2, which is the default on macOS.
 run_engine() {
     local -a cmd
-    cmd=("${NOPROXY[@]}")
-    if [[ ${#TIMEOUT[@]} -gt 0 ]]; then
-        cmd+=("${TIMEOUT[@]}")
-    fi
-    cmd+=("$@")
+    cmd=("${NOPROXY[@]}" ${TIMEOUT[@]+"${TIMEOUT[@]}"} "$@")
     printf '%s' "$PROMPT" | "${cmd[@]}" 2>/dev/null
 }
 
