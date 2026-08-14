@@ -8,13 +8,13 @@ When `AGENTS.md` or a skill refers to "the agent's primitive for X", map it to t
 
 ## Exobrain versus OpenClaw memory
 
-Durable, structured knowledge belongs in the exobrain; OpenClaw's own workspace memory holds session scratch and short-lived conversational continuity. Don't let `MEMORY.md` become a second knowledge base.
+Sort content by one question: **would it survive replacing OpenClaw with a different agent runtime?** What survives belongs in the exobrain — knowledge, preferences, skills, tool docs. What dies with the runtime stays in OpenClaw's workspace — cron definitions, chat ids, ports, session policy, daily memory. Where the two meet, procedure is portable and wiring is not: a cron prompt names the skill it runs rather than restating one. OpenClaw is itself a **tool** by `AGENTS.md` § Tools, so what any agent needs in order to drive this machine belongs in its tool doc, while gotchas only OpenClaw needs about itself stay in `MEMORY.md`.
 
 A memory-consolidation pass is therefore an exobrain review, not a filing exercise: **reconcile rather than append** — correct what a new note contradicts instead of stacking another version of the fact beside it — and once something is promoted, keep no second copy of the synthesis in `MEMORY.md`. Raw notes and routine churn stay in OpenClaw memory to be pruned normally.
 
 ## Git history hygiene
 
-Keep this repo's history agent-neutral — omit OpenClaw's default attribution from commit messages and PR bodies. (`validate-exobrain.sh` gates outgoing commit messages for agent-attribution trailers and footers regardless of which agent authored them.)
+Keep this repo's history agent-neutral — omit OpenClaw's default attribution from commit messages and PR bodies.
 
 ## Auto-loading
 
