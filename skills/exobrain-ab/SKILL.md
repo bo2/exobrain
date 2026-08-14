@@ -1,6 +1,6 @@
 ---
 name: exobrain-ab
-description: "A/B-test whether a change to this exobrain's auto-loaded context (an AGENTS.md/CLAUDE.md edit, a skill, or a tool doc) actually moves agent behavior — before shipping on intuition. Runs real headless agents (claude or codex) on control (trunk) vs treatment (trunk + the change) in hermetic sandboxes — each wired by the connector's own --render-specs-only, so it loads context like a real session — and measures which tool/command the agent reaches for. Use to eval / validate / A-B-test a spec/skill/tool-doc change, or to check whether a context change improves or harms agent behavior."
+description: "A/B-test whether a change to this exobrain's auto-loaded context (an AGENTS.md/CLAUDE.md edit, a skill, or a tool doc) actually moves agent behavior — before shipping on intuition. Runs real headless agents (claude or codex) on control (trunk) vs treatment (trunk + the change) in hermetic sandboxes — each wired by the connector's own --wire-sandbox, so it loads context like a real session — and measures which tool/command the agent reaches for. Use to eval / validate / A-B-test a spec/skill/tool-doc change, or to check whether a context change improves or harms agent behavior."
 ---
 
 # exobrain-ab — behavioral A/B testing for exobrain changes
@@ -26,7 +26,7 @@ model are added. Measure, don't guess.
   phrasing, a banned claim, a structural convention — not just which tool fires.
 - **Faithful auto-load = the agent's own headless mode** (`claude -p`, `codex exec`) in a
   copied repo dir whose context surface was wired by *the copy's own* connector
-  (`connect-agent.sh <agent> --render-specs-only` — `REPO_DIR` resolves to the copy, so it
+  (`connect-agent.sh <agent> --wire-sandbox` — `REPO_DIR` resolves to the copy, so it
   points at the patched files, side-effect-free). That loads the copy's
   `CLAUDE.md`/`AGENTS.md`/scope chain like a real session, for whichever agent — no
   hand-rolled rewrite to drift. In-session sub-agents do **not** replicate the auto-load
@@ -82,11 +82,12 @@ this harness doesn't set up — test those by hand or extend the harness.
 ## Files
 
 - `scripts/run.sh` — builds control/treatment sandboxes, renders each via its own
-  `--render-specs-only`, runs the task matrix, prints the summary.
+  `--wire-sandbox`, runs the task matrix, prints the summary.
 - `scripts/run_one.sh` — one graded run; grades the stublog (tool choice) or the agent's
   stdout (`output` modes) into a verdict, spawned in parallel by `run.sh`.
 - `scripts/stubs/` — PATH-shadow tool stubs (ship `example-tool`; add one per measured tool).
 - `scripts/tasks.example.sh` — the `TASKS=()` format and discriminator constraint.
 
-All sandboxes and results land under the repo's gitignored `tmp/`; nothing touches global
-state (the connector's `--render-specs-only` stops before any out-of-dir write).
+All sandboxes and results land under the repo's gitignored `tmp/`, with the codex arm's
+`CODEX_HOME` pointed inside the sandbox. The wiring mode's own write envelope is
+`knowledge/exobrain/agents.md` § `connect-agent.sh` end-to-end.

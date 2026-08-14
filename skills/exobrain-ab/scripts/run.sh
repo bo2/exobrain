@@ -2,7 +2,7 @@
 # exobrain-ab — behavioral A/B eval of an exobrain auto-load change.
 #
 # Builds control (trunk) vs treatment (trunk + a diff) sandboxes, renders each via the
-# sandbox's OWN connector (`connect-agent.sh <agent> --render-specs-only`, side-effect-
+# sandbox's OWN connector (`connect-agent.sh <agent> --wire-sandbox`, side-effect-
 # free), runs a headless agent on each task N times, and measures *which tool/command
 # the agent reaches for* — captured by PATH-shadow stubs that log the invocation and
 # return canned output. Reports control vs treatment pass rates. See SKILL.md.
@@ -73,7 +73,7 @@ in_filter() { # <set> <id>
 
 # --- Build a sandbox: trunk (+ diff for treatment), wired by its OWN connector -----
 # REPO_DIR resolves to the sandbox (connect-agent.sh uses its own location), so the
-# render points at the sandbox's patched files; --render-specs-only skips every
+# render points at the sandbox's patched files; --wire-sandbox skips every
 # out-of-dir side effect. The sandbox is a real git repo so the agent sees a clean tree.
 build_template() { # <dir> <arm:control|treatment>
   local d="$1" arm="$2"
@@ -83,12 +83,12 @@ build_template() { # <dir> <arm:control|treatment>
     ( cd "$d" && git apply "$DIFF" ) || { echo "ERROR: treatment diff did not apply to $BASE_REF" >&2; exit 1; }
   fi
   if [ "$AGENT" = codex ]; then
-    CODEX_HOME="$d/.codex" bash "$d/scripts/connect-agent.sh" codex --render-specs-only >/dev/null 2>&1 \
-      || { echo "ERROR: 'codex --render-specs-only' failed in $d — does $BASE_REF carry the flag?" >&2; exit 1; }
+    CODEX_HOME="$d/.codex" bash "$d/scripts/connect-agent.sh" codex --wire-sandbox >/dev/null 2>&1 \
+      || { echo "ERROR: 'codex --wire-sandbox' failed in $d — does $BASE_REF carry the flag?" >&2; exit 1; }
     ln -sf "$HOME/.codex/auth.json" "$d/.codex/auth.json"
   else
-    bash "$d/scripts/connect-agent.sh" claude --render-specs-only >/dev/null 2>&1 \
-      || { echo "ERROR: 'claude --render-specs-only' failed in $d — does $BASE_REF carry the flag?" >&2; exit 1; }
+    bash "$d/scripts/connect-agent.sh" claude --wire-sandbox >/dev/null 2>&1 \
+      || { echo "ERROR: 'claude --wire-sandbox' failed in $d — does $BASE_REF carry the flag?" >&2; exit 1; }
   fi
   ( cd "$d" && git init -q && git config user.email e@e.co && git config user.name e \
       && git add -A && git commit -q -m init \
