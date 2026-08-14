@@ -59,6 +59,30 @@ naming.
 A file the instance simply lacks is not reported: that means it's behind, which is
 adoption's business, not the harvest's.
 
+**Always read the instance's merged PRs, not the drift alone.** A diff shows what
+changed; the PR body says why, and whether the change fixes something *the seed also
+has* — sometimes saying so outright. Read the bodies first and let them pick which
+diffs you read closely: the highest-value harvests look cosmetic as a diff, a
+reflowed conditional or a rewrapped expansion.
+
+```bash
+gh -R <owner/repo> pr list --state merged --limit 40 \
+    --json number,title,mergedAt,files --jq \
+    '.[] | select(any(.files[].path; test("^(scripts|skills)/|^knowledge/exobrain/|^[A-Z]+[.]md$")))
+         | "\(.number) \(.mergedAt[:10]) \(.title)"'
+```
+
+`any(…)` rather than `.files[].path |` — the latter emits one row per matching
+file. Match `knowledge/exobrain/`, not `knowledge/`: an instance's content domains
+are payload, and they are most of its PRs.
+
+Scope it to what landed since the ledger's newest row for that instance (§4), and
+read the body of every PR touching a framework path — including the ones whose
+title says "adopt": an instance applying a seed card is the likeliest place to find
+a bug in the card. Fall back to commit messages where PR bodies are thin, and to
+diffs alone for a local-path instance with no forge; say so in the ledger row, since
+a diffs-only pass is a weaker read than a full one.
+
 Read the actual diffs for anything promising. Then add what the scan can't see:
 conventions in the instance's root `AGENTS.md`, patterns in its meta-domain docs,
 and helper structure inside its skills. Instances that restructured (older ones use
