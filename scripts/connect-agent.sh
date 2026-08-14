@@ -955,7 +955,10 @@ install_hook
 # They run below the --render-specs-only cutoff because a hook is arbitrary code
 # with its own write surface, and a render promises none. A failing hook is
 # reported with its output and the connect carries on: one scope's extra must not
-# cost the human their wiring.
+# cost the human their wiring — which is why every loop tail below is an `if`
+# block rather than a trailing `[[ … ]] && …`, whose false status would become
+# the loop's, ride both loops out of the function, and abort the connect at the
+# bare call site under `set -e`.
 run_scope_hooks() {
     local scope hook output line status announced=false
     for scope in ${CHAIN[@]+"${CHAIN[@]}"}; do
@@ -970,7 +973,7 @@ run_scope_hooks() {
             else
                 echo "  ! $scope/scripts/$(basename "$hook") failed (exit $status) — connect continues"
                 while IFS= read -r line; do
-                    [[ -n "$line" ]] && echo "      $line"
+                    if [[ -n "$line" ]]; then echo "      $line"; fi
                 done <<< "$output"
             fi
         done

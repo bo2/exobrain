@@ -379,6 +379,22 @@ test_scope_hook_failure_is_reported_not_fatal() {
     assert_contains "$out" "✓ Connected claude." "the connect still completes"
 }
 
+# The same guarantee for a hook that fails **silently** — the case the loop tails
+# decide, and the one an output-producing fixture never reaches. Printing the
+# hook's (empty) output runs a read loop whose body ends on a false test; that
+# status is the loop's, then both enclosing loops' and finally run_scope_hooks',
+# whose bare call site aborts the connect under `set -e` — after the surface is
+# written, and before "✓ Connected".
+test_scope_hook_silent_failure_is_not_fatal() {
+    local r out; r="$(setup_fake_exobrain)"; add_person "$r" people/alice
+    mkdir -p "$r/people/alice/hosts/h1/scripts"
+    printf '#!/usr/bin/env bash\nexit 4\n' > "$r/people/alice/hosts/h1/scripts/connect-agent.claude.sh"
+    chmod +x "$r/people/alice/hosts/h1/scripts/connect-agent.claude.sh"
+    out="$(connect "$r" claude --handle alice --host h1 2>&1)" || return 1
+    assert_contains "$out" "failed (exit 4) — connect continues" "the failure is named" || return 1
+    assert_contains "$out" "✓ Connected claude." "the connect still completes"
+}
+
 # A render promises no writes outside the target dir; a hook is arbitrary code.
 test_scope_hooks_skipped_on_render() {
     local r; r="$(setup_fake_exobrain)"; add_person "$r" people/alice
@@ -974,6 +990,7 @@ run_test "scope hooks run shallow->deep"       test_scope_hooks_run_shallow_to_d
 run_test "scope hook agent-specific filtered"  test_scope_hook_agent_specific_is_filtered
 run_test "scope hook both variants run"        test_scope_hook_both_variants_run
 run_test "scope hook failure not fatal"        test_scope_hook_failure_is_reported_not_fatal
+run_test "silent hook failure not fatal"       test_scope_hook_silent_failure_is_not_fatal
 run_test "scope hooks skipped on render"       test_scope_hooks_skipped_on_render
 run_test "global connector is not a hook"      test_global_connector_is_not_a_scope_hook
 run_test "hooks install into repo, other cwd" test_hooks_install_into_repo_from_other_cwd
