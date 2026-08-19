@@ -9,9 +9,11 @@ the generator, the feed, this scope flag — excluded by exactly that one rule.
 Seed-local tooling lives under `seed/` — see [`README.md`](README.md).
 
 Because it's a generator and not anyone's personal knowledge base, this checkout
-carries only the `exobrain` meta-domain — never real content domains (`health`,
+carries only framework domains — the `exobrain` meta-domain and the
+`harness-engineering` doctrine — never personal content domains (`health`,
 `finances`, `home`, …). Those exist only in instances. Don't scaffold example
-domains here; demonstrate domain machinery through the meta-domain itself.
+domains here; demonstrate domain machinery through the framework domains
+themselves.
 
 A change **outside `seed/`** is therefore a framework change: when persisting one,
 **publish a feed card** under [`feed/`](feed/) so instances can adopt it — one card

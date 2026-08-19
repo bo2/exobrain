@@ -13,7 +13,8 @@ real agents on control vs treatment and counting what they actually do.
 Intuition is unreliable here: the single most-favorable task always overstates a change,
 and effects are strongly model-dependent. A change that reads as a near-total fix on one
 task and one model can be safe-but-narrow — or a wash — once held-out tasks and a stronger
-model are added. Measure, don't guess.
+model are added. Measure, don't guess. The general doctrine this skill implements is
+`knowledge/harness-engineering/behavioral-testing.md` § Context A/B.
 
 ## Core method
 

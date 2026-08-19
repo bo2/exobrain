@@ -41,7 +41,8 @@ so the non-hermetic suite is always an explicit, separate invocation.
 All three always test *this* instance — the skill ships into every instance, so any
 instance self-tests by invoking it. None knows anything about the seed: to test the
 seed itself (build an instance from it, then test that), use the seed-only
-`seed-tests` skill, which invokes the *built instance's* copy of this suite.
+`seed-tests` skill, which invokes the *built instance's* copy of this suite. The
+general doctrine these suites implement is `knowledge/harness-engineering/behavioral-testing.md`.
 
 ## unit/ — the deterministic machinery suite
 
