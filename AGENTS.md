@@ -111,3 +111,5 @@ Before writing anything — doc, commit, message — name who reads it and what 
 ## How exobrain works — depth
 
 `knowledge/exobrain/` is the meta-domain: the concept itself, written for an agent — `entities.md`, `scopes.md`, `agents.md`, `skills.md`, `tools.md`, `domains.md`, `grill.md`, `authoring.md`, `propagation.md`, `compat.md` (the shim ledger), and `machinery.md` (an index of every script, hook, registry, and gate). Read it before reasoning from scratch about how this repo works.
+
+`knowledge/harness-engineering/` is its sibling: application-agnostic doctrine for engineering with LLM agents. **Read it before starting harness work** — designing or changing anything an agent auto-loads or invokes (a spec, skill, gate, eval, standing automation, or multi-agent structure): start at its `README.md`, and check new designs against its `failure-modes.md`.

@@ -68,13 +68,13 @@ reflowed conditional or a rewrapped expansion.
 ```bash
 gh -R <owner/repo> pr list --state merged --limit 40 \
     --json number,title,mergedAt,files --jq \
-    '.[] | select(any(.files[].path; test("^(scripts|skills)/|^knowledge/exobrain/|^[A-Z]+[.]md$")))
+    '.[] | select(any(.files[].path; test("^(scripts|skills)/|^knowledge/(exobrain|harness-engineering)/|^[A-Z]+[.]md$")))
          | "\(.number) \(.mergedAt[:10]) \(.title)"'
 ```
 
 `any(…)` rather than `.files[].path |` — the latter emits one row per matching
-file. Match `knowledge/exobrain/`, not `knowledge/`: an instance's content domains
-are payload, and they are most of its PRs.
+file. Match the framework domains (`knowledge/exobrain/`, `knowledge/harness-engineering/`),
+not `knowledge/`: an instance's content domains are payload, and they are most of its PRs.
 
 Scope it to what landed since the ledger's newest row for that instance (§4), and
 read the body of every PR touching a framework path — including the ones whose
@@ -94,17 +94,19 @@ This is the judgment that makes the skill worth running. A candidate qualifies o
 if it would help an exobrain that shares **none** of this instance's content:
 
 - It touches the **framework body** — `scripts/`, `skills/exobrain-*`,
-  `knowledge/exobrain/`, the root spec, `skills.schema.json`, `tools/README.md`.
+  `knowledge/exobrain/`, `knowledge/harness-engineering/`, the root spec,
+  `skills.schema.json`, `tools/README.md`.
 - It is a **pattern**, not a payload — a mechanism, gate, or convention rather than
   a fact about that instance's life or work.
 - It survives **renaming everything** — if it only makes sense with that instance's
   scope names, tool set, or directory layout, it isn't universal yet; generalize it
   or drop it.
 
-Reject outright, without proposing: the instance's knowledge domains and workspaces
-(the seed carries only the `exobrain` meta-domain — never scaffold content domains
-here), its `people/`/host scopes, its per-tool docs, its `skills.json`, its adoption
-ledger, and any workaround for one machine. Reject anything whose value depends on
+Reject outright, without proposing: the instance's content domains and workspaces
+(the seed carries only framework domains — the `exobrain` meta-domain and
+`harness-engineering`; never personal content domains), its `people/`/host scopes,
+its per-tool docs, its `skills.json`, its adoption ledger, and any workaround for
+one machine. Reject anything whose value depends on
 the instance's org, employer, client, or private repos — that's not a harvest, it's
 a leak.
 
