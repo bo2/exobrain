@@ -21,6 +21,7 @@ The `connect-agent.sh` ecosystem wires repo content into each agent's context �
 | `.agents/skills/` *(generated, Codex)* | Repo-local Codex skills dir (real dir, symlinked children) — keeps exobrain skills out of the global `~/.codex/skills`. |
 | `scripts/skills-registry.sh` · `scripts/fetch-external-skills.sh` | Sourced/invoked by the connector — see § Skills system. |
 | `skills/exobrain-tests/unit/test-connect-agent.sh` | Deterministic connector/registry harness — fake exobrains in temp dirs, no agent. Coverage: the `exobrain-tests` SKILL.md § `unit/`. |
+| `skills/exobrain-tests/unit/test-persist.sh` | Deterministic harness for `scripts/persist.sh` — a bare origin, a main checkout, worktrees, stub gates (validator, authoring review, unit suite) and a fake `gh` that squash-merges into the bare origin. |
 | `skills/exobrain-tests/` · `seed/skills/seed-tests/` | The instance self-test skill, three sub-suites: `unit/` (deterministic, no agent — harnesses for the framework scripts under `scripts/`), `behavior/` (hermetic, agent-driven — runs concrete tasks against a snapshot copy) and `onboarding/` (non-hermetic — fresh Docker machine → clone the instance's origin → connect → healthcheck/validator; optional headless-agent e2e; per-case requirements skip when unmet). `seed-tests` is seed-only — builds an instance from the seed, then runs its unit + behavior suites against it. See § Skills system. |
 
 **Verifying a connector/wiring change** (`connect-agent.sh`, `skills-registry.sh`, `fetch-external-skills.sh`, the injection): first run `skills/exobrain-tests/unit/run.sh --harnesses connect-agent` for the fixture-level logic. Then wire a real checkout with `connect-agent.sh <agent> --wire-sandbox` (see [`agents.md`](agents.md) § `connect-agent.sh` end-to-end for its write envelope and the openclaw guard), and spot-check the agent's surface — for Claude that `.claude/connected-scopes.md` + `.claude/optional-skills.md` exist and every manifest `@-import` resolves to a real file; for Codex that the generated in-repo `AGENTS.override.md` holds the expected scopes, for OpenClaw that the marker block in `USER.md` does — plus the `.claude/` and `.agents/skills/` dirs. Finally run `scripts/validate-exobrain.sh` for conventions.
@@ -104,7 +105,8 @@ See `AGENTS.md` → "Git workflow" and the `exobrain-persist` skill.
 |---|---|
 | `scripts/create-worktree.sh` | Create a worktree off the default branch — symlinks `.env*` / `.exobrain.json` into it. |
 | `src/<repo>/` *(gitignored)* | Clones of external code; `src/exobrain-seed/` is the one fixed name — the seed's update cache for `exobrain-evolve`. |
-| `exobrain-persist` skill | The worktree → commit → push → PR → squash-merge → update main → cleanup procedure (a skill + standing authorization, not a script). |
+| `exobrain-persist` skill | The worktree → commit → verify → land procedure and the standing authorization to run it; the agent-judged steps (what is a logical change, behavioral verification of machinery) stay with the agent. |
+| `scripts/persist.sh` | The mechanical land as one idempotent command, run from inside the worktree: timeline rows → commit → validator → authoring review → push → PR → squash-merge → fast-forward main → cleanup. On a machinery diff it runs the unit suite itself and lands only with `--machinery-verified`; `--sweep` lands claimed and quiet worktrees, `--dry-run` prints the plan. Semantics in the `exobrain-persist` skill. |
 
 ## Periodic jobs
 

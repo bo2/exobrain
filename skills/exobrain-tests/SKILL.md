@@ -78,6 +78,12 @@ Exit: `0` all passed · `1` some failed · `2` harness error (including an unkno
   the `--dry-run` plan, and a real sync's add / patch / remove calls against a fake
   `openclaw` binary that answers `cron list --json` from a fixture — foreign jobs
   spared, `{ROOT}` expanded, the linked-worktree refusal.
+- **`test-persist.sh`** — `persist.sh`: the full land against a bare origin and a fake
+  `gh` (commit, gates, push, PR, squash-merge, main fast-forward, cleanup), the
+  machinery gate in both halves (the unit suite the script runs, the flag the agent
+  asserts, and the claim that carries it into a sweep), timeline rows, resume after an
+  interrupted run, conflict handling, the no-remote fast-forward, and `--sweep`'s
+  claimed / quiet / dirty rules.
 
 ### Add a unit harness
 
