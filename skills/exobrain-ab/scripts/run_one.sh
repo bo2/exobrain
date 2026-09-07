@@ -15,16 +15,22 @@ i="$1"
 RUN="${SANDBOX_ROOT:-/tmp/exo-ab}/${ARM}_run_$$_${i}"
 LOG="$RUN.stublog"; OUTF="$RUN.out"
 
+# Bound each agent run when a coreutils `timeout` exists (macOS ships none; Homebrew
+# installs it as `gtimeout`); without one the run is unbounded rather than failed.
+TMO=()
+if t="$(command -v timeout 2>/dev/null)"; then TMO=("$t" "${TIMEOUT:-240}")
+elif t="$(command -v gtimeout 2>/dev/null)"; then TMO=("$t" "${TIMEOUT:-240}"); fi
+
 run_agent() { # cwd=$RUN, PATH already has $STUBS, STUB_LOG set
   if [ "${AGENT:-claude}" = codex ]; then
-    # CODEX_HOME points at the copy's rendered .codex; inherit=all so the stub PATH +
+    # CODEX_HOME points at the copy's wired .codex; inherit=all so the stub PATH +
     # STUB_LOG reach codex's command shell; bypass codex's own sandbox (we shadow tools).
-    CODEX_HOME="$RUN/.codex" timeout "${TIMEOUT:-240}" codex exec -C "$RUN" \
+    CODEX_HOME="$RUN/.codex" ${TMO[@]+"${TMO[@]}"} codex exec -C "$RUN" \
       --ignore-user-config --dangerously-bypass-approvals-and-sandbox --ephemeral \
       --skip-git-repo-check -c shell_environment_policy.inherit=all \
       -m "${MODEL:-gpt-5.5}" "$TASK_PROMPT" </dev/null >"$OUTF" 2>/dev/null
   else
-    timeout "${TIMEOUT:-240}" claude -p "$TASK_PROMPT" --model "${MODEL:-opus}" \
+    ${TMO[@]+"${TMO[@]}"} claude -p "$TASK_PROMPT" --model "${MODEL:-opus}" \
       --max-turns "${MAX_TURNS:-14}" --permission-mode bypassPermissions >"$OUTF" 2>/dev/null
   fi
 }

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # exobrain-ab — behavioral A/B eval of an exobrain auto-load change.
 #
-# Builds control (trunk) vs treatment (trunk + a diff) sandboxes, renders each via the
+# Builds control (trunk) vs treatment (trunk + a diff) sandboxes, wires each via the
 # sandbox's OWN connector (`connect-agent.sh <agent> --wire-sandbox`, side-effect-
 # free), runs a headless agent on each task N times, and measures *which tool/command
 # the agent reaches for* — captured by PATH-shadow stubs that log the invocation and
@@ -19,9 +19,9 @@
 #
 # Env: AGENT (claude|codex, default claude), BASE_REF (default: the repo's trunk),
 #      SANDBOX_ROOT, OUTDIR (both default under the repo's gitignored tmp/),
-#      MAX_TURNS (14), TIMEOUT (240), BUILD_ONLY (stop after building+rendering).
+#      MAX_TURNS (14), TIMEOUT (240), BUILD_ONLY (stop after building+wiring).
 #
-# Sandboxes render guest (global scope only) — root AGENTS.md/CLAUDE.md + global skills
+# Sandboxes wire as guest (global scope only) — root AGENTS.md/CLAUDE.md + global skills
 # and tool docs, which is what most framework changes touch. Deeper-scope changes need a
 # connected leaf wired into the sandbox; that is out of scope for this harness.
 set -u
@@ -73,12 +73,17 @@ in_filter() { # <set> <id>
 
 # --- Build a sandbox: trunk (+ diff for treatment), wired by its OWN connector -----
 # REPO_DIR resolves to the sandbox (connect-agent.sh uses its own location), so the
-# render points at the sandbox's patched files; --wire-sandbox skips every
+# wiring points at the sandbox's patched files; --wire-sandbox skips every
 # out-of-dir side effect. The sandbox is a real git repo so the agent sees a clean tree.
 build_template() { # <dir> <arm:control|treatment>
   local d="$1" arm="$2"
   rm -rf "$d"; mkdir -p "$d"
   git -C "$REPO" archive "$BASE_REF" | tar -x -C "$d"
+  # Make the sandbox its own repo BEFORE applying the diff: inside a subdirectory of an
+  # enclosing repo (tmp/ under this checkout), `git apply` treats the diff's paths as
+  # outside the current directory and skips them all, exiting 0 — an A/A run that reads
+  # as a treatment run.
+  ( cd "$d" && git init -q && git config user.email e@e.co && git config user.name e )
   if [ "$arm" = treatment ] && [ -n "$DIFF" ]; then
     ( cd "$d" && git apply "$DIFF" ) || { echo "ERROR: treatment diff did not apply to $BASE_REF" >&2; exit 1; }
   fi
@@ -90,16 +95,20 @@ build_template() { # <dir> <arm:control|treatment>
     bash "$d/scripts/connect-agent.sh" claude --wire-sandbox >/dev/null 2>&1 \
       || { echo "ERROR: 'claude --wire-sandbox' failed in $d — does $BASE_REF carry the flag?" >&2; exit 1; }
   fi
-  ( cd "$d" && git init -q && git config user.email e@e.co && git config user.name e \
-      && git add -A && git commit -q -m init \
+  ( cd "$d" && git add -A && git commit -q -m init \
       && git remote add origin "$ORIGIN" )
 }
 
 echo "Building templates (agent=$AGENT, model=$MODEL, base=$BASE_REF)..."
 build_template "$SANDBOX_ROOT/control"   control   || exit 1
 build_template "$SANDBOX_ROOT/treatment" treatment || exit 1
+# Two arms whose trees match are an A/A, whatever the diff claimed to do: refuse to
+# spend agent runs measuring nothing.
+if [ -n "$DIFF" ] && [ "$(git -C "$SANDBOX_ROOT/control" rev-parse 'HEAD^{tree}')" = "$(git -C "$SANDBOX_ROOT/treatment" rev-parse 'HEAD^{tree}')" ]; then
+  echo "ERROR: control and treatment sandboxes are identical — the diff changed nothing under $BASE_REF" >&2; exit 1
+fi
 
-# BUILD_ONLY=1 stops here — inspect the templates (rendered auto-load, applied diff)
+# BUILD_ONLY=1 stops here — inspect the templates (wired auto-load, applied diff)
 # without spending on agent runs.
 if [ -n "${BUILD_ONLY:-}" ]; then
   echo "BUILD_ONLY: templates under $SANDBOX_ROOT (control/, treatment/); skipping matrix."
