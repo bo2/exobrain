@@ -6,6 +6,10 @@ This file holds OpenClaw-specific guidance. The shared conventions in `AGENTS.md
 
 When `AGENTS.md` or a skill refers to "the agent's primitive for X", map it to the OpenClaw equivalent for file edits, search, and shell. OpenClaw has no separate skill-invocation primitive: `tier: always` skills are linked into its skills dir, and `tier: optional` skills appear in the optional-skills index inside the injected block — read the `SKILL.md` at the path given and follow it inline.
 
+## Answer from the exobrain, not cold
+
+A short personal follow-up is a request for recorded context even when it names no domain: "we", "our", "my", something the person "already" has, a household member, a recorded possession, event, or preference. Retrieve before asking — the knowledge index picks the likely domain, its `README.md` comes first, then the domain's content, then `workspaces/` for provenance. Ask the person to restate a provider, product, file, event, or preference only after retrieval fails, and say what was checked. An impersonal general-knowledge request with no dependency on their world is exempt.
+
 ## Skills are exobrain files
 
 Every skill this agent sees is an exobrain repo file, scripts included — change one the way any exobrain file changes: through the normal review, into the skill that governs it or a new skill declared in `skills.json`, never into a workspace proposal. OpenClaw's own Skill Workshop is off and its `skill_workshop` tool denied wherever this exobrain is connected; the connector keeps that config reconciled.
