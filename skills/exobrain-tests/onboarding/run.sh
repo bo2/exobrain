@@ -58,7 +58,7 @@ if [[ -n "$SEL_CASES" ]]; then IFS=',' read -r -a CASES <<<"$SEL_CASES"; else CA
 
 log "instance: $INSTANCE_DIR · mode=$MODE · cases: ${CASES[*]}"
 PASS=0; FAIL=0; SKIP=0; FAILED=()
-for c in "${CASES[@]}"; do
+for c in ${CASES[@]+"${CASES[@]}"}; do
     cdir="$CASES_DIR/$c"; m="$cdir/meta.json"
     [[ -f "$m" ]] || { err "no such case: $c"; FAIL=$((FAIL+1)); FAILED+=("$c(missing)"); continue; }
 

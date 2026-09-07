@@ -232,7 +232,7 @@ build_scope_chain() {
             [[ -z "$leaf" || "$leaf" == "global" ]] && continue
             local prefix="" seg depth=0
             local oldIFS="$IFS"; IFS='/'; local segs=($leaf); IFS="$oldIFS"
-            for seg in "${segs[@]}"; do
+            for seg in ${segs[@]+"${segs[@]}"}; do
                 [[ -z "$seg" ]] && continue
                 prefix="${prefix:+$prefix/}$seg"
                 depth=$((depth + 1))

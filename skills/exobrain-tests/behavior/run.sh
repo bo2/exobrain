@@ -83,7 +83,7 @@ fi
 # ---- resolve agents (filter to runnable) ----------------------------------
 IFS=',' read -r -a REQ_AGENTS <<<"$AGENTS_SEL"
 AGENTS=()
-for a in "${REQ_AGENTS[@]}"; do
+for a in ${REQ_AGENTS[@]+"${REQ_AGENTS[@]}"}; do
     case "$a" in
         claude|codex) ;;
         *) err "unknown agent: $a (expected claude or codex)"; exit 2 ;;
@@ -114,7 +114,7 @@ log "run root: $RUN_ROOT"
 
 # ---- estimate -------------------------------------------------------------
 per_agent_sessions=0; per_agent_judge=0
-for c in "${CASES[@]}"; do
+for c in ${CASES[@]+"${CASES[@]}"}; do
     m="$CASES_DIR/$c/meta.json"; [[ -f "$m" ]] || continue
     prof="$(meta_field "$m" permission_profile action)"
     n="$(meta_field "$m" runs 3)"; [[ -n "$RUNS_OVERRIDE" ]] && n="$RUNS_OVERRIDE"
@@ -156,7 +156,7 @@ overall_setup_error=0
 
 for agent in ${AGENTS[@]+"${AGENTS[@]}"}; do
   log "######## agent: $agent ########"
-  for case in "${CASES[@]}"; do
+  for case in ${CASES[@]+"${CASES[@]}"}; do
     cdir="$CASES_DIR/$case"
     meta="$cdir/meta.json"
     if [[ ! -f "$meta" ]]; then err "no such case: $case"; overall_setup_error=1; continue; fi

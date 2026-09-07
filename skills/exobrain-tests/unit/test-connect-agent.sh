@@ -47,7 +47,7 @@ assert_symlink()      { [[ -L "$1" ]] || { echo "ASSERT_SYMLINK${2:+ ($2)}: $1 n
 
 # Everything a run left in a dir, one space-separated sorted line — for asserting
 # exactly what a connect wrote into an agent's home config dir.
-dir_listing()     { (cd "$1" && LC_ALL=C ls -A | sort | tr '\n' ' ' | sed 's/ $//'); }
+dir_listing()     { (cd "$1" && LC_ALL=C ls -A | LC_ALL=C sort | tr '\n' ' ' | sed 's/ $//'); }
 
 claude_manifest() { cat "$1/.claude/connected-scopes.md"; }
 claude_index()    { cat "$1/.claude/optional-skills.md"; }
