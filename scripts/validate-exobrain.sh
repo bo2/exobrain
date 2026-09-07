@@ -14,6 +14,8 @@
 #     citations in profiles; "(verified <date>)" temporal markers. Excludes _raw/
 #     and the exobrain meta-domain.
 #   - Skills registry integrity (delegated to skills-validate.sh).
+#   - Cron registry shape — every per-scope crons.json (delegated to
+#     openclaw-cron-sync.py --check; no gateway access, no openclaw binary).
 #   - Duplicate feed-card IDs (canonical seed only) — the NNNN filename prefix is
 #     a never-reused provenance key; concurrent PRs can collide on one.
 #   - Compatibility-shim ledger: every `COMPAT <id>` marker in the tree has a row in
@@ -434,6 +436,21 @@ if [[ -x "$REPO_DIR/scripts/skills-validate.sh" ]]; then
         while IFS= read -r line; do
             record "  $line"
         done <<<"$skills_output"
+    fi
+fi
+
+# ---------------------------------------------------------------------------
+# Cron registries — delegate to openclaw-cron-sync.py --check (no gateway)
+# ---------------------------------------------------------------------------
+
+if [[ -x "$REPO_DIR/scripts/openclaw-cron-sync.py" ]] && command -v python3 >/dev/null 2>&1; then
+    crons_output="$("$REPO_DIR/scripts/openclaw-cron-sync.py" --check 2>&1)"
+    crons_status=$?
+    if [[ $crons_status -ne 0 ]]; then
+        record "openclaw-cron-sync.py --check failed:"
+        while IFS= read -r line; do
+            record "  $line"
+        done <<<"$crons_output"
     fi
 fi
 

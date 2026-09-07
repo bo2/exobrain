@@ -64,7 +64,8 @@ Exit: `0` all passed · `1` some failed · `2` harness error (including an unkno
 
 - **`test-connect-agent.sh`** — `connect-agent.sh` + `skills-registry.sh`: scope-chain
   resolution, opt-in skill tiers, flag-driven identity, the per-agent surfaces, the
-  generated indexes, and validator/fetcher plumbing.
+  generated indexes, validator/fetcher plumbing, and the OpenClaw runtime-config
+  reconcile (against a fake `openclaw` CLI).
 - **`test-authoring-review.sh`** — `authoring-review.sh`'s engine call: inherited proxy
   env is stripped (else a proxied push silently skips the review), and a reported
   violation exits non-zero.
@@ -72,6 +73,17 @@ Exit: `0` all passed · `1` some failed · `2` harness error (including an unkno
   holding `COMPAT` markers and `compat.md` rows to each other (both directions, dates
   included) while never failing on the calendar, and `exobrain-healthcheck.sh` naming
   shims past their removal date.
+- **`test-openclaw-cron-sync.sh`** — `openclaw-cron-sync.py`: registry validation
+  (`--check`: duplicate names, model pins, cron without tz, announce without a target),
+  the `--dry-run` plan, and a real sync's add / patch / remove calls against a fake
+  `openclaw` binary that answers `cron list --json` from a fixture — foreign jobs
+  spared, `{ROOT}` expanded, the linked-worktree refusal.
+- **`test-persist.sh`** — `persist.sh`: the full land against a bare origin and a fake
+  `gh` (commit, gates, push, PR, squash-merge, main fast-forward, cleanup), the
+  machinery gate in both halves (the unit suite the script runs, the flag the agent
+  asserts, and the claim that carries it into a sweep), timeline rows, resume after an
+  interrupted run, conflict handling, the no-remote fast-forward, and `--sweep`'s
+  claimed / quiet / dirty rules.
 
 ### Add a unit harness
 

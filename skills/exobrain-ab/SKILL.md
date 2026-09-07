@@ -21,6 +21,11 @@ model are added. Measure, don't guess. The general doctrine this skill implement
 - **Measure the decision, not the outcome.** Real tools hit live systems; you can't and
   shouldn't run them. Measure *which tool/command the agent reaches for* — captured by
   PATH-shadow stubs that log the invocation and return canned output.
+- **Stub every live CLI a task could plausibly reach, not just the measured one.**
+  Sandbox agents run with bypassed permissions on the real machine's PATH: any
+  unstubbed real CLI (`gh`, a workspace or cloud CLI) is live, and a run can cause real
+  side effects through it. Shadow known-live CLIs with inert stubs even when no task
+  grades them, and sweep their surfaces after a run if one was reachable anyway.
 - **Two gradable signals.** Grade the *tool decision* (which command the agent reached for
   — the default) or the agent's *authored output* (its own stdout, via the `output` /
   `output_absent` grade modes). Output grading A/Bs any content behavior — a required
@@ -52,7 +57,7 @@ model are added. Measure, don't guess. The general doctrine this skill implement
 
 ## Sandbox scope
 
-Sandboxes render **guest** (global scope only) — root `AGENTS.md`/`CLAUDE.md` plus global
+Sandboxes wire as **guest** (global scope only) — root `AGENTS.md`/`CLAUDE.md` plus global
 skills and tool docs, which is what most framework changes touch. A change to a *deeper*
 scope (person/host/group) needs that scope's connected leaf wired into the sandbox, which
 this harness doesn't set up — test those by hand or extend the harness.
@@ -73,7 +78,7 @@ this harness doesn't set up — test those by hand or extend the harness.
    ```bash
    AGENT=claude skills/exobrain-ab/scripts/run.sh tmp/change.diff <tasks.sh> [N=12] [parallel=2] [model] [dev|holdout|all|<id>]
    ```
-   Inspect the rendered sandboxes first with `BUILD_ONLY=1` (builds + renders, no agent
+   Inspect the wired sandboxes first with `BUILD_ONLY=1` (builds + wires, no agent
    runs). Output: per-arm `control correct` vs `treatment correct` k/N, and per-run CSVs
    under `tmp/exobrain-ab/results/`.
 5. **Read the verdict honestly.** A real win shows on held-out tasks, on the production
@@ -82,7 +87,7 @@ this harness doesn't set up — test those by hand or extend the harness.
 
 ## Files
 
-- `scripts/run.sh` — builds control/treatment sandboxes, renders each via its own
+- `scripts/run.sh` — builds control/treatment sandboxes, wires each via its own
   `--wire-sandbox`, runs the task matrix, prints the summary.
 - `scripts/run_one.sh` — one graded run; grades the stublog (tool choice) or the agent's
   stdout (`output` modes) into a verdict, spawned in parallel by `run.sh`.

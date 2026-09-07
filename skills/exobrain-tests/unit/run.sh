@@ -22,7 +22,9 @@ RED='\033[0;31m'; GREEN='\033[0;32m'; DIM='\033[0;90m'; BOLD='\033[1m'; RESET='\
 # name|script|what it covers
 HARNESSES='connect-agent|test-connect-agent.sh|scripts/connect-agent.sh + scripts/skills-registry.sh
 authoring-review|test-authoring-review.sh|scripts/authoring-review.sh
-compat-ledger|test-compat-ledger.sh|the compat-shim gates in validate-exobrain.sh + exobrain-healthcheck.sh'
+compat-ledger|test-compat-ledger.sh|the compat-shim gates in validate-exobrain.sh + exobrain-healthcheck.sh
+openclaw-cron-sync|test-openclaw-cron-sync.sh|scripts/openclaw-cron-sync.py (crons.json validation + gateway reconciliation)
+persist|test-persist.sh|scripts/persist.sh (the one-command land from a worktree, its gates and resume paths, and --sweep)'
 
 SEL=""; FILTER=""; LIST=0
 while [[ $# -gt 0 ]]; do
@@ -74,7 +76,7 @@ done <<< "$HARNESSES"
 if [[ $ran -eq 0 ]]; then echo "no harnesses selected" >&2; exit 2; fi
 plural=""; [[ $ran -ne 1 ]] && plural="es"
 if [[ $failed -gt 0 ]]; then
-    printf "${RED}${BOLD}%d/%d harness%s failed${RESET}: %s\n" "$failed" "$ran" "$plural" ${FAILED_NAMES[@]+"${FAILED_NAMES[*]}"}
+    printf "${RED}${BOLD}%d/%d harness%s failed${RESET}: %s\n" "$failed" "$ran" "$plural" ${FAILED_NAMES[*]+"${FAILED_NAMES[*]}"}
     exit 1
 fi
 printf "${GREEN}${BOLD}All %d harness%s passed${RESET}\n" "$ran" "$plural"
