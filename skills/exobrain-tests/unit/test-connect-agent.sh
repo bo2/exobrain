@@ -628,36 +628,8 @@ test_codex_indexes_inlined_not_in_home() {
         "nothing written to CODEX_HOME"
 }
 
-# COMPAT 0003 (remove after 2026-08-28) — an upgrading instance carries index copies
-# the pre-override connector left in the home dir. Relink clears the ones it wrote —
-# matched on the generated heading — and leaves a same-named file of the human's own
-# alone.
-test_codex_prunes_legacy_home_indexes() {
-    local r; r="$(setup_fake_exobrain)"; add_person "$r" people/alice
-    write_config "$r" people/alice/hosts/h1 codex
-    mkdir -p "$TEST_DIR/codex"
-    printf '# Tools\n\nstale\n'   > "$TEST_DIR/codex/tools-index.md"
-    printf '# Domains\n\nstale\n' > "$TEST_DIR/codex/domains-index.md"
-    printf '# My own notes\n'     > "$TEST_DIR/codex/optional-skills.md"   # not ours
-    wire_sandbox "$r" codex >/dev/null 2>&1 || return 1
-    assert_no_file "$TEST_DIR/codex/tools-index.md" "legacy tools index removed" || return 1
-    assert_no_file "$TEST_DIR/codex/domains-index.md" "legacy domains index removed" || return 1
-    assert_file "$TEST_DIR/codex/optional-skills.md" "foreign same-named file left alone" || return 1
-    assert_eq "# My own notes" "$(head -n 1 "$TEST_DIR/codex/optional-skills.md")" "foreign file unmodified"
-}
-
 # A mode advertised as side-effect-free must refuse the one default that isn't:
-# openclaw's USER.md and codex's legacy home-dir cleanups target the real home
-# config dir when the override is unset.
-test_wire_codex_refuses_without_codex_home() {
-    local r out; r="$(setup_fake_exobrain)"; add_person "$r" people/alice
-    write_config "$r" people/alice/hosts/h1 codex
-    out="$(cd "$r" && env "HOME=$TEST_DIR/hm" "CODEX_HOME=" "OPENCLAW_WORKSPACE=$TEST_DIR/ocw" \
-        bash scripts/connect-agent.sh codex --wire-sandbox 2>&1)" && { echo "should refuse"; return 1; }
-    assert_contains "$out" "CODEX_HOME" "error names the override" || return 1
-    assert_no_file "$TEST_DIR/hm/.codex" "home config dir untouched"
-}
-
+# openclaw's USER.md targets the real home workspace when the override is unset.
 test_wire_openclaw_refuses_without_workspace() {
     local r out; r="$(setup_fake_exobrain)"; add_person "$r" people/alice
     write_config "$r" people/alice/hosts/h1 openclaw
@@ -742,9 +714,7 @@ test_knowledge_index_claude() {
     wire_sandbox "$r" claude >/dev/null 2>&1 || return 1
     assert_file "$r/.claude/knowledge-index.md" "knowledge-index.md generated" || return 1
     local d; d="$(claude_knowledge "$r")"
-    # Both dead-copy prunes identify a stale index by this heading rather than by
-    # name, so a human's same-named file survives — change the heading, change them.
-    assert_contains "$d" "# Knowledge domains" "heading matches the dead-copy prunes" || return 1
+    assert_contains "$d" "# Knowledge domains" "index heading" || return 1
     assert_contains "$d" "health" "domain row present" || return 1
     assert_contains "$d" "knowledge/health/README.md" "README path present" || return 1
     assert_contains "$d" "Conditions, meds, providers, and insurance." "summary extracted from frontmatter" || return 1
@@ -768,26 +738,6 @@ test_claude_index_removed_when_source_goes() {
     local c; c="$(cat "$r/.claude/CLAUDE.md")"
     assert_not_contains "$c" "@knowledge-index.md" "CLAUDE.md drops the removed knowledge import" || return 1
     assert_not_contains "$c" "@tools-index.md" "CLAUDE.md drops the removed tools import"
-}
-
-# COMPAT 0004 (remove after 2026-08-30) — a checkout relinking across the rename
-# carries .claude/domains-index.md, which nothing imports once CLAUDE.md is
-# regenerated. install_index only clears the name it writes, so the old copy needs
-# its own sweep — and a same-named file the human wrote must survive it.
-test_claude_prunes_renamed_index() {
-    local r; r="$(setup_fake_exobrain)"; add_person "$r" people/alice
-    add_domain "$r" health "Conditions, meds, providers, and insurance."
-    write_config "$r" people/alice/hosts/h1
-    mkdir -p "$r/.claude"
-    printf '# Knowledge domains\n\nstale\n' > "$r/.claude/domains-index.md"
-    wire_sandbox "$r" claude >/dev/null 2>&1 || return 1
-    assert_no_file "$r/.claude/domains-index.md" "renamed index copy removed" || return 1
-    assert_file "$r/.claude/knowledge-index.md" "the current index is in place" || return 1
-
-    printf '# My own notes\n' > "$r/.claude/domains-index.md"   # not ours
-    wire_sandbox "$r" claude >/dev/null 2>&1 || return 1
-    assert_file "$r/.claude/domains-index.md" "foreign same-named file left alone" || return 1
-    assert_eq "# My own notes" "$(head -n 1 "$r/.claude/domains-index.md")" "foreign file unmodified"
 }
 
 test_knowledge_index_empty_skip() {
@@ -1046,12 +996,10 @@ run_test "always linked, unlisted not"         test_always_skill_linked_unlisted
 run_test "claude index imports resolve"        test_claude_index_imports_resolve
 run_test "codex inlines specs"                 test_codex_inlines_specs
 run_test "codex indexes inlined, not in home"  test_codex_indexes_inlined_not_in_home
-run_test "codex prunes legacy home indexes"    test_codex_prunes_legacy_home_indexes
 run_test "openclaw indexes inlined, not home"  test_openclaw_indexes_inlined_not_in_home
 run_test "tools index (claude)"                test_tools_index_claude
 run_test "tools index empty -> skip"           test_tools_index_empty_skip
 run_test "knowledge index (claude)"              test_knowledge_index_claude
-run_test "renamed index copy pruned"             test_claude_prunes_renamed_index
 run_test "knowledge index empty -> skip"         test_knowledge_index_empty_skip
 run_test "stale claude index cleared"          test_claude_index_removed_when_source_goes
 run_test "relink skips unconnected claude"     test_relink_skips_unconnected_claude
@@ -1071,7 +1019,6 @@ run_test "flags never scaffold"                test_flags_no_scaffold_unknown_ha
 run_test "flags guest connects nothing"        test_flags_guest
 run_test "flags extra --scope"                 test_flags_extra_scope
 run_test "flags name-match nested"             test_flags_name_match_nested
-run_test "wiring codex refuses without CODEX_HOME" test_wire_codex_refuses_without_codex_home
 run_test "wiring openclaw refuses without workspace" test_wire_openclaw_refuses_without_workspace
 run_test "legacy render flag still wires"      test_legacy_render_flag_alias
 run_test "seed scope auto-joins chain"         test_seed_scope_auto_joins_chain

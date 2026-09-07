@@ -438,16 +438,10 @@ esac
 
 # --wire-sandbox promises no writes outside the checkout, but openclaw
 # delivers part of its surface into TARGET_DIR — the real home config dir when
-# the override isn't set — and codex's legacy cleanups (COMPAT 0001/0002/0003)
-# prune connector-written files there. Refuse up front rather than touch the
-# home dir and call it a sandbox. The codex arm retires with those shims.
+# the override isn't set. Refuse up front rather than touch the home dir and
+# call it a sandbox.
 if $WIRE_SANDBOX; then
     case "$AGENT" in
-        codex)    [[ -n "${CODEX_HOME:-}" ]] || {
-                      echo "--wire-sandbox for codex runs legacy home-dir cleanups against CODEX_HOME (default ~/.codex)." >&2
-                      echo "Set CODEX_HOME to a throwaway dir first, e.g.: CODEX_HOME=\$(mktemp -d) $0 codex --wire-sandbox" >&2
-                      exit 1
-                  } ;;
         openclaw) [[ -n "${OPENCLAW_WORKSPACE:-}" ]] || {
                       echo "--wire-sandbox for openclaw writes USER.md into OPENCLAW_WORKSPACE (default ~/.openclaw/workspace)." >&2
                       echo "Set OPENCLAW_WORKSPACE to a throwaway dir first, e.g.: OPENCLAW_WORKSPACE=\$(mktemp -d) $0 openclaw --wire-sandbox" >&2
@@ -591,19 +585,6 @@ for d in "$SKILLS_DIR"/*; do
     esac
 done
 
-# COMPAT 0001 (remove after 2026-08-28) — codex skills used to link under
-# ~/.codex/skills (global); they live in the repo-local .agents/skills. Remove the
-# symlinks left in the home dir (only
-# links pointing back into this repo) so a re-linked codex install keeps no stale
-# global copies; anything else under there is left untouched.
-if [[ "$AGENT" == codex && "$SKILLS_DIR" != "$TARGET_DIR/skills" && -d "$TARGET_DIR/skills" ]]; then
-    for _l in "$TARGET_DIR"/skills/*; do
-        [[ -L "$_l" ]] || continue
-        [[ "$(readlink "$_l")" == "$REPO_DIR"/* ]] && { rm "$_l"; echo "  - removed legacy codex skill link $(basename "$_l")"; }
-    done
-    rmdir "$TARGET_DIR/skills" 2>/dev/null || true
-fi
-
 # --------------------------------------------------------------------------
 # Optional-skills index
 # --------------------------------------------------------------------------
@@ -627,43 +608,6 @@ install_index() {
     elif [[ -f "$dest" ]]; then
         rm -f "$dest"; echo "  - removed stale $label"
     fi
-}
-
-# COMPAT 0003 (remove after 2026-08-28) — prune_home_indexes: the pre-override
-# delivery model wrote these indexes into the agent's home config dir, back when that
-# dir was the transport. The
-# composed surface now carries them inlined, so home-dir copies are read by nothing:
-# a shared dir where two checkouts overwrite each other and every copy goes stale at
-# the next relink elsewhere. Removes only a file this connector wrote — matched on the
-# generated heading — so a same-named file of the human's own is left alone.
-prune_home_indexes() {
-    local file heading
-    while IFS='|' read -r file heading; do
-        [[ -f "$TARGET_DIR/$file" ]] || continue
-        [[ "$(head -n 1 "$TARGET_DIR/$file")" == "$heading" ]] || continue
-        rm -f "$TARGET_DIR/$file"; echo "  - removed dead index copy $TARGET_DIR/$file"
-    done <<'LEGACY'
-optional-skills.md|# Optional skills
-tools-index.md|# Tools
-domains-index.md|# Domains
-domains-index.md|# Knowledge domains
-LEGACY
-}
-
-# COMPAT 0004 (remove after 2026-08-30) — prune_renamed_claude_index: the knowledge
-# index was called domains-index.md before it was named after the tree it catalogs.
-# install_index only ever clears the destination it writes, so a checkout relinking
-# across the rename keeps the old copy in .claude/ with nothing importing it. Matched
-# on the generated heading, so a same-named file of the human's own is left alone.
-# Must run before the index installs: the heading match can't tell a stale copy from
-# a live index a diverged connector still writes under the old name — sweeping first
-# means such a connector regenerates the file instead of deleting what it just wrote.
-prune_renamed_claude_index() {
-    local dead="$TARGET_DIR/domains-index.md" first
-    [[ -f "$dead" ]] || return 0
-    first="$(head -n 1 "$dead")"
-    [[ "$first" == "# Knowledge domains" || "$first" == "# Domains" ]] || return 0
-    rm -f "$dead"; echo "  - removed renamed index copy .claude/domains-index.md"
 }
 
 echo ""; echo "Optional skills index:"
@@ -844,7 +788,6 @@ case "$AGENT" in
         # Claude is the one surface that reads the indexes as files: the manifest
         # @-imports them by name, so they need durable copies in the in-repo
         # (gitignored) .claude/ that travels with the checkout.
-        prune_renamed_claude_index
         install_index "$INDEX_FILE"           "$TARGET_DIR/optional-skills.md" ".claude/optional-skills.md"
         install_index "$TOOLS_INDEX_FILE"     "$TARGET_DIR/tools-index.md"     ".claude/tools-index.md"
         install_index "$KNOWLEDGE_INDEX_FILE" "$TARGET_DIR/knowledge-index.md" ".claude/knowledge-index.md"
@@ -893,15 +836,6 @@ case "$AGENT" in
             compose_context
         } > "$OVERRIDE"
         echo "  ✓ $(basename "$OVERRIDE")"
-
-        # COMPAT 0002 (remove after 2026-08-28) — strip the exobrain marker block a
-        # prior connector injected into ~/.codex/AGENTS.md, superseded by the override.
-        if [[ -f "$TARGET_DIR/AGENTS.md" ]] && grep -qF "<!-- BEGIN exobrain -->" "$TARGET_DIR/AGENTS.md" 2>/dev/null; then
-            awk 'BEGIN{s=0} /<!-- BEGIN exobrain -->/{s=1} /<!-- END exobrain -->/{s=0;next} !s' \
-                "$TARGET_DIR/AGENTS.md" > "$TARGET_DIR/AGENTS.md.tmp" && mv "$TARGET_DIR/AGENTS.md.tmp" "$TARGET_DIR/AGENTS.md"
-            echo "  - removed legacy exobrain block from $TARGET_DIR/AGENTS.md"
-        fi
-        prune_home_indexes
         ;;
     openclaw)
         # OpenClaw has no import primitive and auto-loads the root AGENTS.md but not
@@ -920,7 +854,6 @@ case "$AGENT" in
         mkdir -p "$TARGET_DIR"
         inject_block "$DEST" "exobrain" "$CONTENT_TMP" "$(basename "$DEST")"
         rm -f "$CONTENT_TMP"
-        prune_home_indexes
         ;;
 esac
 
