@@ -46,7 +46,7 @@ fi
 #
 # A skill declared at a shared scope loads for everyone whose chain includes that
 # scope, so a newly declared one must carry committed proof it earns that reach:
-# registration as a periodic job in a schedule.json, or a test/eval/ab artifact inside
+# registration as a scheduled job in a crons.json, or a test/eval/ab artifact inside
 # the skill dir. Absent either, the skill belongs under a person scope, which imposes
 # on no one. Proof must live WITH the skill — a skill may not cite the workspace it
 # came from (AGENTS.md: links from anything that must stay current go stale silently).
@@ -80,7 +80,7 @@ skill_proof_signal() {   # $1 = skill dir (abs), $2 = skill name — 0 if proof 
     while IFS= read -r sched; do
         [[ -n "$sched" ]] || continue
         grep -qF -- "$name" "$REPO_DIR/$sched" 2>/dev/null && return 0
-    done < <(git -C "$REPO_DIR" ls-files 'schedule.json' '*/schedule.json' 2>/dev/null)
+    done < <(git -C "$REPO_DIR" ls-files 'crons.json' '*/crons.json' 2>/dev/null)
     [[ -n "$(find "$dir" -type d -iname 'evals' 2>/dev/null | head -1)" ]] && return 0
     [[ -n "$(find "$dir" -type f \( -iname '*test*' -o -name 'ab-results.json' \
              -o -iname '*.eval.json' \) 2>/dev/null | head -1)" ]] && return 0
@@ -192,7 +192,7 @@ if [[ ${#unproven[@]} -gt 0 ]]; then
     {
         echo ""
         echo "NEW SHARED SKILL — newly declared at a shared scope with no committed proof it"
-        echo "earns that reach: no schedule.json registration, and no test/eval/ab artifact in"
+        echo "earns that reach: no crons.json registration, and no test/eval/ab artifact in"
         echo "the skill dir. A shared skill loads for everyone whose chain includes its scope."
         echo "For each, either PROVE it — commit the test run, eval, or exobrain-ab result into"
         echo "the skill's own directory, so the proof travels with the skill — or RELOCATE it"

@@ -73,6 +73,11 @@ Exit: `0` all passed · `1` some failed · `2` harness error (including an unkno
   holding `COMPAT` markers and `compat.md` rows to each other (both directions, dates
   included) while never failing on the calendar, and `exobrain-healthcheck.sh` naming
   shims past their removal date.
+- **`test-openclaw-cron-sync.sh`** — `openclaw-cron-sync.py`: registry validation
+  (`--check`: duplicate names, model pins, cron without tz, announce without a target),
+  the `--dry-run` plan, and a real sync's add / patch / remove calls against a fake
+  `openclaw` binary that answers `cron list --json` from a fixture — foreign jobs
+  spared, `{ROOT}` expanded, the linked-worktree refusal.
 
 ### Add a unit harness
 

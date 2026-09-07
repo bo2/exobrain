@@ -22,7 +22,8 @@ RED='\033[0;31m'; GREEN='\033[0;32m'; DIM='\033[0;90m'; BOLD='\033[1m'; RESET='\
 # name|script|what it covers
 HARNESSES='connect-agent|test-connect-agent.sh|scripts/connect-agent.sh + scripts/skills-registry.sh
 authoring-review|test-authoring-review.sh|scripts/authoring-review.sh
-compat-ledger|test-compat-ledger.sh|the compat-shim gates in validate-exobrain.sh + exobrain-healthcheck.sh'
+compat-ledger|test-compat-ledger.sh|the compat-shim gates in validate-exobrain.sh + exobrain-healthcheck.sh
+openclaw-cron-sync|test-openclaw-cron-sync.sh|scripts/openclaw-cron-sync.py (crons.json validation + gateway reconciliation)'
 
 SEL=""; FILTER=""; LIST=0
 while [[ $# -gt 0 ]]; do
