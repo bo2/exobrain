@@ -138,30 +138,57 @@ add_domain() {
 
 write_config() { printf '{"connected_scopes":["%s"],"agents":["%s"]}\n' "$2" "${3:-claude}" > "$1/.exobrain.json"; }
 
+# fake_openclaw — a stand-in `openclaw` CLI for the connector's runtime-config step:
+# `config get <path> --json` / `config set --batch-json <ops>` over a JSON file,
+# every argv logged. Every wiring helper points OPENCLAW_BIN at it, so no test
+# reaches a real openclaw binary or its config.
+fake_openclaw() {
+    mkdir -p "$TEST_DIR/bin"
+    [[ -f "$TEST_DIR/oc-config.json" ]] || echo '{}' > "$TEST_DIR/oc-config.json"
+    cat > "$TEST_DIR/bin/openclaw" <<EOF
+#!/usr/bin/env bash
+STATE="$TEST_DIR/oc-config.json"
+echo "\$*" >> "$TEST_DIR/oc-calls.txt"
+case "\$1 \$2" in
+  "config get")
+    v="\$(jq -c --arg p "\$3" 'getpath(\$p | split("."))' "\$STATE")"
+    if [[ "\$v" == "null" ]]; then echo '{"ok":false}'; exit 1; fi
+    echo "\$v" ;;
+  "config set")
+    jq --argjson ops "\$4" 'reduce \$ops[] as \$o (.; setpath(\$o.path | split("."); \$o.value))' "\$STATE" > "\$STATE.t" && mv "\$STATE.t" "\$STATE"
+    echo "Updated \$(jq length <<< "\$4") config paths." ;;
+  *) echo "fake openclaw: unsupported: \$*" >&2; exit 2 ;;
+esac
+EOF
+    chmod +x "$TEST_DIR/bin/openclaw"
+}
+oc_config()    { jq -c "$1" "$TEST_DIR/oc-config.json"; }
+oc_set_calls() { local n; n="$(grep -c "^config set" "$TEST_DIR/oc-calls.txt" 2>/dev/null)"; echo "${n:-0}"; }
+
 # wire_sandbox <repo> <agent> — wire the agent surface into the fixture, HOME-isolated.
 wire_sandbox() {
     local repo="$1" agent="$2"
-    mkdir -p "$TEST_DIR/home" "$TEST_DIR/codex" "$TEST_DIR/ocw"
+    mkdir -p "$TEST_DIR/home" "$TEST_DIR/codex" "$TEST_DIR/ocw"; fake_openclaw
     (cd "$repo" && env "HOME=$TEST_DIR/home" "CODEX_HOME=$TEST_DIR/codex" \
-        "OPENCLAW_WORKSPACE=$TEST_DIR/ocw" bash scripts/connect-agent.sh "$agent" --wire-sandbox)
+        "OPENCLAW_WORKSPACE=$TEST_DIR/ocw" "OPENCLAW_BIN=$TEST_DIR/bin/openclaw" bash scripts/connect-agent.sh "$agent" --wire-sandbox)
 }
 
 # wire_sandbox_flags <repo> <agent> <flag...> — wire with explicit identity flags, so
 # resolve_from_flags runs and writes .exobrain.json into the sandbox.
 wire_sandbox_flags() {
     local repo="$1" agent="$2"; shift 2
-    mkdir -p "$TEST_DIR/home" "$TEST_DIR/codex" "$TEST_DIR/ocw"
+    mkdir -p "$TEST_DIR/home" "$TEST_DIR/codex" "$TEST_DIR/ocw"; fake_openclaw
     (cd "$repo" && env "HOME=$TEST_DIR/home" "CODEX_HOME=$TEST_DIR/codex" \
-        "OPENCLAW_WORKSPACE=$TEST_DIR/ocw" bash scripts/connect-agent.sh "$agent" --wire-sandbox "$@")
+        "OPENCLAW_WORKSPACE=$TEST_DIR/ocw" "OPENCLAW_BIN=$TEST_DIR/bin/openclaw" bash scripts/connect-agent.sh "$agent" --wire-sandbox "$@")
 }
 
 # connect <repo> <agent> [flag...] — a real connect (writes the marker and the
 # repo's own git hooks), HOME-isolated. Non-interactive, so no config means guest.
 connect() {
     local repo="$1" agent="$2"; shift 2
-    mkdir -p "$TEST_DIR/home" "$TEST_DIR/codex" "$TEST_DIR/ocw"
+    mkdir -p "$TEST_DIR/home" "$TEST_DIR/codex" "$TEST_DIR/ocw"; fake_openclaw
     (cd "$repo" && env "HOME=$TEST_DIR/home" "CODEX_HOME=$TEST_DIR/codex" \
-        "OPENCLAW_WORKSPACE=$TEST_DIR/ocw" bash scripts/connect-agent.sh "$agent" "$@")
+        "OPENCLAW_WORKSPACE=$TEST_DIR/ocw" "OPENCLAW_BIN=$TEST_DIR/bin/openclaw" bash scripts/connect-agent.sh "$agent" "$@")
 }
 
 # relink <repo> <agent> — what the post-merge hook runs for each agent in turn.
@@ -961,6 +988,61 @@ test_seed_scope_in_manifest() {
 }
 
 # ---------------------------------------------------------------------------
+# Tests — OpenClaw runtime config
+# ---------------------------------------------------------------------------
+
+# A real openclaw connect reconciles openclaw.json: every linked skill's real
+# parent dir joins the trusted symlink roots, skill_workshop joins tools.deny,
+# Workshop autonomy is off — and what the human already had there stays.
+test_openclaw_runtime_config_reconciled() {
+    local r; r="$(setup_fake_exobrain)"; add_person "$r" people/alice
+    declare_skill "$r" global g-skill always force
+    declare_skill "$r" people/alice a-skill always force
+    write_config "$r" people/alice/hosts/h1 openclaw
+    fake_openclaw
+    echo '{"skills":{"load":{"allowSymlinkTargets":["/kept/root"]}},"tools":{"deny":["browser"]}}' > "$TEST_DIR/oc-config.json"
+    connect "$r" openclaw >/dev/null 2>&1 || return 1
+    local real; real="$(cd "$r" && pwd -P)"
+    assert_eq "$(jq -nc --arg a "$real/skills" --arg b "$real/people/alice/skills" '[$a, $b, "/kept/root"] | sort')" \
+              "$(oc_config '.skills.load.allowSymlinkTargets | sort')" "linked roots unioned with the kept one" || return 1
+    assert_eq '["browser","skill_workshop"]' "$(oc_config '.tools.deny | sort')" "skill_workshop denied beside the kept entry" || return 1
+    assert_eq '"off"' "$(oc_config '.skills.workshop.autonomous.mode')" "Workshop autonomy off"
+}
+
+# A second run with nothing to change writes nothing.
+test_openclaw_runtime_config_idempotent() {
+    local r; r="$(setup_fake_exobrain)"; add_person "$r" people/alice
+    declare_skill "$r" people/alice a-skill always force
+    write_config "$r" people/alice/hosts/h1 openclaw
+    connect "$r" openclaw >/dev/null 2>&1 || return 1
+    assert_eq "1" "$(oc_set_calls)" "first connect wrote once" || return 1
+    local out; out="$(relink "$r" openclaw 2>&1)" || return 1
+    assert_eq "1" "$(oc_set_calls)" "relink wrote nothing" || return 1
+    assert_contains "$out" "already reconciled"
+}
+
+# Without the CLI the connect still completes — reported, not fatal.
+test_openclaw_runtime_config_degrades_without_cli() {
+    local r; r="$(setup_fake_exobrain)"; add_person "$r" people/alice
+    write_config "$r" people/alice/hosts/h1 openclaw
+    mkdir -p "$TEST_DIR/home" "$TEST_DIR/ocw"
+    local out
+    out="$(cd "$r" && env "HOME=$TEST_DIR/home" "OPENCLAW_WORKSPACE=$TEST_DIR/ocw" \
+        "OPENCLAW_BIN=$TEST_DIR/none/openclaw" bash scripts/connect-agent.sh openclaw 2>&1)" || { echo "$out"; return 1; }
+    assert_contains "$out" "openclaw CLI not found" || return 1
+    assert_file "$r/.openclaw" "connect completed"
+}
+
+# A sandbox wiring promises no out-of-dir writes: the runtime config is untouched.
+test_openclaw_runtime_config_skipped_on_wire_sandbox() {
+    local r; r="$(setup_fake_exobrain)"; add_person "$r" people/alice
+    declare_skill "$r" people/alice a-skill always force
+    write_config "$r" people/alice/hosts/h1 openclaw
+    wire_sandbox "$r" openclaw >/dev/null 2>&1 || return 1
+    assert_no_file "$TEST_DIR/oc-calls.txt" "no openclaw call from a sandbox wiring"
+}
+
+# ---------------------------------------------------------------------------
 
 run_test "scope chain shallow->deep"          test_scope_chain_shallow_to_deep
 run_test "person scope ids list people only"   test_person_scope_ids_lists_people_only
@@ -1024,6 +1106,10 @@ run_test "legacy render flag still wires"      test_legacy_render_flag_alias
 run_test "seed scope auto-joins chain"         test_seed_scope_auto_joins_chain
 run_test "no seed scope without seed/"         test_no_seed_scope_without_seed_dir
 run_test "seed scope in manifest"              test_seed_scope_in_manifest
+run_test "openclaw runtime config reconciled"  test_openclaw_runtime_config_reconciled
+run_test "openclaw runtime config idempotent"  test_openclaw_runtime_config_idempotent
+run_test "openclaw config degrades w/o CLI"    test_openclaw_runtime_config_degrades_without_cli
+run_test "openclaw config skipped on wiring"   test_openclaw_runtime_config_skipped_on_wire_sandbox
 
 echo ""
 printf "Ran %d  ${GREEN}passed %d${RESET}  ${RED}failed %d${RESET}\n" "$TESTS_RUN" "$TESTS_PASSED" "$TESTS_FAILED"

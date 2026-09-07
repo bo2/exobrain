@@ -64,7 +64,8 @@ Exit: `0` all passed · `1` some failed · `2` harness error (including an unkno
 
 - **`test-connect-agent.sh`** — `connect-agent.sh` + `skills-registry.sh`: scope-chain
   resolution, opt-in skill tiers, flag-driven identity, the per-agent surfaces, the
-  generated indexes, and validator/fetcher plumbing.
+  generated indexes, validator/fetcher plumbing, and the OpenClaw runtime-config
+  reconcile (against a fake `openclaw` CLI).
 - **`test-authoring-review.sh`** — `authoring-review.sh`'s engine call: inherited proxy
   env is stripped (else a proxied push silently skips the review), and a reported
   violation exits non-zero.

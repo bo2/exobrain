@@ -881,6 +881,66 @@ fi
 install_hook
 
 # --------------------------------------------------------------------------
+# OpenClaw runtime config — what the linked surface needs from openclaw.json
+# --------------------------------------------------------------------------
+# OpenClaw skips a workspace skill symlink whose target lies outside the
+# workspace unless the target's root is trusted, and its Skill Workshop would
+# otherwise author skills into the workspace beside the exobrain's. Three keys
+# are reconciled through `openclaw config set` — lists as a union, so entries
+# the human added stay:
+#   skills.load.allowSymlinkTargets  ∪= the real parent dir of every linked skill
+#   tools.deny                       ∪= skill_workshop
+#   skills.workshop.autonomous.mode   = off
+# Nothing is written when the config already matches. Sits below the
+# --wire-sandbox cutoff (it writes the runtime's own config) and degrades open
+# when the CLI is absent, so a checkout wires the same without the runtime
+# installed. OPENCLAW_BIN overrides the binary (the unit suite points it at a fake).
+oc_get_list() {  # <bin> <path> → JSON array; [] when unset or not a list
+    local v
+    v="$("$1" config get "$2" --json 2>/dev/null)" || v='[]'
+    jq -c 'if type == "array" then . else [] end' <<< "$v" 2>/dev/null || echo '[]'
+}
+configure_openclaw_runtime() {
+    local bin="${OPENCLAW_BIN:-openclaw}"
+    echo ""; echo "OpenClaw runtime config:"
+    if ! command -v "$bin" >/dev/null 2>&1; then
+        echo "  ! openclaw CLI not found — skipped (trusted skill symlink roots, Skill Workshop off); run --relink once it is installed"
+        return 0
+    fi
+    local d target roots=()
+    for d in "$SKILLS_DIR"/*; do
+        [[ -L "$d" && -d "$d" ]] || continue
+        target="$(cd "$d" && pwd -P)" || continue
+        roots+=("$(dirname "$target")")
+    done
+    local want_roots cur_roots new_roots cur_deny new_deny cur_mode ops='[]'
+    want_roots="$(printf '%s\n' ${roots[@]+"${roots[@]}"} | jq -R 'select(length > 0)' | jq -sc 'unique')"
+    cur_roots="$(oc_get_list "$bin" skills.load.allowSymlinkTargets)"
+    new_roots="$(jq -nc --argjson a "$cur_roots" --argjson b "$want_roots" '($a + $b) | unique')"
+    if [[ "$(jq -c 'unique' <<< "$cur_roots")" != "$new_roots" ]]; then
+        ops="$(jq -c --argjson v "$new_roots" '. + [{path: "skills.load.allowSymlinkTargets", value: $v}]' <<< "$ops")"
+    fi
+    cur_deny="$(oc_get_list "$bin" tools.deny)"
+    new_deny="$(jq -nc --argjson a "$cur_deny" '($a + ["skill_workshop"]) | unique')"
+    if [[ "$(jq -c 'unique' <<< "$cur_deny")" != "$new_deny" ]]; then
+        ops="$(jq -c --argjson v "$new_deny" '. + [{path: "tools.deny", value: $v}]' <<< "$ops")"
+    fi
+    cur_mode="$("$bin" config get skills.workshop.autonomous.mode --json 2>/dev/null | jq -r 'if type == "string" then . else "" end' 2>/dev/null || true)"
+    if [[ "$cur_mode" != "off" ]]; then
+        ops="$(jq -c '. + [{path: "skills.workshop.autonomous.mode", value: "off"}]' <<< "$ops")"
+    fi
+    if [[ "$ops" == "[]" ]]; then echo "  ✓ already reconciled"; return 0; fi
+    local out
+    if out="$("$bin" config set --batch-json "$ops" 2>&1)"; then
+        jq -r '.[] | "  ✓ " + .path' <<< "$ops"
+    else
+        echo "  ! openclaw config set failed — connect continues"
+        sed 's/^/      /' <<< "$out"
+    fi
+}
+if [[ "$AGENT" == "openclaw" ]]; then configure_openclaw_runtime; fi
+
+# --------------------------------------------------------------------------
 # Scope hooks — a connected scope extending the connect with its own setup
 # --------------------------------------------------------------------------
 # Each scope in the chain carrying an executable scripts/connect-agent.sh (every
