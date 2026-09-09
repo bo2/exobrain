@@ -1,0 +1,68 @@
+---
+title: Exobrain
+description: A version-controlled knowledge base your AI agent loads as context, so it works with knowledge of your world instead of starting cold every session.
+template: splash
+hero:
+  tagline: Your agent already writes good code. It just doesn't know anything about you — your projects, your machines, your conventions, the decision you settled last month. An exobrain is where that lives.
+  actions:
+    - text: Why you'd want one
+      link: /why/
+      icon: right-arrow
+    - text: Create yours
+      link: /start/
+      icon: rocket
+      variant: minimal
+---
+
+import { Card, CardGrid, LinkCard } from '@astrojs/starlight/components';
+
+## The whole idea in sixty seconds
+
+An exobrain is a **git repository of markdown files** that your coding agent loads as context at the start of every session.
+
+Two kinds of content live in it. **Knowledge** is durable — how your stack is set up, which conventions your projects follow, what you decided and why. **Workspaces** are time-bound — an investigation, a migration, a piece of work with a beginning and an end.
+
+**Scopes** decide what loads. A rule that belongs to everyone lives at the top; a rule that only applies to you, or only on one machine, lives further down. Your agent inherits the whole chain, innermost wins.
+
+That's it. No database, no service, no daemon, no account. Files you can read, in a repo you own, that your agent reads too.
+
+<CardGrid stagger>
+  <Card title="Any agent" icon="puzzle">
+    Universal context lives in `AGENTS.md`. Per-agent quirks live in `CLAUDE.md`, `CODEX.md`, or `OPENCLAW.md` sidecars. Switching agents doesn't mean rewriting anything.
+  </Card>
+  <Card title="Yours outright" icon="approve-check">
+    You don't fork this repo and you never merge from it. An agent reads the concept and builds *your* exobrain, with names and structure that fit you. It has no upstream.
+  </Card>
+  <Card title="Readable" icon="document">
+    Every fact is a line of markdown in a git history. When your agent gets something wrong you can see exactly which line taught it that, and fix it.
+  </Card>
+  <Card title="Scales down" icon="setting">
+    A useful exobrain is one `AGENTS.md` and one knowledge file. The rest exists when you need it and stays out of the way when you don't.
+  </Card>
+</CardGrid>
+
+## Start where you are
+
+<LinkCard
+  title="Why an exobrain"
+  description="What actually goes wrong with a bare agent, and what changes when it has context. Includes an honest comparison."
+  href="/why/"
+/>
+
+<LinkCard
+  title="How it gets used"
+  description="Concrete day-to-day: what people put in one, and what it feels like when the agent already knows."
+  href="/how-its-used/"
+/>
+
+<LinkCard
+  title="Get started"
+  description="Paste one prompt into an agent in an empty folder. It interviews you and scaffolds your exobrain in place."
+  href="/start/"
+/>
+
+<LinkCard
+  title="Questions"
+  description="Is this lock-in? What happens if the project stops? Do I have to keep it updated? Answered plainly."
+  href="/questions/"
+/>
