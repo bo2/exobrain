@@ -1,0 +1,102 @@
+---
+interface Props {
+  scenario: string;
+}
+const { scenario } = Astro.props;
+---
+
+<div class="cmp">
+  <p class="cmp-scenario">{scenario}</p>
+  <div class="cmp-grid">
+    <div class="cmp-col cmp-without">
+      <p class="cmp-label">Bare agent</p>
+      <div class="cmp-body"><slot name="without" /></div>
+    </div>
+    <div class="cmp-col cmp-with">
+      <p class="cmp-label">With an exobrain</p>
+      <div class="cmp-body"><slot name="with" /></div>
+    </div>
+  </div>
+</div>
+
+<style>
+  .cmp {
+    margin-block: 2rem;
+  }
+
+  .cmp-scenario {
+    font-size: var(--sl-text-lg);
+    font-weight: 600;
+    color: var(--sl-color-white);
+    margin: 0 0 0.75rem;
+    line-height: 1.4;
+  }
+
+  .cmp-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 0.75rem;
+    margin: 0;
+  }
+
+  @media (min-width: 45rem) {
+    .cmp-grid {
+      grid-template-columns: 1fr 1fr;
+      gap: 1rem;
+    }
+  }
+
+  .cmp-col {
+    margin: 0;
+    border: 1px solid var(--sl-color-gray-5);
+    border-radius: 0.5rem;
+    padding: 1rem 1.15rem 1.15rem;
+    background: var(--sl-color-black);
+  }
+
+  .cmp-without {
+    border-inline-start: 3px solid var(--sl-color-red);
+  }
+
+  .cmp-with {
+    border-inline-start: 3px solid var(--sl-color-green);
+  }
+
+  .cmp-label {
+    font-size: var(--sl-text-xs);
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    margin: 0 0 0.6rem;
+  }
+
+  .cmp-without .cmp-label {
+    color: var(--sl-color-red-high);
+  }
+
+  .cmp-with .cmp-label {
+    color: var(--sl-color-green-high);
+  }
+
+  .cmp-body {
+    font-size: var(--sl-text-sm);
+    line-height: 1.6;
+  }
+
+  .cmp-body > :global(:first-child) {
+    margin-top: 0;
+  }
+
+  .cmp-body > :global(:last-child) {
+    margin-bottom: 0;
+  }
+
+  .cmp-body :global(p) {
+    margin-block: 0.6rem;
+  }
+
+  .cmp-body :global(em) {
+    color: var(--sl-color-gray-3);
+    font-style: italic;
+  }
+</style>
