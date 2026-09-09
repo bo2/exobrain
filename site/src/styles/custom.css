@@ -1,0 +1,5 @@
+/* Expressive Code reveals the copy button only on hover. The prompt on the
+   landing page is meant to be taken away, so keep its button visible. */
+.sl-markdown-content .expressive-code .copy button {
+  opacity: 1;
+}

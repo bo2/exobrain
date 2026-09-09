@@ -7,6 +7,7 @@ export default defineConfig({
   integrations: [
     starlight({
       title: 'Exobrain',
+      customCss: ['./src/styles/custom.css'],
       description:
         'A version-controlled knowledge base your AI agent loads as context, so it works with knowledge of your world instead of starting cold every session.',
       social: [
