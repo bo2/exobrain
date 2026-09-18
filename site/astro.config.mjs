@@ -19,6 +19,7 @@ export default defineConfig({
       sidebar: [
         { label: 'Why an exobrain', slug: 'why' },
         { label: 'How it gets used', slug: 'how-its-used' },
+        { label: 'Evidence', slug: 'evidence' },
         { label: 'Get started', slug: 'start' },
         {
           label: 'Concepts',

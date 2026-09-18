@@ -43,6 +43,8 @@ The design draws one hard line: **credentials never go in.** Secrets live in an 
 
 For everything else, the honest framing is that it's your repository under your access controls, and you should treat what goes in it accordingly.
 
+Whether an agent actually honours that line under pressure is tested, not assumed — see [Evidence](/evidence/).
+
 ## Isn't this just a `CLAUDE.md` with extra steps?
 
 For a single machine, a single agent, and no colleagues — genuinely yes, and you should use the flat file. That comparison is laid out properly in [Why an exobrain](/why/#versus-a-single-agentsmd--claudemd).
