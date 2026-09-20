@@ -48,18 +48,16 @@ const { scenario } = Astro.props;
 
   .cmp-col {
     margin: 0;
-    border: 1px solid var(--sl-color-gray-5);
-    border-radius: 0.5rem;
-    padding: 1rem 1.15rem 1.15rem;
-    background: var(--sl-color-black);
+    border-top: 2px solid var(--sl-color-gray-5);
+    padding-top: 0.7rem;
   }
 
   .cmp-without {
-    border-inline-start: 3px solid var(--sl-color-red);
+    border-top-color: var(--sl-color-red);
   }
 
   .cmp-with {
-    border-inline-start: 3px solid var(--sl-color-green);
+    border-top-color: var(--sl-color-green);
   }
 
   .cmp-label {
@@ -67,7 +65,7 @@ const { scenario } = Astro.props;
     font-weight: 600;
     letter-spacing: 0.08em;
     text-transform: uppercase;
-    margin: 0 0 0.6rem;
+    margin: 0 0 0.5rem;
   }
 
   .cmp-without .cmp-label {

@@ -1,7 +1,95 @@
 ---
 title: Why an exobrain
-description: What goes wrong with a bare agent, what changes when it has durable context, and an honest comparison against the alternatives.
+description: Six ordinary moments with a bare agent and with an exobrain, the failure modes behind them, and an honest comparison against the alternatives.
 ---
+
+import Compare from '../../components/Compare.astro';
+
+## Six ordinary moments, with and without
+
+Same model, same prompt. The only difference is whether it has somewhere durable to read from.
+
+<Compare scenario="You ask it to start a new piece of work">
+  <Fragment slot="without">
+    It branches off `main`. Your default is `trunk`.
+
+    You correct it. It apologises and gets it right for the rest of the session.
+
+    *Tomorrow: `main` again.*
+  </Fragment>
+  <Fragment slot="with">
+    It branches off `trunk`, because your convention is a line in a file it read at startup.
+
+    *You stopped noticing this months ago.*
+  </Fragment>
+</Compare>
+
+<Compare scenario="A procedure you run every week">
+  <Fragment slot="without">
+    You paste the same four steps into the chat, in the same order, for the fourth time this month.
+
+    *The steps live in your head and nowhere else.*
+  </Fragment>
+  <Fragment slot="with">
+    You say "ship it." The procedure is written down as a skill; it reads the steps and follows them.
+
+    *When the procedure changes, you edit the file once.*
+  </Fragment>
+</Compare>
+
+<Compare scenario="A decision you made a month ago">
+  <Fragment slot="without">
+    It proposes the design you evaluated and rejected in August.
+
+    It was a reasonable suggestion — it has no way to know you've been here. Neither of you remembers the reason you said no.
+
+    *You rebuild the argument from scratch.*
+  </Fragment>
+  <Fragment slot="with">
+    It reads the decision, and the reason behind it, and proposes something that accounts for both.
+
+    *The afternoon you spent deciding stays spent.*
+  </Fragment>
+</Compare>
+
+<Compare scenario="You open your other laptop">
+  <Fragment slot="without">
+    Every path it learned is wrong. You spend the first twenty minutes re-teaching a setup you already taught.
+
+    *Two machines means teaching everything twice.*
+  </Fragment>
+  <Fragment slot="with">
+    That machine's scope loads, with that machine's paths. Everything you know stays shared.
+
+    *A third machine is one small file.*
+  </Fragment>
+</Compare>
+
+<Compare scenario="You want to try a different agent">
+  <Fragment slot="without">
+    Start over. Whatever it had learned lived in one vendor's memory, in a format you can't read or move.
+
+    *Switching costs you everything you'd built up.*
+  </Fragment>
+  <Fragment slot="with">
+    Run the connector. The new agent reads the same files, and per-agent quirks sit in a sidecar.
+
+    *Running two agents at once is a supported case, not a workaround.*
+  </Fragment>
+</Compare>
+
+<Compare scenario="It needs to reach an external system">
+  <Fragment slot="without">
+    It fumbles the authentication, then hits the obscure error that cost you an hour last year.
+
+    *It costs the hour again.*
+  </Fragment>
+  <Fragment slot="with">
+    It reads that system's document first — commands, credentials handling, and the failure modes you've already met.
+
+    *The hour was spent once.*
+  </Fragment>
+</Compare>
 
 ## The problem is not capability
 
@@ -51,6 +139,8 @@ If you have one machine, one agent, and no colleagues, a flat file is genuinely 
 Most agents now offer some form of automatic memory. It's convenient and it's opaque: you don't fully control what got remembered, you can't diff it, it doesn't move between agents, and when it's wrong it's awkward to correct.
 
 An exobrain is the opposite trade — **explicit over automatic**. You decide what's durable. The cost is that it doesn't populate itself; the benefit is that you can read it, review it in a pull request, and take it with you.
+
+The gates a fact crosses on the way in — a validator wired into git, a model reading the writing, a squash-merged diff — are [How knowledge lands](/concepts/how-knowledge-lands/).
 
 ### Versus a wiki, Notion, or a docs folder
 
