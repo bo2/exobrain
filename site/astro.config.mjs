@@ -26,6 +26,7 @@ export default defineConfig({
           items: [
             { label: 'Scopes', slug: 'concepts/scopes' },
             { label: 'Knowledge and workspaces', slug: 'concepts/knowledge-and-workspaces' },
+            { label: 'How knowledge lands', slug: 'concepts/how-knowledge-lands' },
             { label: 'Skills and tools', slug: 'concepts/skills-and-tools' },
             { label: 'Staying current', slug: 'concepts/staying-current' },
           ],
