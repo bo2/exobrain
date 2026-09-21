@@ -41,7 +41,9 @@ if $show_all; then
         printf 'NAME\tSCOPE\tOWNER\tTIER\tFORCE\tDESCRIPTION\n'
         while IFS= read -r jf; do
             dir="$(dirname "$jf")"; scope="${dir#"$REPO_DIR"}"; scope="${scope#/}"; [[ -z "$scope" ]] && scope="global"
-            while IFS=$'\t' read -r n own tr frc ext; do
+            # \x1f, not a tab: tab is IFS whitespace, so read would collapse an
+            # owner-less declaration's empty owner and shift every later column.
+            while IFS=$'\x1f' read -r n own tr frc ext; do
                 [[ -z "$n" ]] && continue
                 if [[ "$ext" == "ext" ]]; then
                     desc="(external)"
@@ -51,7 +53,7 @@ if $show_all; then
                 fi
                 printf '%s\t%s\t%s\t%s\t%s\t%s\n' "$n" "$scope" "${own:--}" "$tr" "$frc" "${desc:0:64}"
             done < <(jq -r '(.skills // [])[] | select(has("from") | not)
-                        | [.name, (.owner // ""), .tier, (if .force then "force" else "-" end), (if .source then "ext" else "" end)] | @tsv' "$jf" 2>/dev/null)
+                        | [(.name // ""), (.owner // ""), (.tier // ""), (if .force then "force" else "-" end), (if .source then "ext" else "" end)] | join("\u001f")' "$jf" 2>/dev/null)
         done < <(find "$REPO_DIR" -name skills.json \
                     -not -path '*/.git/*' -not -path '*/node_modules/*' -not -path '*/src/*' \
                     -not -path "$REPO_DIR/seed/*" -not -path '*/tmp/*' | sort)
