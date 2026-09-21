@@ -51,8 +51,11 @@ Four things follow from it being nothing but a repository of markdown:
 ## Read on
 
 - [Why an exobrain](/why/) — six ordinary moments with a bare agent and with an exobrain, the failure modes behind them, and an honest comparison against a flat `AGENTS.md`, built-in agent memory, and a wiki. Including when not to bother.
+- [Philosophy](/philosophy/) — the idea underneath: people coordinating through a shared space their agents read and write, instead of through each other.
 - [How knowledge lands](/concepts/how-knowledge-lands/) — the gates a fact crosses on the way in, and what each one is honestly worth.
 - [How it gets used](/how-its-used/) — what actually accumulates in one, and what it feels like day to day.
 - [Evidence](/evidence/) — a behavioral test suite that runs real agents against the context and checks what they do, and how to run it yourself.
 - [Get started](/start/) — paste one prompt into an agent in an empty folder. It interviews you and scaffolds your exobrain in place.
 - [Questions](/questions/) — is this lock-in? What if the project stops? Do I have to keep it updated?
+- [Changelog](/changelog/) — every framework change, newest first.
+- [Maintainer](/maintainer/) — who builds this, and where it came from.

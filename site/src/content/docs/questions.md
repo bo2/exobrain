@@ -19,7 +19,7 @@ This is worth weighing against the usual alternative. A hosted memory service go
 
 ## Who maintains it, and is there support?
 
-It's a **personal project**, used daily by its author. There's no company, no roadmap, no support commitment, and no response-time promise. Setting that expectation honestly is more useful than implying otherwise.
+It's a **personal project**, used daily by [its author](/maintainer/). There's no company, no roadmap, no support commitment, and no response-time promise. Setting that expectation honestly is more useful than implying otherwise.
 
 What replaces support is that the system is written to be read by an agent — and you have one. The full model lives in [`knowledge/exobrain/`](https://github.com/bo2/exobrain/tree/main/knowledge/exobrain) in the repository, written as reference documentation. When something is unclear or broken, pointing your own agent at the repository and asking is usually faster than asking a person, and it works at three in the morning.
 
