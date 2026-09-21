@@ -84,8 +84,7 @@ Exit: `0` all passed · `1` some failed · `2` harness error (including an unkno
   as a workspace `_cache/` is never walked, while similar names still are.
 - **`test-validator-checks.sh`** — the validator's whole-tree checks (UPPERCASE names,
   bash-4 constructs, unguarded empty-array expansions, the COMPAT marker scan), each
-  asserting the exact set of violations its fixture raises — what holds the batched
-  greps to the per-file results.
+  asserting the exact set of violations its fixture raises.
 - **`test-skills-validate.sh`** / **`test-skills-status.sh`** — every registry error,
   exit codes, and the directories never walked; every `--all` column under its own
   heading whatever fields a declaration omits (an owner-less one included).
