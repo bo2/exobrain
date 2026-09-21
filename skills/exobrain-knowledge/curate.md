@@ -12,7 +12,7 @@ The [shared foundation](SKILL.md) applies. Triage and challenge run the discipli
 
 ## 1. Ingest (with input)
 
-Land the source in `_raw/` first — files keep their **original filename** (source traceability); non-file inputs (threads, pasted text, links) are fetched and captured to `_raw/curate-YYYY-MM-DD-<slug>.md` with link, author, date. **Dedupe before anything else** — check `_raw/` for the same document by content, not name. Byte-identical and already incorporated → report and stop, no PR. A revision of an existing doc → ingest alongside and incorporate only the delta.
+Record where the source lives first ([`knowledge/exobrain/entities.md`](../../knowledge/exobrain/entities.md) § Synthesized, not raw). A file — a photo, a PDF, an export — stays in its own system, or goes to the person's raw-data folder when it has none, keeping its **original filename** (source traceability); `_meta/sources.md` links it. A non-file input no simple call can fetch again (a chat message, pasted text, a thread excerpt) is captured to `_raw/curate-YYYY-MM-DD-<slug>.md` with link, author, date; for one a call can fetch (an email, an issue), `_raw/` keeps the call. **Dedupe before anything else** — check `_meta/sources.md` and `_raw/` for the same document by content, not name. Byte-identical and already incorporated → report and stop, no PR. A revision of an existing doc → ingest alongside and incorporate only the delta.
 
 ## 2. Map (with input)
 

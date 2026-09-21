@@ -22,6 +22,7 @@ AGENTS.override.md
 # Generated / throwaway output and worktrees
 tmp/
 /src/
+_cache/
 .worktrees/
 .agent-worktrees/
 

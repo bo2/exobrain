@@ -13,7 +13,7 @@ knowledge/<area>/
   _meta/
     open-questions.md   # unknowns, conflicts between sources
     sources.md          # where non-trivial claims came from
-  _raw/            # optional — unsynthesized source captures, kept out of the profile
+  _raw/            # optional — partially processed captures no simple call reproduces (entities.md § Synthesized, not raw)
 ```
 
 A small domain (under ~10 files) skips section directories and puts topic files at the root beside `README.md`. `_meta/` appears once the domain accumulates open questions or needs a sources index — a one-file domain doesn't need it.
@@ -87,7 +87,7 @@ One row per persist pass — a narrative summary of the pass, not a per-edit log
 A domain comes together in four moves; a skill can automate them, or you can do them by hand:
 
 1. **Scaffold** — the directory layout, a `README.md` with the file index, and empty topic files (H1 only).
-2. **Collect** — gather raw findings from your sources (notes, threads, issues, code), one capture per source, into `_raw/` with citations. No synthesis yet.
+2. **Collect** — gather findings from your sources (notes, threads, issues, code), one capture per source, into `_raw/` with citations; source files stay in their own systems. No synthesis yet.
 3. **Walk the material** — for a system or codebase, trace it end-to-end as a comprehension pass; the trace is scaffolding for understanding, not draft text (see `authoring.md` → "Don't transcribe what the source already holds").
 4. **Synthesize** — read the raw captures, fill the topic files per `authoring.md`, populate `_meta/sources.md`, and record gaps and conflicts in `_meta/open-questions.md`.
 

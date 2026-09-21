@@ -16,11 +16,18 @@ The `connect-agent.sh` ecosystem wires repo content into each agent's context �
 | `.claude/optional-skills.md` *(generated)* | The Claude-filtered optional-skills index. |
 | `AGENTS.override.md` *(generated, Codex)* | Codex surface — the full composition (root `AGENTS.md` + root sidecar + deeper-scope specs + index) written to an in-repo, gitignored `AGENTS.override.md`, which Codex reads natively and which outranks `AGENTS.md` at the same directory level (so it must carry the root spec too). |
 | `~/.openclaw/workspace/USER.md` *(generated)* | OpenClaw surface — the same composed context inlined between markers, since OpenClaw has no `@-import` primitive. |
-| `.claude/CLAUDE.md` · `.codex` · `.openclaw` | Per-agent markers (generated, gitignored) — which agents this checkout connects. `--relink` silently skips agents without a marker. |
-| `.exobrain.json` *(gitignored)* | Saved config: `connected` scope leaves, `agents`, per-tool state. |
+| `.claude/CLAUDE.md` · `.codex` · `.openclaw` | Per-agent markers (generated, gitignored) — which agents this checkout connects. `--relink` silently skips agents without a marker, and with no agent named relinks every agent that has one. |
+| `.exobrain.json` *(gitignored)* | Saved config: `connected` scope leaves, `agents`, per-tool state, per-mount state (`mounts.<name>.enabled`, optional `path`). |
+| `mounts.json` · `mounts.schema.json` | Declares the mounts — other instances whose knowledge domains this one reads (name, repo, audience, `skip_domains`). See [`mounts.md`](mounts.md). |
+| `scripts/mounts.sh` | `status` / `enable` / `disable` / `sync` for the mounts: clones or verifies a mount's checkout, records its state, and fast-forwards only a clean checkout on its origin's default branch. |
 | `.agents/skills/` *(generated, Codex)* | Repo-local Codex skills dir (real dir, symlinked children) — keeps exobrain skills out of the global `~/.codex/skills`. |
 | `scripts/skills-registry.sh` · `scripts/fetch-external-skills.sh` | Sourced/invoked by the connector — see § Skills system. |
 | `skills/exobrain-tests/unit/test-connect-agent.sh` | Deterministic connector/registry harness — fake exobrains in temp dirs, no agent. Coverage: the `exobrain-tests` SKILL.md § `unit/`. |
+| `skills/exobrain-tests/unit/test-mounts.sh` | Harness for mounts — a bare mounted instance with a non-standard default branch and a host declaring it: `mounts.sh`, the mounted index sections, and the mount checks in the healthcheck and validator. |
+| `skills/exobrain-tests/unit/test-raw-data.sh` | Harness for `validate-exobrain.sh`'s raw-format gate — real temp git repos with a default ref, since the gate only looks at files added against it. |
+| `skills/exobrain-tests/unit/test-script-syntax.sh` | Harness for `validate-exobrain.sh`'s shell and Python syntax gates — real temp git repos with a default ref, since the gates only check scripts changed against it. |
+| `skills/exobrain-tests/unit/test-validator-scan.sh` | Harness for `validate-exobrain.sh`'s `find_repo` pruning — a whole-tree check must never walk a gitignored bulk directory such as a workspace `_cache/`. |
+| `skills/exobrain-repair-findings/tests/test-findings-pending.sh` | Harness for the repair skill's `findings-pending.sh` against a fake `gh`; runs as the unit suite's `findings-pending` harness. |
 | `skills/exobrain-tests/unit/test-persist.sh` | Deterministic harness for `scripts/persist.sh` — a bare origin, a main checkout, worktrees, stub gates (validator, authoring review, unit suite) and a fake `gh` that squash-merges into the bare origin. |
 | `skills/exobrain-tests/` · `seed/skills/seed-tests/` | The instance self-test skill, three sub-suites: `unit/` (deterministic, no agent — harnesses for the framework scripts under `scripts/`), `behavior/` (hermetic, agent-driven — runs concrete tasks against a snapshot copy) and `onboarding/` (non-hermetic — fresh Docker machine → clone the instance's origin → connect → healthcheck/validator; optional headless-agent e2e; per-case requirements skip when unmet). `seed-tests` is seed-only — builds an instance from the seed, then runs its unit + behavior suites against it. See § Skills system. |
 
@@ -32,8 +39,8 @@ Installed by `connect-agent.sh`, refreshed idempotently on every relink.
 
 | Hook | Runs |
 |---|---|
-| `post-merge` | `connect-agent.sh <agent> --relink` for each connected agent after a fast-forward/merge `git pull`. |
-| `post-rewrite` | The same relink after a rebase-based pull (`git pull --rebase`); guarded to skip plain `commit --amend`. |
+| `post-merge` | After a fast-forward/merge `git pull`: `scripts/mounts.sh sync` when `mounts.json` exists, then `connect-agent.sh <agent> --relink` for each connected agent. |
+| `post-rewrite` | The same mount sync and relink after a rebase-based pull (`git pull --rebase`); guarded to skip plain `commit --amend`. |
 | `pre-push` | `scripts/validate-exobrain.sh` (deterministic) — blocks the push on a violation. |
 
 ## Session hooks (Claude)
@@ -46,9 +53,9 @@ Installed by `connect-agent.sh`, refreshed idempotently on every relink.
 
 | Gate | Checks | When |
 |---|---|---|
-| `scripts/validate-exobrain.sh` | Deterministic conventions: `AGENTS.md` placement, file naming, JSON syntax, `scopes.json` shape, the skills registry, agent-neutral outgoing commit messages, machine-specific absolute paths outside host scope (diff-scoped against the default branch, so existing paths are grandfathered; `_raw/` and Dockerfile-siblings exempt), compat markers against the shim ledger both ways (see [`compat.md`](compat.md); the removal date never fails the gate), every per-scope `crons.json` registry's shape (delegated to `openclaw-cron-sync.py --check`; no gateway), bash-4-only constructs in `*.sh` (`declare -A`, `mapfile`, `readarray` — comment lines exempt, a script opts out with `# exobrain-allow-bash4`), unguarded expansion of any array some script assigns empty (names collected repo-wide; write `${name[@]+"${name[@]}"}`) — plus every connected scope's validator hook (`<scope>/scripts/validate-exobrain.sh`, run with the checkout under validation as `$1`; non-zero exit → its output becomes violations; the gitignored `local/` scope's hook is the private leak scan). | pre-push + manual |
+| `scripts/validate-exobrain.sh` | Deterministic conventions: `AGENTS.md` placement, file naming, JSON syntax, `scopes.json` shape, the skills registry, agent-neutral outgoing commit messages, machine-specific absolute paths outside host scope (diff-scoped against the default branch, so existing paths are grandfathered; `_raw/` and Dockerfile-siblings exempt), relative markdown links escaping the repository and shell or Python that does not parse (both diff-scoped the same way), raw-format files newly added under `knowledge/` or `workspaces/` ([`entities.md`](entities.md) § Synthesized, not raw), `mounts.json` shape, compat markers against the shim ledger both ways (see [`compat.md`](compat.md); the removal date never fails the gate), every per-scope `crons.json` registry's shape (delegated to `openclaw-cron-sync.py --check`; no gateway), bash-4-only constructs in `*.sh` (`declare -A`, `mapfile`, `readarray` — comment lines exempt, a script opts out with `# exobrain-allow-bash4`), unguarded expansion of any array some script assigns empty (names collected repo-wide; write `${name[@]+"${name[@]}"}`) — plus every connected scope's validator hook (`<scope>/scripts/validate-exobrain.sh`, run with the checkout under validation as `$1`; non-zero exit → its output becomes violations; the gitignored `local/` scope's hook is the private leak scan). | pre-push + manual |
 | `scripts/authoring-review.sh` | Two layers. Deterministic (§0, exit 2): the new-shared-skill proof gate — criteria in [`skills.md`](skills.md). LLM (exit 1): judgment over changed specs/knowledge domains against the authoring rules, plus the skill-authoring rubric (type / leverage / proof / reach → KEEP, TRIM, PROVE, DEMOTE, MERGE) for changed `SKILL.md` files. Self-skips when nothing changed; degrades open when no agent CLI is installed; skippable with `EXOBRAIN_SKIP_AUTHORING_REVIEW=1`. | `exobrain-persist` (after commit, before push) + manual; not a push-hook gate |
-| `scripts/exobrain-healthcheck.sh` | Connection integrity (not-connected / stale links) + trunk freshness (main checkout behind upstream → suggests `git pull --ff-only`; the fetch is throttled and time-boxed, and it never pulls) + compatibility shims past their removal date ([`compat.md`](compat.md) § Ledger, read from the current checkout). Read-only; resolves the main checkout from a worktree; always exits 0. | SessionStart + manual |
+| `scripts/exobrain-healthcheck.sh` | Connection integrity (not-connected / stale links; Codex: [`agents.md`](agents.md) § Worktree context) + trunk freshness (main checkout behind upstream → suggests `git pull --ff-only`; the fetch is throttled and time-boxed, and it never pulls) + mount freshness ([`mounts.md`](mounts.md) § Freshness) + compatibility shims past their removal date ([`compat.md`](compat.md) § Ledger, read from the current checkout). Read-only; resolves the main checkout from a worktree; always exits 0. | SessionStart + manual |
 | `exobrain-authoring-audit` skill | Scopes a new or justification-heavy doc by its readers, tracing each contested fact to a real reader need. | before drafting/revising a substantial doc |
 
 The authoring rules these enforce live in [`authoring.md`](authoring.md) and `AGENTS.md` → "Reader Lens" / "Conventions".
@@ -72,7 +79,7 @@ Physical skill directories at any scope, inert until declared in a `skills.json`
 | `scripts/fetch-external-skills.sh` | Fetch external (third-party) skills declared with `source`. |
 | optional-skills index *(generated)* | Index of optional-tier skills, read on demand — `.claude/optional-skills.md` (Claude), or inlined into `AGENTS.override.md` (Codex) / `~/.openclaw/workspace/USER.md` (OpenClaw). |
 
-Global skills the seed ships: `exobrain-ab`, `exobrain-authoring-audit`, `exobrain-knowledge`, `exobrain-evolve`, `exobrain-persist`, `exobrain-tests`, `exobrain-tools`.
+Global skills the seed ships: `exobrain-ab`, `exobrain-authoring-audit`, `exobrain-knowledge`, `exobrain-evolve`, `exobrain-persist`, `exobrain-repair-findings` (unlisted), `exobrain-tests`, `exobrain-tools`.
 
 ## Tools
 
@@ -94,7 +101,7 @@ The durable knowledge areas — see [`domains.md`](domains.md).
 | Artifact | Role |
 |---|---|
 | `knowledge/*/README.md` | Each domain's entry point — frontmatter (`name`, `type`, `curator`, `summary`) + TL;DR + file index. The one-line `summary:` is pulled verbatim into the knowledge index. |
-| knowledge index *(generated)* | Flat catalog of every knowledge domain (name + README path + `summary:`), composed into each agent's surface like the tools index — `.claude/knowledge-index.md` (Claude), or inlined into `AGENTS.override.md` (Codex) / `~/.openclaw/workspace/USER.md` (OpenClaw). Root-only and unscoped (no tiers/overlays); a pure function of the committed READMEs, regenerated on relink. |
+| knowledge index *(generated)* | Flat catalog of every knowledge domain (name + README path + `summary:`), composed into each agent's surface like the tools index — `.claude/knowledge-index.md` (Claude), or inlined into `AGENTS.override.md` (Codex) / `~/.openclaw/workspace/USER.md` (OpenClaw). Root-only and unscoped (no tiers/overlays), followed by one section per mount — its audience and domain rows, without summaries ([`mounts.md`](mounts.md)); a function of the committed READMEs and this machine's mount state, regenerated on relink. |
 | `exobrain-knowledge` skill | Builds and maintains knowledge domains (`create` / `distill` / `curate` / `update`), including setting and refreshing each README's `summary:`. |
 
 ## Git workflow
@@ -103,10 +110,12 @@ See `AGENTS.md` → "Git workflow" and the `exobrain-persist` skill.
 
 | Artifact | Role |
 |---|---|
-| `scripts/create-worktree.sh` | Create a worktree off the default branch — symlinks `.env*` / `.exobrain.json` into it. |
+| `scripts/create-worktree.sh` | Create a worktree off the default branch — symlinks `.env*` / `.exobrain.json` into it and invokes `link-worktree-context.sh`. |
+| `scripts/link-worktree-context.sh` | Inherit generated markdown and Codex skill folders into a new or existing worktree, preserving destination files. See [`agents.md`](agents.md) § Worktree context. |
 | `src/<repo>/` *(gitignored)* | Clones of external code; `src/exobrain-seed/` is the one fixed name — the seed's update cache for `exobrain-evolve`. |
 | `exobrain-persist` skill | The worktree → commit → verify → land procedure and the standing authorization to run it; the agent-judged steps (what is a logical change, behavioral verification of machinery) stay with the agent. |
-| `scripts/persist.sh` | The mechanical land as one idempotent command, run from inside the worktree: timeline rows → commit → validator → authoring review → push → PR → squash-merge → fast-forward main → cleanup. On a machinery diff it runs the unit suite itself and lands only with `--machinery-verified`; `--sweep` lands claimed and quiet worktrees, `--dry-run` prints the plan. Semantics in the `exobrain-persist` skill. |
+| `scripts/persist.sh` | The mechanical land as one idempotent command, run from inside the worktree: timeline rows → commit → validator → authoring review → push → PR → squash-merge → fast-forward main → cleanup. On a machinery diff it runs the unit suite itself and lands only with `--machinery-verified`; `--detach` returns after the commit and lands in the background; `--context` carries a session handover into the PR body; `--sweep` lands claimed and quiet worktrees and fails on one left stale; `--dry-run` prints the plan. An unattended land (detached or swept) records authoring findings in the PR body instead of blocking. Semantics in the `exobrain-persist` skill. |
+| `exobrain-repair-findings` skill · its `scripts/findings-pending.sh` | Clears the findings unattended lands record: the script lists merged PRs whose body carries them and that aren't labelled `findings-repaired`, oldest first; the skill repairs one PR per isolated session — apply only what each finding prescribes, land in the foreground, label the PR. |
 
 ## Periodic jobs
 

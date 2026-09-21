@@ -70,7 +70,13 @@ EOF
     cat > "$seed/scripts/authoring-review.sh" <<EOF
 #!/usr/bin/env bash
 [[ "\${EXOBRAIN_SKIP_AUTHORING_REVIEW:-}" == "1" ]] && exit 0
-echo review >> "$REC"; exit "\${FAKE_REVIEW_EXIT:-0}"
+echo review >> "$REC"
+if [[ "\${FAKE_REVIEW_EXIT:-0}" == "1" ]]; then
+    echo "Authoring review flagged possible issues in the changed files:" >&2
+    echo "  knowledge/plain/x.md — a session echo" >&2
+    echo "For a deeper reader-lens pass, run the audit skill." >&2
+fi
+exit "\${FAKE_REVIEW_EXIT:-0}"
 EOF
     cat > "$seed/skills/exobrain-tests/unit/run.sh" <<EOF
 #!/usr/bin/env bash
@@ -115,11 +121,12 @@ case "\$sub" in
     head=""; while [[ \$# -gt 0 ]]; do case "\$1" in --head) head="\$2"; shift 2;; *) shift;; esac; done
     awk -v b="\$head" '\$2==b {print \$1" "\$3}' "\$STATE" | tail -1 ;;
   "pr create")
-    head=""; title=""
-    while [[ \$# -gt 0 ]]; do case "\$1" in --head) head="\$2"; shift 2;; --title) title="\$2"; shift 2;; --base|--body) shift 2;; *) shift;; esac; done
+    head=""; title=""; body=""
+    while [[ \$# -gt 0 ]]; do case "\$1" in --head) head="\$2"; shift 2;; --title) title="\$2"; shift 2;; --body) body="\$2"; shift 2;; --base) shift 2;; *) shift;; esac; done
     git -C "\$ORIGIN" rev-parse --verify --quiet "refs/heads/\$head" >/dev/null || { echo "gh: branch \$head not on origin" >&2; exit 1; }
     n=\$(( \$(wc -l < "\$STATE") + 1 ))
     printf '%s %s OPEN %s\n' "\$n" "\$head" "\$title" >> "\$STATE"
+    printf '%s\n' "\$body" > "$TEST_DIR/pr-body-\$n"
     echo "https://forge.test/pr/\$n" ;;
   "pr merge")
     n="\$1"; line="\$(awk -v n="\$n" '\$1==n' "\$STATE")"
@@ -161,6 +168,22 @@ persist() {
 
 # sweep [env…] — run --sweep from the main checkout with the fake gh.
 sweep() { (cd "$MAIN" && PATH="$FAKE_BIN:$PATH" env "$@" scripts/persist.sh --sweep); }
+
+# age_files <days> <path…> — backdate mtimes.
+age_files() {
+    local d="$1"; shift
+    touch -t "$(date -v-"${d}"d +%Y%m%d%H%M 2>/dev/null || date -d "$d days ago" +%Y%m%d%H%M)" "$@"
+}
+
+# wait_for_log <file> <text> — a detached land finishes on its own time.
+wait_for_log() {
+    local i
+    for i in $(seq 1 100); do
+        grep -q "$2" "$1" 2>/dev/null && return 0
+        python3 -c 'import time; time.sleep(0.1)'
+    done
+    echo "timed out waiting for '$2' in $1:"; cat "$1" 2>/dev/null; return 1
+}
 
 origin_log()  { git -C "$ORIGIN" log --format=%s main; }
 main_log()    { git -C "$MAIN" log --format=%s main; }
@@ -399,6 +422,75 @@ test_dry_run_changes_nothing() {
     assert_not_contains "$(cat "$REC")" "gh pr merge" "no merge"
 }
 
+test_option_without_its_value_is_a_usage_error() {
+    setup_repo
+    local wt; wt="$(add_worktree feat-v)"
+    local out; out="$(persist "$wt" -m 2>&1)"; local rc=$?
+    assert_eq 2 "$rc" "exit code" || return 1
+    assert_contains "$out" "-m needs a value"
+}
+
+test_context_file_lands_in_the_pr_body() {
+    setup_repo
+    local wt; wt="$(add_worktree feat-w)"
+    commit_in "$wt" knowledge/plain/x.md "x" "Change x"
+    mkdir -p "$wt/tmp"; printf 'Asked for x; unsure about y.\n' > "$wt/tmp/handover.md"
+    printf 'tmp/\n' >> "$wt/.git/info/exclude" 2>/dev/null || printf 'tmp/\n' >> "$MAIN/.git/info/exclude"
+    persist "$wt" --context tmp/handover.md >/dev/null || return 1
+    assert_contains "$(cat "$TEST_DIR/pr-body-1")" "## Source context" || return 1
+    assert_contains "$(cat "$TEST_DIR/pr-body-1")" "unsure about y"
+}
+
+# ---------------------------------------------------------------------------
+# Tests — detached lands
+# ---------------------------------------------------------------------------
+
+test_detach_commits_returns_and_lands_in_the_background() {
+    setup_repo
+    local wt; wt="$(add_worktree dt-a)"
+    printf 'f\n' > "$wt/knowledge/tracked/fact.md"
+    local out; out="$(persist "$wt" --detach -m "Record a fact")" || { echo "$out"; return 1; }
+    assert_contains "$out" "committed on dt-a" || return 1
+    assert_contains "$out" "started in the background" || return 1
+    local logf="$MAIN/.git/persist-logs/dt-a.log"
+    wait_for_log "$logf" "landed dt-a as PR 1" || return 1
+    assert_eq "Record a fact (#1)" "$(origin_log | head -1)" || return 1
+    # The timeline row folds into the commit --detach made, not a second one.
+    assert_eq 1 "$(grep -c '^- ' "$TEST_DIR/pr-body-1")" "one commit on the branch"
+}
+
+test_detach_refuses_unverified_machinery_in_the_foreground() {
+    setup_repo
+    local wt; wt="$(add_worktree dt-b)"
+    commit_in "$wt" scripts/tool.sh "#!/bin/sh" "Add a tool"
+    local out; out="$(persist "$wt" --detach 2>&1)"; local rc=$?
+    assert_eq 3 "$rc" "exit code" || return 1
+    assert_contains "$out" "--machinery-verified" || return 1
+    assert_no_file "$MAIN/.git/persist-logs/dt-b.log" "nothing was started"
+}
+
+test_detached_land_records_findings_in_the_pr_body() {
+    setup_repo
+    local wt; wt="$(add_worktree dt-c)"
+    commit_in "$wt" knowledge/plain/x.md "x" "Change x"
+    FAKE_REVIEW_EXIT=1 persist "$wt" --detach >/dev/null || return 1
+    wait_for_log "$MAIN/.git/persist-logs/dt-c.log" "landed dt-c as PR 1" || return 1
+    local body; body="$(cat "$TEST_DIR/pr-body-1")"
+    assert_contains "$body" "## Authoring review (unattended land, not blocking)" || return 1
+    assert_contains "$body" "a session echo" || return 1
+    assert_not_contains "$body" "For a deeper" "the trailer is trimmed"
+}
+
+test_detached_land_still_blocks_on_the_proof_gate() {
+    setup_repo
+    local wt; wt="$(add_worktree dt-d)"
+    commit_in "$wt" knowledge/plain/x.md "x" "Change x"
+    FAKE_REVIEW_EXIT=2 persist "$wt" --detach >/dev/null || return 1
+    wait_for_log "$MAIN/.git/persist-logs/dt-d.log" "authoring review flagged" || return 1
+    origin_has_branch dt-d && { echo "pushed despite the proof gate"; return 1; }
+    assert_file "$(claim_of dt-d)" "still claimed for the sweep"
+}
+
 # ---------------------------------------------------------------------------
 # Tests — sweep
 # ---------------------------------------------------------------------------
@@ -411,14 +503,14 @@ test_sweep_lands_claimed_and_quiet_skips_fresh_and_dirty() {
     fresh="$(add_worktree sw-fresh)";     commit_in "$fresh" knowledge/plain/b.md b "Change b"
     dirty="$(add_worktree sw-dirty)";     commit_in "$dirty" knowledge/plain/c.md c "Change c"; printf 'wip\n' > "$dirty/knowledge/plain/wip.md"
     local out; out="$(sweep PERSIST_QUIET_MINUTES=60)" || { echo "$out"; return 1; }
-    assert_contains "$out" "sweep: 1 landed, 2 skipped, 0 failed" || return 1
+    assert_contains "$out" "sweep: 1 landed, 2 skipped, 0 awaiting verification, 0 stale, 0 failed" || return 1
     assert_no_file "$claimed" "claimed worktree landed" || return 1
     assert_file "$fresh" "fresh worktree left alone" || return 1
     assert_file "$dirty" "dirty worktree left alone" || return 1
     assert_eq "Change a (#1)" "$(origin_log | head -1)" || return 1
     # With no quiet period the fresh one lands too; the dirty one never does.
     out="$(sweep PERSIST_QUIET_MINUTES=0)" || { echo "$out"; return 1; }
-    assert_contains "$out" "sweep: 1 landed, 1 skipped, 0 failed" || return 1
+    assert_contains "$out" "sweep: 1 landed, 1 skipped, 0 awaiting verification, 0 stale, 0 failed" || return 1
     assert_no_file "$fresh" || return 1
     assert_file "$dirty"
 }
@@ -429,15 +521,47 @@ test_sweep_honors_a_claim_that_asserted_machinery() {
     asserted="$(add_worktree sw-asserted)"; commit_in "$asserted" scripts/tool.sh "#!/bin/sh" "Add a tool"
     echo machinery-verified > "$(claim_of sw-asserted)"
     bare="$(add_worktree sw-bare)";         commit_in "$bare" scripts/other.sh "#!/bin/sh" "Add another"
-    touch "$(claim_of sw-bare)"
-    local out; out="$(sweep PERSIST_QUIET_MINUTES=0 2>&1)"; local rc=$?
-    assert_eq 1 "$rc" "the unasserted claim fails the sweep" || return 1
-    assert_contains "$out" "sweep: 1 landed, 0 skipped, 1 failed" || return 1
+    local out; out="$(sweep PERSIST_QUIET_MINUTES=0 2>&1)" || { echo "$out"; return 1; }
+    assert_contains "$out" "sweep: 1 landed, 0 skipped, 1 awaiting verification, 0 stale, 0 failed" || return 1
+    assert_contains "$out" "skip sw-bare: touches shared machinery" || return 1
     assert_no_file "$asserted" "asserted claim landed" || return 1
     assert_eq 1 "$(grep -c '^unit$' "$REC")" "unit suite ran for the asserted land" || return 1
-    assert_file "$bare" "unasserted claim kept" || return 1
-    assert_no_file "$(claim_of sw-bare)" "gate refusal drops the claim" || return 1
+    assert_file "$bare" "unverified machinery left for an agent" || return 1
     assert_eq "Add a tool (#1)" "$(origin_log | head -1)"
+}
+
+test_sweep_fails_on_machinery_that_waited_too_long() {
+    setup_repo
+    local wt; wt="$(add_worktree sw-old)"
+    mkdir -p "$wt/scripts"; printf '#!/bin/sh\n' > "$wt/scripts/old.sh"; git -C "$wt" add -A
+    GIT_COMMITTER_DATE="2020-01-01T00:00:00" git -C "$wt" commit -q -m "Add an old tool"
+    local out; out="$(sweep PERSIST_QUIET_MINUTES=0 2>&1)"; local rc=$?
+    assert_eq 1 "$rc" "a stale worktree fails the sweep" || return 1
+    assert_contains "$out" "stale: sw-old has waited" || return 1
+    assert_contains "$out" "1 stale, 0 failed" || return 1
+    assert_file "$wt" "worktree kept"
+}
+
+test_sweep_fails_on_a_stale_dirty_worktree() {
+    setup_repo
+    local wt; wt="$(add_worktree sw-rot)"
+    printf 'wip\n' > "$wt/knowledge/plain/wip.md"; age_files 3 "$wt/knowledge/plain/wip.md"
+    local out; out="$(sweep 2>&1)"; local rc=$?
+    assert_eq 1 "$rc" "exit code" || return 1
+    assert_contains "$out" "stale: sw-rot has uncommitted changes untouched for 3d" || return 1
+    assert_contains "$out" "0 skipped, 0 awaiting verification, 1 stale, 0 failed" || return 1
+    assert_file "$wt/knowledge/plain/wip.md" "never touched" || return 1
+    # The threshold is configurable.
+    out="$(sweep PERSIST_STALE_DAYS=7 2>&1)" || { echo "$out"; return 1; }
+    assert_contains "$out" "1 skipped, 0 awaiting verification, 0 stale"
+}
+
+test_swept_land_records_findings_in_the_pr_body() {
+    setup_repo
+    local wt; wt="$(add_worktree sw-find)"; commit_in "$wt" knowledge/plain/x.md x "Change x"
+    local out; out="$(sweep PERSIST_QUIET_MINUTES=0 FAKE_REVIEW_EXIT=1 2>&1)" || { echo "$out"; return 1; }
+    assert_contains "$out" "findings go into the PR body" || return 1
+    assert_contains "$(cat "$TEST_DIR/pr-body-1")" "a session echo"
 }
 
 test_sweep_reports_a_failed_land_and_continues() {
@@ -448,7 +572,7 @@ test_sweep_reports_a_failed_land_and_continues() {
     commit_in "$MAIN" knowledge/plain/same.md "main" "Main same"; git -C "$MAIN" push -q origin main
     local out; out="$(sweep PERSIST_QUIET_MINUTES=0 2>&1)"; local rc=$?
     assert_eq 1 "$rc" "exit code" || return 1
-    assert_contains "$out" "sweep: 1 landed, 0 skipped, 1 failed" || return 1
+    assert_contains "$out" "sweep: 1 landed, 0 skipped, 0 awaiting verification, 0 stale, 1 failed" || return 1
     assert_file "$bad" || return 1
     assert_no_file "$good"
 }
@@ -485,8 +609,17 @@ run_test non_conflicting_divergence_lands            test_non_conflicting_diverg
 run_test conflict_fails_cleanly_and_keeps_the_branch test_conflict_fails_cleanly_and_keeps_the_branch
 run_test no_remote_fast_forwards_locally             test_no_remote_fast_forwards_locally
 run_test dry_run_changes_nothing                     test_dry_run_changes_nothing
+run_test option_without_its_value_is_a_usage_error   test_option_without_its_value_is_a_usage_error
+run_test context_file_lands_in_the_pr_body           test_context_file_lands_in_the_pr_body
+run_test detach_commits_returns_and_lands_in_the_background test_detach_commits_returns_and_lands_in_the_background
+run_test detach_refuses_unverified_machinery_in_the_foreground test_detach_refuses_unverified_machinery_in_the_foreground
+run_test detached_land_records_findings_in_the_pr_body test_detached_land_records_findings_in_the_pr_body
+run_test detached_land_still_blocks_on_the_proof_gate test_detached_land_still_blocks_on_the_proof_gate
 run_test sweep_lands_claimed_and_quiet_skips_fresh_and_dirty test_sweep_lands_claimed_and_quiet_skips_fresh_and_dirty
 run_test sweep_honors_a_claim_that_asserted_machinery test_sweep_honors_a_claim_that_asserted_machinery
+run_test sweep_fails_on_machinery_that_waited_too_long test_sweep_fails_on_machinery_that_waited_too_long
+run_test sweep_fails_on_a_stale_dirty_worktree       test_sweep_fails_on_a_stale_dirty_worktree
+run_test swept_land_records_findings_in_the_pr_body  test_swept_land_records_findings_in_the_pr_body
 run_test sweep_reports_a_failed_land_and_continues   test_sweep_reports_a_failed_land_and_continues
 run_test stale_lock_is_taken_over                    test_stale_lock_is_taken_over
 
