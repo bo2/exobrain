@@ -3,7 +3,13 @@ name: Deploy site
 on:
   push:
     branches: [main]
-    paths: ['site/**', '.github/workflows/site.yml']
+    # The site renders the feed and two knowledge domains at build time.
+    paths:
+      - 'site/**'
+      - 'seed/feed/**'
+      - 'knowledge/exobrain/**'
+      - 'knowledge/harness-engineering/**'
+      - '.github/workflows/site.yml'
   workflow_dispatch:
 
 permissions:

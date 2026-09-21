@@ -35,3 +35,11 @@ Four things fall out of the pipeline that automatic memory structurally cannot o
 - **It survives the agent.** The gates are shell scripts in your repository. They keep working when you switch agents, and they keep working if this project disappears.
 
 The cost is real and worth saying: **it does not populate itself.** An exobrain nobody writes to is an empty repository. Automatic memory's whole appeal is that it asks nothing of you, and for a lot of people that's the right trade. This one asks for the habit and pays it back in knowledge you can actually trust.
+
+## One memory, not two
+
+An exobrain running beside an agent's own memory gives you two knowledge bases that drift apart without telling you. Both look healthy, and the agent answers from whichever it happens to read. So the exobrain owns durable memory:
+
+- **Where the agent's memory can be switched off for one repository, it is.** Connecting Claude Code sets `autoMemoryEnabled: false` in the checkout's gitignored local settings.
+- **Where the only switch is user-wide, it's yours.** Codex ships with memory off, and the connector doesn't reach into your global config to keep it that way; a tool that wires one repository doesn't change settings for all of them.
+- **Where memory can't be switched off, the agent gets a rule.** Its own memory holds session scratch. Anything durable is promoted into the exobrain, correcting what it contradicts rather than adding beside it, and no copy stays behind.
