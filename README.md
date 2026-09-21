@@ -4,6 +4,8 @@ A small, version-controlled **knowledge base for your AI agent**. Any agent (Cla
 
 This repo is the **concept + a generator**. You don't fork it. You point an agent at it and it builds *your own* exobrain — with names and structure that fit you.
 
+The case for one, and the model in full: **[exobrain.diy](https://exobrain.diy/)** — why a bare agent falls short, how scopes and knowledge work, what the behavioral test suite checks, and how to start.
+
 ## Create your own exobrain
 
 Open your AI agent in an empty folder where you want your exobrain to live, and paste this:
