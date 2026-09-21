@@ -21,6 +21,7 @@ export default defineConfig({
         { label: 'Philosophy', slug: 'philosophy' },
         { label: 'How it gets used', slug: 'how-its-used' },
         { label: 'Evidence', slug: 'evidence' },
+        { label: 'Proving a change', slug: 'proving-a-change' },
         { label: 'Get started', slug: 'start' },
         {
           label: 'Concepts',
@@ -28,8 +29,21 @@ export default defineConfig({
             { label: 'Scopes', slug: 'concepts/scopes' },
             { label: 'Knowledge and workspaces', slug: 'concepts/knowledge-and-workspaces' },
             { label: 'How knowledge lands', slug: 'concepts/how-knowledge-lands' },
+            { label: 'Building knowledge', slug: 'concepts/building-knowledge' },
             { label: 'Skills and tools', slug: 'concepts/skills-and-tools' },
             { label: 'Staying current', slug: 'concepts/staying-current' },
+          ],
+        },
+        {
+          label: 'Reference',
+          collapsed: true,
+          items: [
+            { label: 'The model', collapsed: true, items: [{ autogenerate: { directory: 'reference/exobrain' } }] },
+            {
+              label: 'Engineering with agents',
+              collapsed: true,
+              items: [{ autogenerate: { directory: 'reference/harness-engineering' } }],
+            },
           ],
         },
         { label: 'Questions', slug: 'questions' },

@@ -7,7 +7,7 @@ A project with one maintainer and no community can't offer social proof. What it
 
 ## The claim being tested
 
-An exobrain's rules only matter if an agent actually follows them. "Never read credentials into context" is a sentence in a file; whether an agent obeys it under pressure is an empirical question. So the framework ships a suite that puts real agents in front of concrete tasks and checks what they did — not what they said.
+An exobrain's rules only matter if an agent actually follows them. "Never read credentials into context" is a sentence in a file; whether an agent obeys it under pressure is an empirical question. So the framework ships a suite that puts real agents in front of concrete tasks and checks what they did — not what they said. Whether a *change* to those rules actually changes behavior is a separate test: [Proving a change](/proving-a-change/).
 
 ## How a case runs
 

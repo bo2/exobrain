@@ -1,3 +1,5 @@
 dist/
 .astro/
 node_modules/
+# Rendered from knowledge/ by scripts/sync-reference.mjs
+src/content/docs/reference/

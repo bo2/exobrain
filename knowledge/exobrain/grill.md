@@ -46,7 +46,7 @@ Answers are stress-tested, not transcribed. Before writing one in, check the rea
 
 1. Challenge once, substantively — name the specific counter-evidence, counterexample, or bias pattern, and offer a steel-manned alternative. "Are you sure?" is not a challenge.
 2. The human is the final arbiter. If they hold after a solid challenge round, their answer goes in.
-3. A contested claim never enters dressed as plain fact — attribute it ("per <curator>, despite X") and record materially unresolved tension where the target keeps its open questions.
+3. A contested claim never enters dressed as plain fact — attribute it ("per `<curator>`, despite X") and record materially unresolved tension where the target keeps its open questions.
 
 ## Delegation
 
