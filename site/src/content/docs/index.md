@@ -1,10 +1,9 @@
 ---
 title: Exobrain
 description: Plain markdown in a repo you own, loaded by your agent every session, so it works with your world instead of starting cold.
-template: splash
-hero:
-  tagline: Plain markdown in a repo you own, loaded by your agent every session — so it works with your world instead of starting cold.
 ---
+
+Plain markdown in a repo you own, loaded by your agent every session — so it works with your world instead of starting cold.
 
 **Managed, not automatic.** Every agent now has a memory that writes itself, and you meet what it kept when it acts on it. Here a fact arrives as a pull request — past a validator wired into git, and a model reading the writing — so nothing enters without a diff you could have read. [How knowledge lands →](/concepts/how-knowledge-lands/)
 
@@ -16,10 +15,14 @@ hero:
 
 You're already talking to something that knows how you work. Rather than reading a site that wants you to say yes, hand it the question.
 
+<div class="prompt">
+
 ```text
 Read https://exobrain.diy, look at how I actually work with you, and tell me
 whether it's worth setting up and maintaining — or whether I'm fine as I am.
 ```
+
+</div>
 
 Two lines on purpose. You shouldn't have to audit a wall of instructions before pasting something from a stranger's website into your agent.
 
