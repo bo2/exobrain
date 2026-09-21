@@ -65,7 +65,33 @@ Exit: `0` all passed · `1` some failed · `2` harness error (including an unkno
 - **`test-connect-agent.sh`** — `connect-agent.sh` + `skills-registry.sh`: scope-chain
   resolution, opt-in skill tiers, flag-driven identity, the per-agent surfaces, the
   generated indexes, validator/fetcher plumbing, and the OpenClaw runtime-config
-  reconcile (against a fake `openclaw` CLI).
+  reconcile (against a fake `openclaw` CLI). Codex regressions cover personal-home
+  isolation, worktree skill discovery and context rewiring, missing-surface
+  healthchecks, and multiline skill descriptions in the generated index.
+- **`test-mounts.sh`** — mounts: `mounts.sh` enable/disable/sync/status against a bare
+  mounted instance whose default branch is not a conventional name, the mounted
+  sections of each agent's knowledge index (no foreign summary reaches one), worktree
+  resolution, sync leaving dirty/off-branch/diverged checkouts untouched, offline
+  staleness, and the mount checks in the healthcheck and validator.
+- **`test-raw-data.sh`** — `validate-exobrain.sh`'s raw-format gate: a photo, PDF, or
+  bank export newly added under `knowledge/` or `workspaces/` is caught (any extension
+  case), while an already-tracked file, text/SQL/chart formats, and paths outside those
+  trees pass.
+- **`test-script-syntax.sh`** — `validate-exobrain.sh`'s syntax gates: a changed shell
+  script that does not parse or changed Python that does not compile is caught, by
+  extension or shebang; unchanged files and other shells are left alone.
+- **`test-validator-scan.sh`** — `find_repo` pruning: a gitignored bulk directory such
+  as a workspace `_cache/` is never walked, while similar names still are.
+- **`test-validator-checks.sh`** — the validator's whole-tree checks (UPPERCASE names,
+  bash-4 constructs, unguarded empty-array expansions, the COMPAT marker scan), each
+  asserting the exact set of violations its fixture raises.
+- **`test-skills-validate.sh`** / **`test-skills-status.sh`** — every registry error,
+  exit codes, and the directories never walked; every `--all` column under its own
+  heading whatever fields a declaration omits (an owner-less one included).
+- **`findings-pending`** (`skills/exobrain-repair-findings/tests/test-findings-pending.sh`)
+  — the repair skill's detector against a fake `gh`: only merged PRs whose body carries
+  the findings heading qualify, the repaired label excludes one, the list comes out
+  oldest first, and the heading matches the one `persist.sh` writes.
 - **`test-authoring-review.sh`** — `authoring-review.sh`'s engine call: inherited proxy
   env is stripped (else a proxied push silently skips the review), and a reported
   violation exits non-zero.
@@ -82,8 +108,10 @@ Exit: `0` all passed · `1` some failed · `2` harness error (including an unkno
   `gh` (commit, gates, push, PR, squash-merge, main fast-forward, cleanup), the
   machinery gate in both halves (the unit suite the script runs, the flag the agent
   asserts, and the claim that carries it into a sweep), timeline rows, resume after an
-  interrupted run, conflict handling, the no-remote fast-forward, and `--sweep`'s
-  claimed / quiet / dirty rules.
+  interrupted run, conflict handling, the no-remote fast-forward, `--detach`
+  (foreground commit and gate refusal, background land), findings recorded in the PR
+  body by an unattended land, `--context`, and `--sweep`'s claimed / quiet / dirty /
+  awaiting-verification / stale rules.
 
 ### Add a unit harness
 

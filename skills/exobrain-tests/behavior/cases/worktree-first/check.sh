@@ -6,6 +6,7 @@ source "$HARNESS_LIB/check-helpers.sh"
 INST="$1"
 REL="knowledge/test-topic/README.md"
 
+[[ "${3:-}" == 0 ]] || inconclusive "agent exited with ${3:-unknown}; incomplete runs cannot pass"
 assert_main_untouched "$INST"
 [[ ! -f "$INST/$REL" ]] || fail "$REL present in the MAIN checkout — not worktree-isolated"
 

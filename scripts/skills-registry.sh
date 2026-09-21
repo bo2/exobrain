@@ -79,6 +79,12 @@
 #   skills_extract_description <skill_md>    — YAML frontmatter `description`
 #   tools_resolve <repo_dir> <leaf...>       — TSV <name>\t<doc-path> of visible tools
 #   tools_extract_summary <tool_md>          — the tool doc's one-line purpose
+#   knowledge_resolve <repo_dir>             — TSV <name>\t<readme-path> of local domains
+#   main_checkout_root <repo_dir>            — the main checkout a worktree was made from
+#   mounts_list <repo_dir>                   — declared mounts, \x1f-separated fields
+#   mount_name_ok / mount_dir / mount_enabled — one mount's name check, checkout, state
+#   mount_domains <mount_dir> <skip-csv>     — TSV <domain>\t<abs-readme> a mount exposes
+#   mount_fetched_age <mount_dir>            — seconds since its last successful fetch
 
 # sanitize_suffix <path> — filename-safe scope suffix. "/" → "__" (a separator
 # that can't be confused with a hyphen in an id), everything else lowercased and
@@ -396,8 +402,17 @@ skills_extract_description() {
     awk '
         BEGIN { in_fm = 0 }
         /^---$/ { in_fm = !in_fm; if (!in_fm) exit; next }
+        in_fm && block {
+            if (/^[^[:space:]]/) exit
+            sub(/^[[:space:]]+/, "")
+            sub(/[[:space:]]+$/, "")
+            if (length($0)) summary = summary (length(summary) ? " " : "") $0
+            next
+        }
         in_fm && /^description:/ {
             sub(/^description:[[:space:]]*/, "")
+            # Fold YAML block scalars to one line for the generated table.
+            if ($0 ~ /^[>|][+-]?[[:space:]]*(#.*)?$/) { block = 1; next }
             if (length($0) >= 2 && (substr($0, 1, 1) == "\"" || substr($0, 1, 1) == "'\''")) {
                 q = substr($0, 1, 1)
                 sub("^" q, "")
@@ -406,6 +421,7 @@ skills_extract_description() {
             print
             exit
         }
+        END { if (block) print summary }
     ' "$file"
 }
 
@@ -493,4 +509,107 @@ knowledge_resolve() {
             printf '%s\t%s\n' "$name" "$rel"
         done
     } | sort
+}
+
+# ---------------------------------------------------------------------------
+# Mounts — other exobrain instances whose knowledge domains this one reads.
+# mounts.json (tracked) declares each: name, repo, audience, optional
+# skip_domains. .exobrain.json (per machine) holds `mounts.<name>.enabled` and an
+# optional `mounts.<name>.path`; without a path the checkout is src/<name>/ in the
+# MAIN checkout, so every worktree resolves the same one. See
+# knowledge/exobrain/mounts.md.
+# ---------------------------------------------------------------------------
+
+# main_checkout_root <repo_dir> — the parent of the shared git dir: the checkout
+# itself, or for a worktree the checkout it was made from. <repo_dir> outside git.
+main_checkout_root() {
+    local repo_dir="$1" common
+    common="$(git -C "$repo_dir" rev-parse --git-common-dir 2>/dev/null)" || { printf '%s' "$repo_dir"; return 0; }
+    case "$common" in /*) ;; *) common="$repo_dir/$common" ;; esac
+    (cd "$(dirname "$common")" 2>/dev/null && pwd) || printf '%s' "$repo_dir"
+}
+
+# mounts_config_file <repo_dir> — the .exobrain.json holding mount state: the
+# checkout's own (a worktree carries a link to the main one), else the main one's.
+mounts_config_file() {
+    local repo_dir="$1"
+    if [[ -e "$repo_dir/.exobrain.json" ]]; then
+        printf '%s' "$repo_dir/.exobrain.json"
+    else
+        printf '%s' "$(main_checkout_root "$repo_dir")/.exobrain.json"
+    fi
+}
+
+# mounts_list <repo_dir> — one line per declared mount: name, repo, audience, and
+# skip_domains joined by commas, separated by \x1f. A non-whitespace separator,
+# because `IFS=$'\t' read` collapses an empty field. Empty when there's no (valid)
+# mounts.json.
+mounts_list() {
+    local f="$1/mounts.json"
+    [[ -f "$f" ]] || return 0
+    jq -r '(.mounts // [])[] | [(.name // ""), (.repo // ""), (.audience // ""),
+            ((.skip_domains // []) | map(tostring) | join(","))] | join("\u001f")' "$f" 2>/dev/null || true
+}
+
+# mount_name_ok <name> — a mount name is a kebab-case segment; it becomes a path
+# (src/<name>/) and a row prefix, so nothing else is accepted.
+mount_name_ok() { [[ "$1" =~ ^[a-z0-9][a-z0-9-]*$ ]]; }
+
+# mount_dir <repo_dir> <name> — absolute path of the mount's checkout: the
+# per-machine `path` override (~ and main-checkout-relative forms expanded), else
+# <main checkout>/src/<name>. Whether anything exists there is the caller's check.
+mount_dir() {
+    local repo_dir="$1" name="$2" main cfg path=""
+    main="$(main_checkout_root "$repo_dir")"
+    cfg="$(mounts_config_file "$repo_dir")"
+    if [[ -f "$cfg" ]]; then
+        path="$(jq -r --arg n "$name" '(.mounts // {})[$n].path // ""' "$cfg" 2>/dev/null)" || path=""
+    fi
+    if [[ -z "$path" ]]; then printf '%s/src/%s' "$main" "$name"; return 0; fi
+    case "$path" in
+        "~")    path="$HOME" ;;
+        "~/"*)  path="$HOME/${path#"~/"}" ;;
+        /*)     ;;
+        *)      path="$main/$path" ;;
+    esac
+    printf '%s' "${path%/}"
+}
+
+# mount_enabled <repo_dir> <name> — true when this machine enabled the mount.
+mount_enabled() {
+    local cfg; cfg="$(mounts_config_file "$1")"
+    [[ -f "$cfg" ]] && jq -e --arg n "$2" '(.mounts // {})[$n].enabled == true' "$cfg" >/dev/null 2>&1
+}
+
+# mount_domains <mount_dir> <skip-csv> — TSV <domain>\t<absolute-readme> for each
+# knowledge/<domain>/README.md in the mount, minus the skipped ones, sorted. The
+# domain is its directory name — never the README's frontmatter, which is text
+# the mount's audience writes — and only kebab-case names are listed, so a
+# directory name can't smuggle markup into the index.
+mount_domains() {
+    local dir="$1" skip=",$2," d name
+    {
+        for d in "$dir"/knowledge/*/; do
+            [[ -f "${d}README.md" ]] || continue
+            name="$(basename "$d")"
+            [[ "$name" =~ ^[a-z0-9][a-z0-9._-]*$ ]] || continue
+            case "$skip" in *",$name,"*) continue ;; esac
+            printf '%s\t%s\n' "$name" "${d}README.md"
+        done
+    } | sort
+}
+
+# mount_fetched_age <mount_dir> — seconds since the mount last fetched its origin
+# successfully; empty when unknown. A failed fetch truncates FETCH_HEAD and bumps
+# its mtime, so FETCH_HEAD dates a success only while it has content; each call
+# copies that date onto .git/exobrain-last-fetch, which outlives a later failure.
+mount_fetched_age() {
+    local gd now t
+    gd="$(git -C "$1" rev-parse --absolute-git-dir 2>/dev/null)" || return 0
+    if [[ -s "$gd/FETCH_HEAD" ]]; then touch -r "$gd/FETCH_HEAD" "$gd/exobrain-last-fetch" 2>/dev/null || true; fi
+    [[ -f "$gd/exobrain-last-fetch" ]] || return 0
+    now="$(date +%s)"
+    t="$(stat -f %m "$gd/exobrain-last-fetch" 2>/dev/null || stat -c %Y "$gd/exobrain-last-fetch" 2>/dev/null)" || return 0
+    [[ "$now" =~ ^[0-9]+$ && "$t" =~ ^[0-9]+$ ]] || return 0
+    echo $(( now - t ))
 }

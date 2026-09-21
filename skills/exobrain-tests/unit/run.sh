@@ -24,7 +24,15 @@ HARNESSES='connect-agent|test-connect-agent.sh|scripts/connect-agent.sh + script
 authoring-review|test-authoring-review.sh|scripts/authoring-review.sh
 compat-ledger|test-compat-ledger.sh|the compat-shim gates in validate-exobrain.sh + exobrain-healthcheck.sh
 openclaw-cron-sync|test-openclaw-cron-sync.sh|scripts/openclaw-cron-sync.py (crons.json validation + gateway reconciliation)
-persist|test-persist.sh|scripts/persist.sh (the one-command land from a worktree, its gates and resume paths, and --sweep)'
+mounts|test-mounts.sh|scripts/mounts.sh, the mounted knowledge index, and the mount checks in the healthcheck and validator
+raw-data|test-raw-data.sh|the raw-format gate in validate-exobrain.sh (raw data added under knowledge/ or workspaces/)
+script-syntax|test-script-syntax.sh|the syntax gates in validate-exobrain.sh (bash -n and python compile over changed scripts)
+validator-scan|test-validator-scan.sh|find_repo pruning in validate-exobrain.sh (gitignored bulk directories are never walked)
+validator-checks|test-validator-checks.sh|the whole-tree checks in validate-exobrain.sh (UPPERCASE names, bash 4 constructs, empty-array expansions, COMPAT markers)
+skills-validate|test-skills-validate.sh|scripts/skills-validate.sh (every registry error, undeclared dirs as info, exit codes, the dirs it never walks)
+skills-status|test-skills-status.sh|scripts/skills-status.sh --all (every column under its heading, whatever fields a declaration omits)
+persist|test-persist.sh|scripts/persist.sh (the one-command land from a worktree, its gates and resume paths, --detach, and --sweep)
+findings-pending|../../exobrain-repair-findings/tests/test-findings-pending.sh|skills/exobrain-repair-findings/scripts/findings-pending.sh (merged PRs carrying unrepaired authoring findings)'
 
 SEL=""; FILTER=""; LIST=0
 while [[ $# -gt 0 ]]; do

@@ -33,6 +33,25 @@ The rule most easily violated:
 
 Workspace links rot silently: the workspace stays fixed, the world moves, and a reader finds old information presented as current. If a finding turns out durably useful, **promote it** — move the script into a scope's `scripts/`, the fact into a `knowledge/` area, the framework into a skill. The workspace remains as historical provenance ("this originated in `workspaces/…`"); the artifact lives where it gets maintained. Citing a workspace as the *source* of a current fact is fine; citing it *as* the current fact is not.
 
+## Synthesized, not raw
+
+A domain or workspace holds what was made from data; the data itself stays where it belongs (root `AGENTS.md` § Synthesized knowledge, not raw data). Where each kind of material goes:
+
+| Material | Home |
+|---|---|
+| Synthesis — facts, decisions, current state, analysis, conclusions | The domain or workspace |
+| The code and queries that produced it — scripts, SQL, notebooks — and synthetic test fixtures | The workspace, or `scripts/` |
+| Small derived results — aggregates, masked or sampled evidence, generated indexes | Beside the synthesis they back |
+| Partially processed material no simple call reproduces — search results, a source sweep's findings, reference sets (IDs, links) into another system | `_raw/` |
+| Raw data a call can retrieve again — an email, an issue, an API or query result | Its own system; `_raw/` keeps the call (command and parameters) |
+| Raw data with a native home — a photo in a synced photo library, a document in a documents tree, a statement at the bank | Its own system; the citing file links it |
+| Raw data with no native home — a photo sent in chat, a PDF from a site that won't keep it | The person's file store: the raw-data folder the person scope names, in a subfolder mirroring the citing file's repo path; the citing file links it |
+| Working copies for processing | A gitignored `_cache/` or `tmp/` |
+
+A person scope's `AGENTS.md` names the raw-data folder and the tool that reaches it; until it does, ask the person where such a file should go rather than committing it.
+
+`validate-exobrain.sh` blocks a file in an unambiguously raw format — photos, PDFs, office documents, email and bank exports, GEDCOM, archives, audio, video — newly added under `knowledge/` or `workspaces/`. Files already tracked are left alone. CSV, JSON, and other text formats pass the gate, as do PNG, SVG, and GIF, because they are as often derived as raw (a chart, a recording of the work); for those, the table decides.
+
 ## Entry points
 
 Every domain and workspace uses `README.md` as its entry point — for humans browsing and agents loading context alike. There is no `AGENTS.md` at a domain or workspace root; the `README.md` carries that load. The `AGENTS.md` filename is reserved for the auto-loaded spec (repo root) and the optional group/person/host sidecars — see [`agents.md`](agents.md).

@@ -7,8 +7,9 @@
 #   skills/exobrain-tests/unit/test-connect-agent.sh <pattern>  # filter by name
 #
 # Each test builds an isolated fake exobrain in a temp dir and wires the agent
-# surface into it (connect-agent.sh --wire-sandbox with HOME / CODEX_HOME /
-# OPENCLAW_WORKSPACE pointed at temp dirs), so nothing touches the real repo or ~/. Function-level checks source skills-registry.sh directly.
+# surface side-effect-free (connect-agent.sh --wire-sandbox with HOME /
+# CODEX_HOME / OPENCLAW_WORKSPACE pointed at temp dirs), so nothing touches the
+# real repo or ~/. Function-level checks source skills-registry.sh directly.
 
 set -uo pipefail
 
@@ -27,7 +28,8 @@ run_test() {
     [[ -n "$FILTER" && "$name" != *"$FILTER"* ]] && return 0
     TESTS_RUN=$((TESTS_RUN + 1))
     printf "${DIM}%-56s${RESET} " "$name"
-    TEST_DIR="$(mktemp -d)"
+    mkdir -p "$REPO_DIR/tmp"
+    TEST_DIR="$(mktemp -d "$REPO_DIR/tmp/connect-agent.XXXXXX")"
     trap 'rm -rf "$TEST_DIR"' RETURN
     local output
     if output=$("$@" 2>&1); then
@@ -66,12 +68,17 @@ setup_fake_exobrain() {
     cp "$SCRIPTS_DIR/skills-registry.sh"       "$repo/scripts/"
     cp "$SCRIPTS_DIR/fetch-external-skills.sh"  "$repo/scripts/"
     cp "$SCRIPTS_DIR/skills-validate.sh"        "$repo/scripts/"
+    cp "$SCRIPTS_DIR/create-worktree.sh"        "$repo/scripts/"
+    cp "$SCRIPTS_DIR/exobrain-healthcheck.sh"   "$repo/scripts/"
+    if [[ -f "$SCRIPTS_DIR/link-worktree-context.sh" ]]; then
+        cp "$SCRIPTS_DIR/link-worktree-context.sh" "$repo/scripts/"
+    fi
     cp "$REPO_DIR/skills.schema.json"          "$repo/"
     chmod +x "$repo/scripts/"*.sh
     printf '# Exobrain\n' > "$repo/AGENTS.md"
     printf '{"scopes":[{"type":"group","collection":"groups"},{"type":"person","collection":"people"},{"type":"host","collection":"hosts"}]}\n' > "$repo/scopes.json"
     printf '{"$schema":"./skills.schema.json","skills":[]}\n' > "$repo/skills.json"
-    printf '.claude/\n.codex\n.openclaw\nAGENTS.override.md\n.exobrain.json\nsrc/\n' > "$repo/.gitignore"
+    printf '.claude/\n.codex\n.agents/\n.openclaw\nAGENTS.override.md\n.exobrain.json\nsrc/\n' > "$repo/.gitignore"
     echo "$repo"
 }
 
@@ -165,7 +172,7 @@ EOF
 oc_config()    { jq -c "$1" "$TEST_DIR/oc-config.json"; }
 oc_set_calls() { local n; n="$(grep -c "^config set" "$TEST_DIR/oc-calls.txt" 2>/dev/null)"; echo "${n:-0}"; }
 
-# wire_sandbox <repo> <agent> — wire the agent surface into the fixture, HOME-isolated.
+# wire_sandbox <repo> <agent> — wire the agent surface side-effect-free, HOME-isolated.
 wire_sandbox() {
     local repo="$1" agent="$2"
     mkdir -p "$TEST_DIR/home" "$TEST_DIR/codex" "$TEST_DIR/ocw"; fake_openclaw
@@ -182,9 +189,10 @@ wire_sandbox_flags() {
         "OPENCLAW_WORKSPACE=$TEST_DIR/ocw" "OPENCLAW_BIN=$TEST_DIR/bin/openclaw" bash scripts/connect-agent.sh "$agent" --wire-sandbox "$@")
 }
 
-# connect <repo> <agent> [flag...] — a real connect (writes the marker and the
-# repo's own git hooks), HOME-isolated. Non-interactive, so no config means guest.
-connect() {
+# connect_flags <repo> <agent> <flag...> — a REAL connect, not a sandbox wiring: the only
+# way to reach the marker, the git hooks, and the scope hooks. Everything it
+# writes stays in the temp repo or the temp HOME.
+connect_flags() {
     local repo="$1" agent="$2"; shift 2
     mkdir -p "$TEST_DIR/home" "$TEST_DIR/codex" "$TEST_DIR/ocw"; fake_openclaw
     (cd "$repo" && env "HOME=$TEST_DIR/home" "CODEX_HOME=$TEST_DIR/codex" \
@@ -192,10 +200,10 @@ connect() {
 }
 
 # relink <repo> <agent> — what the post-merge hook runs for each agent in turn.
-relink() { connect "$1" "$2" --relink; }
+relink() { connect_flags "$1" "$2" --relink; }
 
-# add_scope_hook <repo> <scope> <agent-suffix|""> [exit-code] — an executable connect
-# hook in <scope>/scripts that appends its argv to <repo>/hook-calls.txt.
+# add_scope_hook <repo> <scope> <agent-suffix|""> [exit-code] — an executable
+# connect hook in <scope>/scripts that appends its argv to <repo>/hook-calls.txt.
 add_scope_hook() {
     local repo="$1" scope="$2" suffix="$3" rc="${4:-0}" name="connect-agent"
     [[ -n "$suffix" ]] && name="connect-agent.$suffix"
@@ -210,53 +218,6 @@ EOF
 }
 
 hook_calls() { cat "$1/hook-calls.txt" 2>/dev/null; }
-
-# drive_wizard <repo> <answer>|<answer>|… — run the connector's interactive setup
-# under a pty and feed one answer each time it falls quiet; prints the transcript.
-# The wizard reads /dev/tty and gates on `-t 0 && -t 1`, so a terminal is the only
-# way to reach its prompts at all. python3 supplies the pty; cases self-skip when
-# it is absent, keeping the suite runnable on bash + jq alone. `--configure`
-# performs a real connect, contained to the temp repo and the temp HOME.
-drive_wizard() {
-    local repo="$1" answers="$2"
-    mkdir -p "$TEST_DIR/home" "$TEST_DIR/codex" "$TEST_DIR/ocw"
-    cat > "$TEST_DIR/drive.py" <<'PY'
-import os, pty, select, sys, time
-answers = os.environ["ANSWERS"].split("|")
-pid, fd = pty.fork()
-if pid == 0:
-    os.execv(sys.argv[1], sys.argv[1:])
-out, i, deadline = b"", 0, time.time() + 30
-while time.time() < deadline:
-    ready, _, _ = select.select([fd], [], [], 0.4)
-    if ready:
-        try:
-            chunk = os.read(fd, 4096)
-        except OSError:      # the child closed the pty — it exited
-            break
-        if not chunk:
-            break
-        out += chunk
-    elif i < len(answers):   # quiet: it is waiting on the next prompt
-        os.write(fd, (answers[i] + "\n").encode()); i += 1
-    else:
-        break
-os.close(fd); os.waitpid(pid, 0)
-sys.stdout.write(out.decode(errors="replace").replace("\r\n", "\n"))
-PY
-    env "HOME=$TEST_DIR/home" "CODEX_HOME=$TEST_DIR/codex" \
-        "OPENCLAW_WORKSPACE=$TEST_DIR/ocw" "ANSWERS=$answers" \
-        python3 "$TEST_DIR/drive.py" "$repo/scripts/connect-agent.sh" claude --configure 2>/dev/null
-}
-
-# wizard_fixture — two people, so the scope menu always has an unchecked last row
-# (zoe's host sorts last, and only the connecting person's pair is pre-checked).
-wizard_fixture() {
-    local repo; repo="$(setup_fake_exobrain)"
-    add_person "$repo" people/alice; add_person "$repo" people/zoe
-    git -C "$repo" config user.email dev@example.com
-    echo "$repo"
-}
 
 # resolve <repo> <leaf> — TSV of resolved skills (empty agent = no filtering).
 resolve() { skills_resolve "$1" "" "$2"; }
@@ -278,11 +239,10 @@ test_scope_chain_shallow_to_deep() {
 # ---------------------------------------------------------------------------
 
 test_person_scope_ids_lists_people_only() {
-    local r; r="$(setup_fake_exobrain)"; add_person "$r" people/alice; add_group "$r" acme
-    add_person "$r" groups/acme/people/bob
+    local r; r="$(setup_fake_exobrain)"; add_person "$r" people/alice; add_person "$r" groups/acme/people/bob
+    add_group "$r" acme
     mkdir -p "$r/lab"; printf '# lab\n' > "$r/lab/AGENTS.md"   # standalone scope, not a person
-    assert_eq "alice bob" "$(person_scope_ids "$r" | tr '\n' ' ' | sed 's/ $//')" \
-        "person scopes at any depth, nothing else"
+    assert_eq "alice bob" "$(person_scope_ids "$r" | tr '\n' ' ' | sed 's/ $//')" "person scopes at any depth, nothing else"
 }
 
 test_handle_free_when_unused() {
@@ -296,35 +256,160 @@ test_handle_taken_by_person() {
 }
 
 # The gate that matters: hosts (and any other scope type) share the handle
-# namespace, because identity is name-matched. `--handle h1` would otherwise
-# connect alice's host scope as if it were a person.
+# namespace, because identity is name-matched. `--handle h1` would connect
+# alice's host scope as if it were a person.
 test_handle_taken_by_non_person_scope() {
     local r; r="$(setup_fake_exobrain)"; add_person "$r" people/alice
-    assert_eq "host people/alice/hosts/h1" "$(handle_taken_by "$r" h1)" \
-        "a host name collides with the handle namespace"
+    assert_eq "host people/alice/hosts/h1" "$(handle_taken_by "$r" h1)" "a host name collides with the handle namespace"
 }
 
 test_generic_handles_flagged() {
     is_generic_handle admin   || { echo "admin not flagged"; return 1; }
     is_generic_handle ADMIN   || { echo "uppercase not flagged"; return 1; }
     is_generic_handle root    || { echo "root not flagged"; return 1; }
-    is_generic_handle alice   && { echo "a real name was flagged"; return 1; }
+    is_generic_handle carol  && { echo "a real name was flagged"; return 1; }
     return 0
+}
+
+# ---------------------------------------------------------------------------
+# Tests — scope hooks
+# ---------------------------------------------------------------------------
+
+test_scope_hook_runs_with_scope_args() {
+    local r; r="$(setup_fake_exobrain)"; add_person "$r" people/alice
+    add_scope_hook "$r" people/alice ""
+    connect_flags "$r" claude --handle alice --host h1 >/dev/null 2>&1 || return 1
+    assert_eq "connect-agent|claude|$r/.claude|$r/people/alice" "$(hook_calls "$r")" \
+        "the hook gets agent, target dir, and its own scope dir"
+}
+
+# Every scope in the chain runs, shallow→deep — not just the connected leaf.
+test_scope_hooks_run_shallow_to_deep() {
+    local r; r="$(setup_fake_exobrain)"; add_person "$r" people/alice
+    add_scope_hook "$r" people/alice ""
+    add_scope_hook "$r" people/alice/hosts/h1 ""
+    connect_flags "$r" claude --handle alice --host h1 >/dev/null 2>&1 || return 1
+    assert_eq "people/alice people/alice/hosts/h1" \
+        "$(hook_calls "$r" | sed "s|^[^|]*|$r|;s|.*$r/||" | tr '\n' ' ' | sed 's/ $//')" \
+        "person hook runs before its host's"
+}
+
+test_scope_hook_agent_specific_is_filtered() {
+    local r; r="$(setup_fake_exobrain)"; add_person "$r" people/alice
+    add_scope_hook "$r" people/alice codex
+    connect_flags "$r" claude --handle alice --host h1 >/dev/null 2>&1 || return 1
+    assert_eq "" "$(hook_calls "$r")" "another agent's hook is not run" || return 1
+    connect_flags "$r" codex --handle alice --host h1 >/dev/null 2>&1 || return 1
+    assert_contains "$(hook_calls "$r")" "connect-agent.codex|codex|" "its own agent runs it"
+}
+
+# The universal hook and this agent's hook both run, universal first.
+test_scope_hook_both_variants_run() {
+    local r; r="$(setup_fake_exobrain)"; add_person "$r" people/alice
+    add_scope_hook "$r" people/alice ""
+    add_scope_hook "$r" people/alice claude
+    connect_flags "$r" claude --handle alice --host h1 >/dev/null 2>&1 || return 1
+    assert_eq "connect-agent connect-agent.claude" \
+        "$(hook_calls "$r" | cut -d'|' -f1 | tr '\n' ' ' | sed 's/ $//')" "universal first, then agent-specific"
+}
+
+# A scope's own extra must never cost the human their wiring.
+test_scope_hook_failure_is_reported_not_fatal() {
+    local r out; r="$(setup_fake_exobrain)"; add_person "$r" people/alice
+    add_scope_hook "$r" people/alice "" 3
+    out="$(connect_flags "$r" claude --handle alice --host h1 2>&1)" || return 1
+    assert_contains "$out" "failed (exit 3) — connect continues" "the failure is named" || return 1
+    assert_contains "$out" "hook is unhappy" "its output is surfaced" || return 1
+    assert_contains "$out" "✓ Connected claude." "the connect still completes"
+}
+
+# The same guarantee for the deepest scope's *last* hook failing **silently** —
+# the case the loop tails decide, and the one an output-producing fixture can
+# never reach. Printing the hook's (empty) output runs a read loop whose body
+# ends on a false test; that status is the loop's, the enclosing loops' and
+# finally run_scope_hooks', whose bare call site aborts the connect under
+# `set -e` — after the surface is written and before "✓ Connected".
+test_scope_hook_silent_failure_is_not_fatal() {
+    local r out; r="$(setup_fake_exobrain)"; add_person "$r" people/alice
+    mkdir -p "$r/people/alice/hosts/h1/scripts"
+    printf '#!/usr/bin/env bash\nexit 4\n' > "$r/people/alice/hosts/h1/scripts/connect-agent.claude.sh"
+    chmod +x "$r/people/alice/hosts/h1/scripts/connect-agent.claude.sh"
+    out="$(connect_flags "$r" claude --handle alice --host h1 2>&1)" || return 1
+    assert_contains "$out" "failed (exit 4) — connect continues" "the failure is named" || return 1
+    assert_contains "$out" "✓ Connected claude." "the connect still completes"
+}
+
+# Wiring a sandbox promises no writes outside the target dir; a hook is arbitrary code.
+test_scope_hooks_skipped_on_wire_sandbox() {
+    local r; r="$(setup_fake_exobrain)"; add_person "$r" people/alice
+    add_scope_hook "$r" people/alice ""
+    wire_sandbox_flags "$r" claude --handle alice --host h1 >/dev/null 2>&1 || return 1
+    assert_eq "" "$(hook_calls "$r")" "no hook runs under --wire-sandbox"
+}
+
+# The repo root's scripts/connect-agent.sh is the connector itself: running it as
+# a scope hook would recurse.
+test_global_connector_is_not_a_scope_hook() {
+    local r out; r="$(setup_fake_exobrain)"; add_person "$r" people/alice
+    out="$(connect_flags "$r" claude --handle alice --host h1 2>&1)" || return 1
+    assert_eq "1" "$(grep -c '✓ Connected claude.' <<< "$out")" "the connector runs once, not recursively"
 }
 
 # ---------------------------------------------------------------------------
 # Tests — the setup wizard, driven over a pty
 # ---------------------------------------------------------------------------
+# The wizard reads /dev/tty, so it only runs with a terminal attached. These
+# drive it through one, which is the only way to reach the prompts, the handle
+# gates, and the scope menu. `--configure` performs a real connect, contained to
+# the temp repo (Claude's surface is <repo>/.claude, the hooks <repo>/.git).
+# python3 supplies the pty; with none installed the cases self-skip, keeping the
+# suite runnable on bash + jq alone.
 
-# Regression: the scope menu's last row is unchecked here (zoe's host). A
-# selection loop that ends on a false test returns non-zero, and as a function's
-# last command that aborted the whole wizard under `set -e` — after the human had
-# answered every prompt, and before save_config, so nothing was written.
+# drive_wizard <repo> <answer>|<answer>|… — feed one answer each time the
+# connector falls quiet; print the transcript.
+drive_wizard() {
+    local repo="$1" answers="$2"
+    cat > "$TEST_DIR/drive.py" <<'PY'
+import os, pty, select, sys, time
+answers = os.environ["ANSWERS"].split("|")
+pid, fd = pty.fork()
+if pid == 0:
+    os.execv(sys.argv[1], sys.argv[1:])
+out, i, deadline = b"", 0, time.time() + 30
+while time.time() < deadline:
+    r, _, _ = select.select([fd], [], [], 0.4)
+    if r:
+        try:
+            chunk = os.read(fd, 4096)
+        except OSError:
+            break
+        if not chunk:
+            break
+        out += chunk
+    elif i < len(answers):
+        os.write(fd, (answers[i] + "\n").encode()); i += 1
+    else:
+        break
+os.close(fd); os.waitpid(pid, 0)
+sys.stdout.write(out.decode(errors="replace").replace("\r\n", "\n"))
+PY
+    ANSWERS="$answers" python3 "$TEST_DIR/drive.py" "$repo/scripts/connect-agent.sh" claude --configure 2>/dev/null
+}
+
+# wizard_fixture — two people (alice, zoe) so a menu always has an unchecked
+# last row, and a fixed git email so the derived default handle is "dev".
+wizard_fixture() {
+    local r; r="$(setup_fake_exobrain)"
+    add_person "$r" people/alice; add_person "$r" people/zoe
+    git -C "$r" config user.email dev@example.com
+    echo "$r"
+}
+
 test_wizard_gates_generic_and_taken_handles() {
     command -v python3 >/dev/null 2>&1 || { echo "SKIP: python3 unavailable"; return 0; }
     local r t; r="$(wizard_fixture)"
     t="$(drive_wizard "$r" 'admin|n|alice|n|h1|carol|mbp|||')"
-    assert_contains "$t" "People already here: alice zoe" "existing people are listed up front" || { echo "$t"; return 1; }
+    assert_contains "$t" "People already here: alice zoe" "existing people are listed up front" || return 1
     assert_contains "$t" "'admin' is a machine login" "a machine login is challenged" || return 1
     assert_contains "$t" "'alice' is an existing person scope" "an existing person is challenged" || return 1
     assert_contains "$t" "'h1' already names a host scope" "a non-person scope name is refused" || return 1
@@ -343,115 +428,19 @@ test_wizard_withholds_generic_default() {
     assert_eq "carol" "$(jq -r '.person' "$r/.exobrain.json")" "the typed handle is stored"
 }
 
+# Regression: the scope menu's last row is unchecked here (zoe's host). A
+# selection loop that ends on a false test returns non-zero, and as a function's
+# last command that aborted the whole wizard under `set -e` — after the human had
+# answered every prompt, leaving no config behind.
 test_wizard_completes_with_unchecked_last_row() {
     command -v python3 >/dev/null 2>&1 || { echo "SKIP: python3 unavailable"; return 0; }
     local r t; r="$(wizard_fixture)"
-    t="$(drive_wizard "$r" 'alice|y|h1|')"   # y = "yes, alice is me"
-    assert_contains "$t" "✓ Connected claude." "the connect runs to completion" || { echo "$t"; return 1; }
+    t="$(drive_wizard "$r" 'alice|y|h1|||')"
+    assert_contains "$t" "✓ Connected claude." "the connect runs to completion" || return 1
     assert_file "$r/.exobrain.json" "config is written" || return 1
+    assert_eq "alice" "$(jq -r '.person' "$r/.exobrain.json")" "the joined person is stored" || return 1
     assert_eq "people/alice,people/alice/hosts/h1" \
         "$(jq -r '.connected_scopes | join(",")' "$r/.exobrain.json")" "person + host connected, zoe's left out"
-}
-
-# ---------------------------------------------------------------------------
-# Tests — scope hooks
-# ---------------------------------------------------------------------------
-
-test_scope_hook_runs_with_scope_args() {
-    local r; r="$(setup_fake_exobrain)"; add_person "$r" people/alice
-    add_scope_hook "$r" people/alice ""
-    connect "$r" claude --handle alice --host h1 >/dev/null 2>&1 || return 1
-    assert_eq "connect-agent|claude|$r/.claude|$r/people/alice" "$(hook_calls "$r")" \
-        "the hook gets agent, target dir, and its own scope dir"
-}
-
-# Every scope in the chain runs, shallow→deep — not just the connected leaf.
-test_scope_hooks_run_shallow_to_deep() {
-    local r; r="$(setup_fake_exobrain)"; add_person "$r" people/alice
-    add_scope_hook "$r" people/alice ""
-    add_scope_hook "$r" people/alice/hosts/h1 ""
-    connect "$r" claude --handle alice --host h1 >/dev/null 2>&1 || return 1
-    assert_eq "people/alice people/alice/hosts/h1" \
-        "$(hook_calls "$r" | sed "s|.*$r/||" | tr '\n' ' ' | sed 's/ $//')" \
-        "person hook runs before its host's"
-}
-
-test_scope_hook_agent_specific_is_filtered() {
-    local r; r="$(setup_fake_exobrain)"; add_person "$r" people/alice
-    add_scope_hook "$r" people/alice codex
-    connect "$r" claude --handle alice --host h1 >/dev/null 2>&1 || return 1
-    assert_eq "" "$(hook_calls "$r")" "another agent's hook is not run" || return 1
-    connect "$r" codex --handle alice --host h1 >/dev/null 2>&1 || return 1
-    assert_contains "$(hook_calls "$r")" "connect-agent.codex|codex|" "its own agent runs it"
-}
-
-# The universal hook and this agent's hook both run, universal first.
-test_scope_hook_both_variants_run() {
-    local r; r="$(setup_fake_exobrain)"; add_person "$r" people/alice
-    add_scope_hook "$r" people/alice ""
-    add_scope_hook "$r" people/alice claude
-    connect "$r" claude --handle alice --host h1 >/dev/null 2>&1 || return 1
-    assert_eq "connect-agent connect-agent.claude" \
-        "$(hook_calls "$r" | cut -d'|' -f1 | tr '\n' ' ' | sed 's/ $//')" "universal first, then agent-specific"
-}
-
-# A scope's own extra must never cost the human their wiring.
-test_scope_hook_failure_is_reported_not_fatal() {
-    local r out; r="$(setup_fake_exobrain)"; add_person "$r" people/alice
-    add_scope_hook "$r" people/alice "" 3
-    out="$(connect "$r" claude --handle alice --host h1 2>&1)" || return 1
-    assert_contains "$out" "failed (exit 3) — connect continues" "the failure is named" || return 1
-    assert_contains "$out" "hook is unhappy" "its output is surfaced" || return 1
-    assert_contains "$out" "✓ Connected claude." "the connect still completes"
-}
-
-# The same guarantee for a hook that fails **silently** — the case the loop tails
-# decide, and the one an output-producing fixture never reaches. Printing the
-# hook's (empty) output runs a read loop whose body ends on a false test; that
-# status is the loop's, then both enclosing loops' and finally run_scope_hooks',
-# whose bare call site aborts the connect under `set -e` — after the surface is
-# written, and before "✓ Connected".
-test_scope_hook_silent_failure_is_not_fatal() {
-    local r out; r="$(setup_fake_exobrain)"; add_person "$r" people/alice
-    mkdir -p "$r/people/alice/hosts/h1/scripts"
-    printf '#!/usr/bin/env bash\nexit 4\n' > "$r/people/alice/hosts/h1/scripts/connect-agent.claude.sh"
-    chmod +x "$r/people/alice/hosts/h1/scripts/connect-agent.claude.sh"
-    out="$(connect "$r" claude --handle alice --host h1 2>&1)" || return 1
-    assert_contains "$out" "failed (exit 4) — connect continues" "the failure is named" || return 1
-    assert_contains "$out" "✓ Connected claude." "the connect still completes"
-}
-
-# Wiring a sandbox promises no writes outside the target dir; a hook is arbitrary code.
-test_scope_hooks_skipped_on_wire_sandbox() {
-    local r; r="$(setup_fake_exobrain)"; add_person "$r" people/alice
-    add_scope_hook "$r" people/alice ""
-    wire_sandbox_flags "$r" claude --handle alice --host h1 >/dev/null 2>&1 || return 1
-    assert_eq "" "$(hook_calls "$r")" "no hook runs under --wire-sandbox"
-}
-
-# The repo root's scripts/connect-agent.sh is the connector itself: running it as
-# a scope hook would recurse.
-test_global_connector_is_not_a_scope_hook() {
-    local r out; r="$(setup_fake_exobrain)"; add_person "$r" people/alice
-    out="$(connect "$r" claude --handle alice --host h1 2>&1)" || return 1
-    assert_eq "1" "$(grep -c '✓ Connected claude.' <<< "$out")" "the connector runs once, not recursively"
-}
-
-# ---------------------------------------------------------------------------
-# Tests — git hooks
-# ---------------------------------------------------------------------------
-
-# The hooks are the only thing keeping a checkout's surface fresh after a pull, and
-# install_hook locates them through git's --git-common-dir, which answers relative
-# to the repo. Resolved against the caller's cwd instead, the hooks land wherever
-# the human was standing and the repo silently gets none.
-test_hooks_install_into_repo_from_other_cwd() {
-    local r; r="$(setup_fake_exobrain)"; add_person "$r" people/alice
-    mkdir -p "$TEST_DIR/elsewhere" "$TEST_DIR/home"
-    (cd "$TEST_DIR/elsewhere" && env "HOME=$TEST_DIR/home" \
-        bash "$r/scripts/connect-agent.sh" claude --handle alice --host h1) >/dev/null 2>&1 || return 1
-    assert_file "$r/.git/hooks/post-merge" "hooks installed in the repo" || return 1
-    assert_no_file "$TEST_DIR/elsewhere/.git" "nothing created in the caller's cwd"
 }
 
 # ---------------------------------------------------------------------------
@@ -655,8 +644,8 @@ test_codex_indexes_inlined_not_in_home() {
         "nothing written to CODEX_HOME"
 }
 
-# A mode advertised as side-effect-free must refuse the one default that isn't:
-# openclaw's USER.md targets the real home workspace when the override is unset.
+# A sandbox wiring advertised as side-effect-free must refuse the one default that isn't:
+# openclaw's USER.md targets the real home config dir when the override is unset.
 test_wire_openclaw_refuses_without_workspace() {
     local r out; r="$(setup_fake_exobrain)"; add_person "$r" people/alice
     write_config "$r" people/alice/hosts/h1 openclaw
@@ -664,17 +653,6 @@ test_wire_openclaw_refuses_without_workspace() {
         bash scripts/connect-agent.sh openclaw --wire-sandbox 2>&1)" && { echo "should refuse"; return 1; }
     assert_contains "$out" "OPENCLAW_WORKSPACE" "error names the override" || return 1
     assert_no_file "$TEST_DIR/hm/.openclaw/workspace/USER.md" "nothing written to home workspace"
-}
-
-# COMPAT 0005 (remove after 2026-09-13) — the old flag name still wires a sandbox,
-# with a deprecation warning, so a caller mid-upgrade is told rather than broken.
-test_legacy_render_flag_alias() {
-    local r out; r="$(setup_fake_exobrain)"; add_person "$r" people/alice
-    mkdir -p "$TEST_DIR/home" "$TEST_DIR/codex" "$TEST_DIR/ocw"
-    out="$( (cd "$r" && env "HOME=$TEST_DIR/home" "CODEX_HOME=$TEST_DIR/codex" \
-        "OPENCLAW_WORKSPACE=$TEST_DIR/ocw" bash scripts/connect-agent.sh claude --render-specs-only) 2>&1 )" || return 1
-    assert_contains "$out" "--render-specs-only is now --wire-sandbox" "the old name is called out" || return 1
-    assert_file "$r/.claude/CLAUDE.md" "the surface is still wired"
 }
 
 # ---------------------------------------------------------------------------
@@ -741,7 +719,9 @@ test_knowledge_index_claude() {
     wire_sandbox "$r" claude >/dev/null 2>&1 || return 1
     assert_file "$r/.claude/knowledge-index.md" "knowledge-index.md generated" || return 1
     local d; d="$(claude_knowledge "$r")"
-    assert_contains "$d" "# Knowledge domains" "index heading" || return 1
+    # Both dead-copy prunes identify a stale index by this heading rather than by
+    # name, so a human's same-named file survives — change the heading, change them.
+    assert_contains "$d" "# Knowledge domains" "heading matches the dead-copy prunes" || return 1
     assert_contains "$d" "health" "domain row present" || return 1
     assert_contains "$d" "knowledge/health/README.md" "README path present" || return 1
     assert_contains "$d" "Conditions, meds, providers, and insurance." "summary extracted from frontmatter" || return 1
@@ -814,7 +794,7 @@ test_relink_refreshes_connected_claude() {
     local r; r="$(setup_fake_exobrain)"; add_person "$r" people/alice
     write_config "$r" people/alice/hosts/h1
     fresh_clone_claude_dir "$r"
-    connect "$r" claude >/dev/null 2>&1 || return 1
+    connect_flags "$r" claude >/dev/null 2>&1 || return 1
     assert_file "$r/.claude/CLAUDE.md" "connect writes the marker" || return 1
     rm -f "$r/.claude/connected-scopes.md"
     relink "$r" claude >/dev/null 2>&1 || return 1
@@ -822,16 +802,69 @@ test_relink_refreshes_connected_claude() {
     assert_file "$r/.git/hooks/post-merge" "relink refreshed the hooks"
 }
 
+# relink_all <repo> [flag...] — `--relink` with no agent, HOME-isolated like connect_flags.
+relink_all() {
+    local repo="$1"; shift
+    mkdir -p "$TEST_DIR/home" "$TEST_DIR/codex" "$TEST_DIR/ocw"; fake_openclaw
+    (cd "$repo" && env "HOME=$TEST_DIR/home" "CODEX_HOME=$TEST_DIR/codex" \
+        "OPENCLAW_WORKSPACE=$TEST_DIR/ocw" "OPENCLAW_BIN=$TEST_DIR/bin/openclaw" bash scripts/connect-agent.sh --relink "$@")
+}
+
+# With no agent named, --relink refreshes every connected agent and leaves the rest alone.
+test_relink_all_connected_agents() {
+    local r out; r="$(setup_fake_exobrain)"; add_person "$r" people/alice
+    write_config "$r" people/alice/hosts/h1
+    fresh_clone_claude_dir "$r"
+    connect_flags "$r" claude >/dev/null 2>&1 || return 1
+    connect_flags "$r" codex >/dev/null 2>&1 || return 1
+    add_domain "$r" health "Conditions, meds, providers, and insurance."
+    out="$(relink_all "$r" 2>&1)" || { echo "$out"; return 1; }
+    assert_contains "$(claude_knowledge "$r")" "health" "claude surface refreshed" || return 1
+    assert_contains "$(cat "$r/AGENTS.override.md")" "health" "codex surface refreshed" || return 1
+    assert_contains "$out" "── claude" "claude relinked" || return 1
+    assert_contains "$out" "── codex" "codex relinked" || return 1
+    assert_not_contains "$out" "── openclaw" "unconnected openclaw skipped" || return 1
+    assert_eq "" "$(dir_listing "$TEST_DIR/ocw")" "nothing written to OPENCLAW_WORKSPACE"
+}
+
+test_relink_all_nothing_connected() {
+    local r out; r="$(setup_fake_exobrain)"; add_person "$r" people/alice
+    write_config "$r" people/alice/hosts/h1
+    fresh_clone_claude_dir "$r"
+    out="$(relink_all "$r" 2>&1)" || { echo "exit non-zero: $out"; return 1; }
+    assert_contains "$out" "No agent is connected" || return 1
+    assert_eq "settings.json" "$(dir_listing "$r/.claude")" "nothing written into .claude/" || return 1
+    assert_no_file "$r/.git/hooks/post-merge" "no hooks installed"
+}
+
+test_relink_all_refuses_other_flags() {
+    local r out; r="$(setup_fake_exobrain)"; add_person "$r" people/alice
+    write_config "$r" people/alice/hosts/h1
+    out="$(relink_all "$r" --configure 2>&1)"; local rc=$?
+    assert_eq "2" "$rc" "usage error" || return 1
+    assert_contains "$out" "takes no other flags"
+}
+
+# ---------------------------------------------------------------------------
+# Tests — git hooks
+# ---------------------------------------------------------------------------
+
+# The hooks are the only thing keeping a checkout's surface fresh after a pull, and
+# install_hook locates them through git's --git-common-dir, which answers relative
+# to the repo. Resolved against the caller's cwd instead, the hooks land wherever
+# the human was standing and the repo silently gets none.
+test_hooks_install_into_repo_from_other_cwd() {
+    local r; r="$(setup_fake_exobrain)"; add_person "$r" people/alice
+    mkdir -p "$TEST_DIR/elsewhere" "$TEST_DIR/home"
+    (cd "$TEST_DIR/elsewhere" && env "HOME=$TEST_DIR/home" \
+        bash "$r/scripts/connect-agent.sh" claude --handle alice --host h1) >/dev/null 2>&1 || return 1
+    assert_file "$r/.git/hooks/post-merge" "hooks installed in the repo" || return 1
+    assert_no_file "$TEST_DIR/elsewhere/.git" "nothing created in the caller's cwd"
+}
+
 # ---------------------------------------------------------------------------
 # Tests — validator
 # ---------------------------------------------------------------------------
-
-test_validate_clean() {
-    local r; r="$(setup_fake_exobrain)"; add_person "$r" people/alice
-    declare_skill "$r" global ok optional force
-    (cd "$r" && bash scripts/skills-validate.sh >/dev/null 2>&1)
-    assert_eq "0" "$?" "valid registry passes validation"
-}
 
 # The portability gate. A published rule did not keep bash-4 constructs out of the
 # framework, so the constructs themselves are checked — while the prose that
@@ -846,6 +879,35 @@ test_validate_flags_bash4_constructs() {
     assert_not_contains "$o" "scripts/probe.sh:3" "a comment mentioning one is not flagged"
 }
 
+# The companion gate. Names are collected repo-wide, so the array assigned empty
+# in one file is still caught where another expands it — the shape that let the
+# behavioral harness die before the agent started.
+test_validate_flags_unguarded_array_expansion() {
+    local r; r="$(setup_fake_exobrain)"; add_person "$r" people/alice
+    cp "$SCRIPTS_DIR/validate-exobrain.sh" "$r/scripts/"
+    printf '#!/usr/bin/env bash\nSINK=()\n' > "$r/scripts/lib.sh"
+    printf '#!/usr/bin/env bash\nfoo "${SINK[@]}"\n# prose naming "${SINK[@]}"\n' > "$r/scripts/probe.sh"
+    local o; o="$(cd "$r" && bash scripts/validate-exobrain.sh 2>&1)"
+    assert_contains "$o" "unguarded array expansion in scripts/probe.sh:2" "flagged across files" || return 1
+    assert_not_contains "$o" "scripts/probe.sh:3" "a comment mentioning one is not flagged"
+}
+
+test_validate_guarded_array_expansion_passes() {
+    local r; r="$(setup_fake_exobrain)"; add_person "$r" people/alice
+    cp "$SCRIPTS_DIR/validate-exobrain.sh" "$r/scripts/"
+    printf '#!/usr/bin/env bash\nSINK=()\nfoo ${SINK[@]+"${SINK[@]}"}\n' > "$r/scripts/probe.sh"
+    local o; o="$(cd "$r" && bash scripts/validate-exobrain.sh 2>&1)"
+    assert_not_contains "$o" "unguarded array expansion" "the guarded form is not flagged as its own substring"
+}
+
+test_validate_ignores_never_empty_array() {
+    local r; r="$(setup_fake_exobrain)"; add_person "$r" people/alice
+    cp "$SCRIPTS_DIR/validate-exobrain.sh" "$r/scripts/"
+    printf '#!/usr/bin/env bash\nfixed=(one two)\nrun "${fixed[@]}"\n' > "$r/scripts/probe.sh"
+    local o; o="$(cd "$r" && bash scripts/validate-exobrain.sh 2>&1)"
+    assert_not_contains "$o" "unguarded array expansion" "a never-empty array is not flagged"
+}
+
 test_validate_bash4_optout_honored() {
     local r; r="$(setup_fake_exobrain)"; add_person "$r" people/alice
     cp "$SCRIPTS_DIR/validate-exobrain.sh" "$r/scripts/"
@@ -855,30 +917,11 @@ test_validate_bash4_optout_honored() {
     assert_not_contains "$o" "bash 4 construct" "an opted-out script is skipped"
 }
 
-# The same interpreter, its other trap: an empty array is unset, so a bare
-# expansion aborts under `set -u`. The array that is empty most often is assigned
-# in a sourced lib and expanded by its caller, so the names are collected across
-# the whole tree — a per-file check would miss exactly that case.
-test_validate_flags_unguarded_array_expansion() {
+test_validate_clean() {
     local r; r="$(setup_fake_exobrain)"; add_person "$r" people/alice
-    cp "$SCRIPTS_DIR/validate-exobrain.sh" "$r/scripts/"
-    printf '#!/usr/bin/env bash\nopts=()\n' > "$r/scripts/lib.sh"
-    printf '#!/usr/bin/env bash\nrun "${opts[@]}"\nrun ${opts[@]+"${opts[@]}"}\n# prose about "${opts[@]}"\n' \
-        > "$r/scripts/probe.sh"
-    local o; o="$(cd "$r" && bash scripts/validate-exobrain.sh 2>&1)"
-    assert_contains "$o" "unguarded array expansion in scripts/probe.sh:2" "flagged across files, with its line" || return 1
-    assert_not_contains "$o" "scripts/probe.sh:3" "the guarded form passes" || return 1
-    assert_not_contains "$o" "scripts/probe.sh:4" "a comment mentioning one is not flagged"
-}
-
-# An array nobody assigns empty is left alone — the gate names a hazard it can
-# demonstrate, not every array expansion in the tree.
-test_validate_ignores_never_empty_array() {
-    local r; r="$(setup_fake_exobrain)"; add_person "$r" people/alice
-    cp "$SCRIPTS_DIR/validate-exobrain.sh" "$r/scripts/"
-    printf '#!/usr/bin/env bash\nfixed=(one two)\nrun "${fixed[@]}"\n' > "$r/scripts/probe.sh"
-    local o; o="$(cd "$r" && bash scripts/validate-exobrain.sh 2>&1)"
-    assert_not_contains "$o" "unguarded array expansion" "a never-empty array is not flagged"
+    declare_skill "$r" global ok optional force
+    (cd "$r" && bash scripts/skills-validate.sh >/dev/null 2>&1)
+    assert_eq "0" "$?" "valid registry passes validation"
 }
 
 test_validate_dangling_override() {
@@ -976,7 +1019,7 @@ test_seed_scope_auto_joins_chain() {
 test_no_seed_scope_without_seed_dir() {
     local r; r="$(setup_fake_exobrain)"; add_person "$r" people/alice   # no seed/
     local chain; chain="$(build_scope_chain "$r" people/alice/hosts/h1 | tr '\n' ' ')"
-    assert_not_contains "$chain" "seed" "no seed scope when seed/AGENTS.md is absent (rendered instance)"
+    assert_not_contains "$chain" "seed" "no seed scope when seed/AGENTS.md is absent (wired instance)"
 }
 
 test_seed_scope_in_manifest() {
@@ -986,6 +1029,7 @@ test_seed_scope_in_manifest() {
     wire_sandbox "$r" claude >/dev/null 2>&1 || return 1
     assert_contains "$(claude_manifest "$r")" "@../seed/AGENTS.md" "seed scope wired into the Claude manifest"
 }
+
 
 # ---------------------------------------------------------------------------
 # Tests — OpenClaw runtime config
@@ -1000,13 +1044,53 @@ test_openclaw_runtime_config_reconciled() {
     declare_skill "$r" people/alice a-skill always force
     write_config "$r" people/alice/hosts/h1 openclaw
     fake_openclaw
-    echo '{"skills":{"load":{"allowSymlinkTargets":["/kept/root"]}},"tools":{"deny":["browser"]}}' > "$TEST_DIR/oc-config.json"
-    connect "$r" openclaw >/dev/null 2>&1 || return 1
+    echo '{"skills":{"load":{"allowSymlinkTargets":["/kept/root"]}},"tools":{"deny":["browser"]},"agents":{"defaults":{"bootstrapTotalMaxChars":150000}}}' > "$TEST_DIR/oc-config.json"
+    connect_flags "$r" openclaw >/dev/null 2>&1 || return 1
     local real; real="$(cd "$r" && pwd -P)"
     assert_eq "$(jq -nc --arg a "$real/skills" --arg b "$real/people/alice/skills" '[$a, $b, "/kept/root"] | sort')" \
               "$(oc_config '.skills.load.allowSymlinkTargets | sort')" "linked roots unioned with the kept one" || return 1
     assert_eq '["browser","skill_workshop"]' "$(oc_config '.tools.deny | sort')" "skill_workshop denied beside the kept entry" || return 1
-    assert_eq '"off"' "$(oc_config '.skills.workshop.autonomous.mode')" "Workshop autonomy off"
+    assert_eq '"off"' "$(oc_config '.skills.workshop.autonomous.mode')" "Workshop autonomy off" || return 1
+    assert_eq '60000' "$(oc_config '.agents.defaults.bootstrapMaxChars')" "per-file bootstrap budget raised to its floor" || return 1
+    assert_eq '150000' "$(oc_config '.agents.defaults.bootstrapTotalMaxChars')" "a larger human-set total budget stays"
+}
+
+test_openclaw_indexes_knowledge_domains() {
+    local r; r="$(setup_fake_exobrain)"; add_person "$r" people/alice
+    write_config "$r" people/alice/hosts/h1 openclaw
+    mkdir -p "$r/knowledge/health/_raw"
+    fake_openclaw
+    echo '{"memory":{"search":{"extraPaths":[{"path":"runbooks","pattern":"**/*.md"}]}}}' > "$TEST_DIR/oc-config.json"
+    connect_flags "$r" openclaw >/dev/null 2>&1 || return 1
+    assert_eq "4" "$(oc_config '[.memory.search.extraPaths[] | select(.path | endswith("/knowledge"))] | length')" \
+              "one entry per directory depth" || return 1
+    assert_eq "1" "$(oc_config '[.memory.search.extraPaths[] | select(.path == "runbooks")] | length')" \
+              "a human-added extra path survives the union" || return 1
+    # Every pattern must reject a path segment starting with "_": _raw holds source
+    # captures and _meta open questions, neither of which is current truth.
+    assert_eq "0" "$(oc_config '[.memory.search.extraPaths[] | select(.pattern | test("(^|/)\\[!_\\]\\*/") | not) | select(.path | endswith("knowledge"))] | length')" \
+              "every knowledge pattern guards its first segment against _"
+}
+
+# A repo with no knowledge/ contributes no extra paths at all.
+test_openclaw_no_knowledge_no_extra_paths() {
+    local r; r="$(setup_fake_exobrain)"; add_person "$r" people/alice
+    write_config "$r" people/alice/hosts/h1 openclaw
+    connect_flags "$r" openclaw >/dev/null 2>&1 || return 1
+    assert_eq "null" "$(oc_config '.memory.search.extraPaths // "null"' | tr -d '"')" \
+              "no extraPaths key written without a knowledge dir"
+}
+
+# The union must compare equal on a second run, or every relink rewrites the config.
+test_openclaw_knowledge_paths_idempotent() {
+    local r; r="$(setup_fake_exobrain)"; add_person "$r" people/alice
+    write_config "$r" people/alice/hosts/h1 openclaw
+    mkdir -p "$r/knowledge/home"
+    connect_flags "$r" openclaw >/dev/null 2>&1 || return 1
+    assert_eq "1" "$(oc_set_calls)" "first connect wrote once" || return 1
+    local out; out="$(relink "$r" openclaw 2>&1)" || return 1
+    assert_eq "1" "$(oc_set_calls)" "relink wrote nothing" || return 1
+    assert_contains "$out" "already reconciled"
 }
 
 # A second run with nothing to change writes nothing.
@@ -1014,7 +1098,7 @@ test_openclaw_runtime_config_idempotent() {
     local r; r="$(setup_fake_exobrain)"; add_person "$r" people/alice
     declare_skill "$r" people/alice a-skill always force
     write_config "$r" people/alice/hosts/h1 openclaw
-    connect "$r" openclaw >/dev/null 2>&1 || return 1
+    connect_flags "$r" openclaw >/dev/null 2>&1 || return 1
     assert_eq "1" "$(oc_set_calls)" "first connect wrote once" || return 1
     local out; out="$(relink "$r" openclaw 2>&1)" || return 1
     assert_eq "1" "$(oc_set_calls)" "relink wrote nothing" || return 1
@@ -1042,7 +1126,177 @@ test_openclaw_runtime_config_skipped_on_wire_sandbox() {
     assert_no_file "$TEST_DIR/oc-calls.txt" "no openclaw call from a sandbox wiring"
 }
 
+test_openclaw_gitignore_block_written() {
+    local r; r="$(setup_fake_exobrain)"; add_person "$r" people/alice
+    write_config "$r" people/alice/hosts/h1 openclaw
+    mkdir -p "$TEST_DIR/ocw"; git -C "$TEST_DIR/ocw" init -q
+    wire_sandbox "$r" openclaw >/dev/null 2>&1 || return 1
+    assert_file "$TEST_DIR/ocw/.gitignore" "workspace .gitignore written" || return 1
+    local body; body="$(cat "$TEST_DIR/ocw/.gitignore")"
+    assert_contains "$body" 'memory/????-??-??-*.md' "session-summary pattern ignored" || return 1
+    assert_contains "$body" 'memory/.dreams/' "dreaming corpus ignored" || return 1
+    assert_contains "$body" 'memory/dreaming/' "dreaming phase logs ignored" || return 1
+    assert_contains "$body" "# BEGIN exobrain" "block fenced with a gitignore comment"
+}
+
+test_openclaw_gitignore_idempotent() {
+    local r; r="$(setup_fake_exobrain)"; add_person "$r" people/alice
+    write_config "$r" people/alice/hosts/h1 openclaw
+    mkdir -p "$TEST_DIR/ocw"; git -C "$TEST_DIR/ocw" init -q
+    wire_sandbox "$r" openclaw >/dev/null 2>&1 || return 1
+    wire_sandbox "$r" openclaw >/dev/null 2>&1 || return 1
+    local n; n="$(grep -c '^# BEGIN exobrain$' "$TEST_DIR/ocw/.gitignore")"
+    assert_eq "1" "$(printf '%s' "$n" | tr -d ' ')" "one block after a second run"
+}
+
+test_openclaw_gitignore_preserves_human_rules() {
+    local r; r="$(setup_fake_exobrain)"; add_person "$r" people/alice
+    write_config "$r" people/alice/hosts/h1 openclaw
+    mkdir -p "$TEST_DIR/ocw"; git -C "$TEST_DIR/ocw" init -q
+    printf 'secrets.env\n' > "$TEST_DIR/ocw/.gitignore"
+    wire_sandbox "$r" openclaw >/dev/null 2>&1 || return 1
+    assert_contains "$(cat "$TEST_DIR/ocw/.gitignore")" "secrets.env" "human rule survives the append"
+}
+
+test_openclaw_gitignore_skipped_without_git() {
+    local r; r="$(setup_fake_exobrain)"; add_person "$r" people/alice
+    write_config "$r" people/alice/hosts/h1 openclaw
+    wire_sandbox "$r" openclaw >/dev/null 2>&1 || return 1
+    assert_no_file "$TEST_DIR/ocw/.gitignore" "no ignore file for a workspace that is not a repo"
+}
+
+test_openclaw_gitignore_reports_tracked_summaries() {
+    local r; r="$(setup_fake_exobrain)"; add_person "$r" people/alice
+    write_config "$r" people/alice/hosts/h1 openclaw
+    mkdir -p "$TEST_DIR/ocw/memory/.dreams"; git -C "$TEST_DIR/ocw" init -q
+    : > "$TEST_DIR/ocw/memory/2026-01-01-1200.md"
+    : > "$TEST_DIR/ocw/memory/.dreams/corpus.txt"
+    git -C "$TEST_DIR/ocw" add -A >/dev/null 2>&1
+    git -C "$TEST_DIR/ocw" -c user.email=t@t -c user.name=t commit -qm seed >/dev/null 2>&1
+    local out; out="$(wire_sandbox "$r" openclaw 2>&1)" || return 1
+    assert_contains "$out" "still tracked" "an already-committed summary is reported"
+}
+
 # ---------------------------------------------------------------------------
+
+
+# Codex wiring must leave both existing and absent personal configuration alone.
+test_codex_preserves_home_links() {
+    local r mode; r="$(setup_fake_exobrain)"
+    mkdir -p "$TEST_DIR/codex"
+    printf 'personal rules\n' > "$TEST_DIR/personal.md"
+    ln -s "$TEST_DIR/personal.md" "$TEST_DIR/codex/AGENTS.override.md"
+    ln -s "$TEST_DIR/personal.md" "$TEST_DIR/codex/CODEX.personal.md"
+    for mode in sandbox connect; do
+        if [[ "$mode" == sandbox ]]; then
+            wire_sandbox "$r" codex >/dev/null 2>&1 || return 1
+        else
+            connect_flags "$r" codex --guest >/dev/null 2>&1 || return 1
+        fi
+        assert_symlink "$TEST_DIR/codex/AGENTS.override.md" "$mode preserves personal override" || return 1
+        assert_symlink "$TEST_DIR/codex/CODEX.personal.md" "$mode preserves personal sidecar" || return 1
+    done
+}
+
+test_codex_does_not_create_home() {
+    local r; r="$(setup_fake_exobrain)"
+    (cd "$r" && env "HOME=$TEST_DIR/home" CODEX_HOME= \
+        bash scripts/connect-agent.sh codex --wire-sandbox --guest) >/dev/null 2>&1 || return 1
+    assert_no_file "$TEST_DIR/home/.codex" "default home untouched without an override" || return 1
+    (cd "$r" && env "CODEX_HOME=$TEST_DIR/absent-codex-home" \
+        bash scripts/connect-agent.sh codex --guest) >/dev/null 2>&1 || return 1
+    assert_no_file "$TEST_DIR/absent-codex-home" "normal connect leaves absent home alone"
+}
+
+# A connected fake main checkout plus a real sibling worktree.
+make_codex_worktree() {
+    local r; r="$(setup_fake_exobrain)"
+    declare_skill "$r" global core always force
+    write_config "$r" "" codex
+    wire_sandbox "$r" codex >/dev/null 2>&1 || return 1
+    touch "$r/.codex"
+    git -C "$r" config core.hooksPath /dev/null
+    git -C "$r" add -A
+    git -C "$r" -c user.email=t@t -c user.name=t commit -qm fixture || return 1
+    (cd "$r" && bash scripts/create-worktree.sh feature 2>/dev/null)
+}
+
+test_codex_worktree_skills() {
+    local wt; wt="$(make_codex_worktree)" || return 1
+    assert_file "$wt/.agents/skills/core/SKILL.md" "skill discoverable in worktree" || return 1
+    [[ ! -L "$wt/.agents/skills" ]] || { echo 'skills parent must be a real directory'; return 1; }
+    printf '\nWorktree-only instructions\n' >> "$wt/skills/core/SKILL.md"
+    assert_contains "$(cat "$wt/.agents/skills/core/SKILL.md")" 'Worktree-only instructions' "link uses branch-local source" || return 1
+    assert_not_contains "$(cat "$TEST_DIR/exobrain/skills/core/SKILL.md")" 'Worktree-only instructions' "main source unchanged"
+}
+
+test_codex_worktree_rewire_preserves_main() {
+    local wt before; wt="$(make_codex_worktree)" || return 1
+    before="$(cat "$TEST_DIR/exobrain/AGENTS.override.md")"
+    printf '\nWorktree-only context\n' >> "$wt/AGENTS.md"
+    wire_sandbox "$wt" codex >/dev/null 2>&1 || return 1
+    assert_eq "$before" "$(cat "$TEST_DIR/exobrain/AGENTS.override.md")" "rewire must not follow the inherited link" || return 1
+    assert_contains "$(cat "$wt/AGENTS.override.md")" 'Worktree-only context' "worktree gets its own composition"
+}
+
+test_codex_worktree_linker_preserves_owned_files() {
+    local wt; wt="$(make_codex_worktree)" || return 1
+    rm "$wt/AGENTS.override.md" "$wt/.agents/skills/core"
+    printf 'owned context\n' > "$wt/AGENTS.override.md"
+    mkdir "$wt/.agents/skills/core"
+    printf 'owned skill\n' > "$wt/.agents/skills/core/SKILL.md"
+    bash "$wt/scripts/link-worktree-context.sh" "$TEST_DIR/exobrain" "$wt" >/dev/null 2>&1 || return 1
+    assert_eq 'owned context' "$(cat "$wt/AGENTS.override.md")" || return 1
+    assert_eq 'owned skill' "$(cat "$wt/.agents/skills/core/SKILL.md")"
+}
+
+test_codex_health_missing_surfaces() {
+    local r out; r="$(setup_fake_exobrain)"
+    write_config "$r" "" codex; touch "$r/.codex"
+    out="$(bash "$r/scripts/exobrain-healthcheck.sh" codex -v)" || return 1
+    assert_contains "$out" 'missing or empty AGENTS.override.md' || return 1
+    assert_contains "$out" 'missing skills directory' || return 1
+    assert_not_contains "$out" 'connected and linked' "missing surfaces cannot report healthy"
+}
+
+test_codex_health_checks_worktree() {
+    local wt out; wt="$(make_codex_worktree)" || return 1
+    out="$(bash "$wt/scripts/exobrain-healthcheck.sh" codex -v)" || return 1
+    assert_contains "$out" 'connected and linked' "valid worktree passes" || return 1
+    rm -f "$wt/.agents/skills/core"
+    out="$(bash "$wt/scripts/exobrain-healthcheck.sh" codex -v)" || return 1
+    assert_contains "$out" 'missing skill core' || return 1
+    assert_contains "$out" "$wt" "warning identifies active checkout" || return 1
+    assert_not_contains "$out" 'connected and linked' || return 1
+    out="$(bash "$TEST_DIR/exobrain/scripts/exobrain-healthcheck.sh" codex -v)" || return 1
+    assert_contains "$out" 'connected and linked' "main remains healthy"
+}
+
+test_codex_health_ignores_personal_home() {
+    local wt out; wt="$(make_codex_worktree)" || return 1
+    ln -s "$TEST_DIR/nonexistent-personal-rules" "$TEST_DIR/codex/AGENTS.personal.md"
+    out="$(CODEX_HOME="$TEST_DIR/codex" bash "$wt/scripts/exobrain-healthcheck.sh" codex -v)" || return 1
+    assert_contains "$out" 'connected and linked' "unrelated personal links do not affect repo wiring"
+}
+
+test_description_block_scalars() {
+    local r marker desc; r="$(setup_fake_exobrain)"
+    for marker in '>' '>-' '>+' '|' '|-' '|+'; do
+        printf -- '---\nname: example\ndescription: %s\n  First line\n  second line.\n\n  Next paragraph.\nmetadata:\n  ignored: value\n---\nBody ignored.\n' "$marker" > "$r/description.md"
+        desc="$(skills_extract_description "$r/description.md")"
+        assert_eq 'First line second line. Next paragraph.' "$desc" "$marker flattened for table" || return 1
+    done
+    printf -- '---\ndescription: "Single line."\n---\n' > "$r/description.md"
+    assert_eq 'Single line.' "$(skills_extract_description "$r/description.md")" "quoted inline description stays intact"
+}
+
+test_description_block_in_index() {
+    local r; r="$(setup_fake_exobrain)"
+    declare_skill "$r" global optional-skill optional force
+    printf -- '---\nname: optional-skill\ndescription: >\n  Discover this skill\n  from both lines.\n---\n' > "$r/skills/optional-skill/SKILL.md"
+    wire_sandbox "$r" codex >/dev/null 2>&1 || return 1
+    assert_contains "$(cat "$r/AGENTS.override.md")" '| Discover this skill from both lines. |' "complete summary in generated index"
+}
 
 run_test "scope chain shallow->deep"          test_scope_chain_shallow_to_deep
 run_test "person scope ids list people only"   test_person_scope_ids_lists_people_only
@@ -1050,18 +1304,17 @@ run_test "unused handle is free"               test_handle_free_when_unused
 run_test "handle taken by a person"            test_handle_taken_by_person
 run_test "handle taken by a non-person scope"  test_handle_taken_by_non_person_scope
 run_test "generic handles flagged"             test_generic_handles_flagged
-run_test "wizard gates generic + taken ids"    test_wizard_gates_generic_and_taken_handles
-run_test "wizard withholds generic default"    test_wizard_withholds_generic_default
-run_test "wizard completes, last row unchecked" test_wizard_completes_with_unchecked_last_row
 run_test "scope hook runs with scope args"     test_scope_hook_runs_with_scope_args
 run_test "scope hooks run shallow->deep"       test_scope_hooks_run_shallow_to_deep
 run_test "scope hook agent-specific filtered"  test_scope_hook_agent_specific_is_filtered
 run_test "scope hook both variants run"        test_scope_hook_both_variants_run
 run_test "scope hook failure not fatal"        test_scope_hook_failure_is_reported_not_fatal
 run_test "silent hook failure not fatal"       test_scope_hook_silent_failure_is_not_fatal
-run_test "scope hooks skipped on wiring"       test_scope_hooks_skipped_on_wire_sandbox
+run_test "scope hooks skipped on sandbox"     test_scope_hooks_skipped_on_wire_sandbox
 run_test "global connector is not a hook"      test_global_connector_is_not_a_scope_hook
-run_test "hooks install into repo, other cwd" test_hooks_install_into_repo_from_other_cwd
+run_test "wizard gates generic + taken ids"    test_wizard_gates_generic_and_taken_handles
+run_test "wizard withholds generic default"    test_wizard_withholds_generic_default
+run_test "wizard completes, last row unchecked" test_wizard_completes_with_unchecked_last_row
 run_test "force reaches non-owner"             test_force_reaches_nonowner
 run_test "owner-gated off for others"          test_owner_gated_off_for_others
 run_test "owner-match enables for owner"       test_owner_match_enables_for_owner
@@ -1073,9 +1326,19 @@ run_test "unlisted resolves"                   test_unlisted_resolves
 run_test "tools resolve deepest wins"          test_tools_resolve_deepest_wins
 run_test "tools resolve excludes template"     test_tools_resolve_excludes_template
 run_test "claude manifest relative + resolves" test_claude_manifest_relative_and_resolves
-run_test "wiring no-sidecar exits 0"           test_wire_no_sidecar_exit0
+run_test "wiring no-sidecar exits 0"          test_wire_no_sidecar_exit0
 run_test "always linked, unlisted not"         test_always_skill_linked_unlisted_not
 run_test "claude index imports resolve"        test_claude_index_imports_resolve
+run_test "codex preserves personal home links" test_codex_preserves_home_links
+run_test "codex does not create home"          test_codex_does_not_create_home
+run_test "codex worktree discovers local skills" test_codex_worktree_skills
+run_test "codex worktree rewire preserves main" test_codex_worktree_rewire_preserves_main
+run_test "codex worktree keeps owned files"     test_codex_worktree_linker_preserves_owned_files
+run_test "codex health catches missing surfaces" test_codex_health_missing_surfaces
+run_test "codex health checks active worktree"  test_codex_health_checks_worktree
+run_test "codex health ignores personal home"  test_codex_health_ignores_personal_home
+run_test "description block scalars"           test_description_block_scalars
+run_test "description block reaches index"     test_description_block_in_index
 run_test "codex inlines specs"                 test_codex_inlines_specs
 run_test "codex indexes inlined, not in home"  test_codex_indexes_inlined_not_in_home
 run_test "openclaw indexes inlined, not home"  test_openclaw_indexes_inlined_not_in_home
@@ -1087,11 +1350,16 @@ run_test "stale claude index cleared"          test_claude_index_removed_when_so
 run_test "relink skips unconnected claude"     test_relink_skips_unconnected_claude
 run_test "relink skips unconnected codex/oc"   test_relink_skips_unconnected_file_marker_agents
 run_test "relink refreshes connected claude"   test_relink_refreshes_connected_claude
-run_test "validate clean"                      test_validate_clean
+run_test "relink, no agent: every connected"    test_relink_all_connected_agents
+run_test "relink, no agent: none connected"     test_relink_all_nothing_connected
+run_test "relink, no agent: refuses flags"      test_relink_all_refuses_other_flags
+run_test "hooks install into repo, other cwd"  test_hooks_install_into_repo_from_other_cwd
 run_test "validate flags bash 4 constructs"    test_validate_flags_bash4_constructs
 run_test "validate honors bash 4 opt-out"      test_validate_bash4_optout_honored
 run_test "validate flags unguarded arrays"     test_validate_flags_unguarded_array_expansion
+run_test "validate passes guarded arrays"      test_validate_guarded_array_expansion_passes
 run_test "validate spares never-empty arrays"  test_validate_ignores_never_empty_array
+run_test "validate clean"                      test_validate_clean
 run_test "validate dangling override"          test_validate_dangling_override
 run_test "fetcher accepts --leaves"            test_fetcher_accepts_leaves_no_external
 run_test "external resolve plan"               test_external_resolve_plan
@@ -1101,17 +1369,24 @@ run_test "flags never scaffold"                test_flags_no_scaffold_unknown_ha
 run_test "flags guest connects nothing"        test_flags_guest
 run_test "flags extra --scope"                 test_flags_extra_scope
 run_test "flags name-match nested"             test_flags_name_match_nested
-run_test "wiring openclaw refuses without workspace" test_wire_openclaw_refuses_without_workspace
-run_test "legacy render flag still wires"      test_legacy_render_flag_alias
+run_test "wire openclaw refuses without workspace" test_wire_openclaw_refuses_without_workspace
+run_test "openclaw runtime config reconciled"   test_openclaw_runtime_config_reconciled
+run_test "openclaw indexes knowledge domains" test_openclaw_indexes_knowledge_domains
+run_test "openclaw no knowledge no extrapaths" test_openclaw_no_knowledge_no_extra_paths
+run_test "openclaw knowledge paths idempotent" test_openclaw_knowledge_paths_idempotent
+run_test "openclaw runtime config idempotent"   test_openclaw_runtime_config_idempotent
+run_test "openclaw runtime config without cli"  test_openclaw_runtime_config_degrades_without_cli
+run_test "openclaw runtime config skipped in sandbox" test_openclaw_runtime_config_skipped_on_wire_sandbox
+run_test "openclaw gitignore block written"   test_openclaw_gitignore_block_written
+run_test "openclaw gitignore idempotent"      test_openclaw_gitignore_idempotent
+run_test "openclaw gitignore keeps human rules" test_openclaw_gitignore_preserves_human_rules
+run_test "openclaw gitignore skipped without git" test_openclaw_gitignore_skipped_without_git
+run_test "openclaw gitignore reports tracked"  test_openclaw_gitignore_reports_tracked_summaries
 run_test "seed scope auto-joins chain"         test_seed_scope_auto_joins_chain
 run_test "no seed scope without seed/"         test_no_seed_scope_without_seed_dir
 run_test "seed scope in manifest"              test_seed_scope_in_manifest
-run_test "openclaw runtime config reconciled"  test_openclaw_runtime_config_reconciled
-run_test "openclaw runtime config idempotent"  test_openclaw_runtime_config_idempotent
-run_test "openclaw config degrades w/o CLI"    test_openclaw_runtime_config_degrades_without_cli
-run_test "openclaw config skipped on wiring"   test_openclaw_runtime_config_skipped_on_wire_sandbox
 
 echo ""
 printf "Ran %d  ${GREEN}passed %d${RESET}  ${RED}failed %d${RESET}\n" "$TESTS_RUN" "$TESTS_PASSED" "$TESTS_FAILED"
-if [[ $TESTS_FAILED -gt 0 ]]; then printf 'Failures: %s\n' ${FAILURES[@]+"${FAILURES[*]}"}; exit 1; fi
+if [[ $TESTS_FAILED -gt 0 ]]; then printf 'Failures: %s\n' ${FAILURES[*]+"${FAILURES[*]}"}; exit 1; fi
 exit 0

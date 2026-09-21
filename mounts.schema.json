@@ -1,0 +1,46 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://exobrain.local/schemas/mounts.json",
+  "title": "Mounts registry",
+  "description": "Other exobrain instances whose knowledge domains this one reads from a local checkout. Lives at the repo root. Each machine enables a mount, and may point it at an existing checkout, in its gitignored .exobrain.json under mounts.<name> ({enabled, path}); by default the checkout is src/<name>/ in the main checkout. Only knowledge domains are indexed — never the mount's specs, hooks, skills, tools, scopes, or its own mounts. See knowledge/exobrain/mounts.md.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "$schema": {
+      "type": "string",
+      "format": "uri-reference",
+      "description": "Path or URL to this schema, for editor autocomplete and validation."
+    },
+    "mounts": {
+      "type": "array",
+      "description": "One entry per mounted instance.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name", "repo", "audience"],
+        "properties": {
+          "name": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9-]*$",
+            "description": "Unique kebab-case id. Names the default checkout (src/<name>/) and prefixes each mounted domain in the knowledge index (<name>/<domain>); must not equal a local domain's directory name."
+          },
+          "repo": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Clone URL of the mounted instance. An existing checkout is accepted when its origin is the same repository in any URL spelling."
+          },
+          "audience": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Who can read that repository, shown beside its domains in the knowledge index — a fact is recorded there only when everyone named here may read it."
+          },
+          "skip_domains": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "Domain directory names of the mount left out of the index — typically its own framework meta-domain, which duplicates this instance's."
+          }
+        }
+      }
+    }
+  }
+}

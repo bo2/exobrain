@@ -28,6 +28,8 @@ Crucially, an exobrain is **one implementation of a shared concept, not a fork o
 | [`authoring.md`](authoring.md) | How to write well-formed knowledge domains — horizon, current-state, synthesis, citations |
 | [`grill.md`](grill.md) | The interview discipline — distilling and curating knowledge through adversarial, one-question-at-a-time interrogation |
 | [`propagation.md`](propagation.md) | How exobrains share improvements — the read-target/feed model, the borrow workflow, invariants |
+| [`mounts.md`](mounts.md) | Mounts — reading another instance's knowledge domains from a local checkout: what is exposed, the index, where facts go, freshness |
+| [`landing.md`](landing.md) | How a change reaches the default branch — attended and detached lands, the sweep, who repairs authoring findings, and how to check on a land |
 | [`compat.md`](compat.md) | The compatibility-shim ledger — how transitional code is marked, dated, and retired |
 | [`machinery.md`](machinery.md) | Index of the concrete machinery — every script, git/session hook, registry, and quality gate, with the verify-a-connector-change flow |
 

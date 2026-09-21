@@ -18,18 +18,11 @@ Every skill this agent sees is an exobrain repo file, scripts included — chang
 
 Sort content by one question: **would it survive replacing OpenClaw with a different agent runtime?** What survives belongs in the exobrain — knowledge, preferences, skills, tool docs. What dies with the runtime stays in OpenClaw's workspace — cron definitions, chat ids, ports, session policy, daily memory. Where the two meet, procedure is portable and wiring is not: a cron prompt names the skill it runs rather than restating one. OpenClaw is itself a **tool** by `AGENTS.md` § Tools, so what any agent needs in order to drive this machine belongs in its tool doc, while gotchas only OpenClaw needs about itself stay in `MEMORY.md`.
 
-A memory-consolidation pass is therefore an exobrain review, not a filing exercise: **reconcile rather than append** — correct what a new note contradicts instead of stacking another version of the fact beside it — and once something is promoted, keep no second copy of the synthesis in `MEMORY.md`. Raw notes and routine churn stay in OpenClaw memory to be pruned normally. Entries OpenClaw's own dreaming sweep promotes into `MEMORY.md` are candidates for that review, not durable truth.
+A memory-consolidation pass is therefore an exobrain review, not a filing exercise: **reconcile rather than append** — correct what a new note contradicts instead of stacking another version of the fact beside it — and once something is promoted, keep no second copy of the synthesis in `MEMORY.md`. Raw notes and routine churn stay in OpenClaw memory to be pruned normally; raw capture — session-reset transcripts, the dreaming sweep's corpus and logs — is a local cache the connector gitignores in the workspace, so promote from it while it is still there. Entries OpenClaw's own dreaming sweep promotes into `MEMORY.md` are candidates for that review, not durable truth.
 
 ## Persisting from a chat turn
 
-A land (`scripts/persist.sh`, the `exobrain-persist` skill) spends a minute or two on git and forge round-trips; a chat turn must not hold the session lane for it, or the person's next message queues behind git. Under OpenClaw:
-
-1. Make the change in a worktree and commit it. The commit is the durable point — "saved" means committed on the branch, not merged. Anything this same turn reads back reads the worktree file; later turns read the default branch once the land completes.
-2. Reply to the person.
-3. Start the land detached — `exec` with `background: true`, running `scripts/persist.sh` from inside the worktree (`-m` when the work is still uncommitted; `--machinery-verified` when the skill's step 3 applies) — and end the turn. Don't poll `process` for it.
-4. The process exit wakes the session. Exit `0`: nothing to say. Non-zero: tell the requester the change is committed on its branch but not yet landed, and what failed; the host's scheduled `scripts/persist.sh --sweep` retries a claimed worktree on its next pass, so a transient failure needs no action from anyone.
-
-A scheduled (cron) session has no one waiting and runs the script in the foreground.
+A turn that answers a channel message is a chat turn in the sense of the `exobrain-persist` skill § Land; a scheduled (cron) session is not. That step says which form of `scripts/persist.sh` each runs. Anything the chat turn reads back after saving reads the worktree file; later turns read the default branch once the land completes. A land that fails after the commit is retried by the host's scheduled `scripts/persist.sh --sweep`; no chat turn reports on it.
 
 ## Git history hygiene
 
@@ -37,7 +30,7 @@ Keep this repo's history agent-neutral — omit OpenClaw's default attribution f
 
 ## Auto-loading
 
-OpenClaw has no `@`-import primitive and auto-loads the root `AGENTS.md` but not the root sidecar, so `scripts/connect-agent.sh openclaw` delivers the rest of the composition into its private `~/.openclaw/workspace/USER.md`, between `<!-- BEGIN exobrain -->` … `<!-- END exobrain -->` markers: this file (`OPENCLAW.md`) if present, then the shared deeper-scope content — every connected scope's `AGENTS.md` (shallow→deep), the OpenClaw-filtered optional-skills index, the tools index, and the knowledge index. The same run reconciles OpenClaw's config so the linked skills load (§ Skills are exobrain files).
+OpenClaw has no `@`-import primitive and auto-loads the root `AGENTS.md` but not the root sidecar, so `scripts/connect-agent.sh openclaw` delivers the rest of the composition into its private `~/.openclaw/workspace/USER.md`, between `<!-- BEGIN exobrain -->` … `<!-- END exobrain -->` markers: this file (`OPENCLAW.md`) if present, then the shared deeper-scope content — every connected scope's `AGENTS.md` (shallow→deep), the OpenClaw-filtered optional-skills index, the tools index, and the knowledge index. The same run reconciles OpenClaw's config — so the linked skills load (§ Skills are exobrain files), the bootstrap budget holds the whole injected block, and semantic recall indexes the knowledge domains — and keeps the runtime's raw memory capture out of the workspace's git history (§ Exobrain versus OpenClaw memory).
 
 ## MCP servers
 

@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 # validate-exobrain.sh — deterministic checks against the conventions in
-# AGENTS.md. Fast and free (sub-second on a clean repo); runs from the
+# AGENTS.md. Offline and free, and seconds rather than minutes while three rules
+# hold: a whole-tree check greps through grep_files, never a process per file;
+# a check that must spend a process per file (bash -n) stays diff-scoped; and a
+# bulk directory .gitignore excludes gets pruned in find_repo. Runs from the
 # pre-push hook installed by connect-agent.sh and is also runnable manually.
 #
 # Catches:
@@ -8,11 +11,24 @@
 #     a valid scope, so only content-tree placement is rejected.
 #   - Custom UPPERCASE.md filenames (allowed: standard open-source +
 #     AI/tool entry-point conventions).
-#   - JSON syntax errors in skills.json and scopes.json files.
+#   - JSON syntax errors in skills.json, scopes.json, and mounts.json files.
 #   - scopes.json shape (type + collection; reserved/kebab-case rules).
+#   - mounts.json shape (kebab-case unique names, a repo, an audience; no name
+#     colliding with a local knowledge domain).
+#   - Relative markdown links escaping the repository in changed files — they
+#     break in every other clone, and from a mounted checkout they reach into the
+#     instance that mounts it. Diff-scoped like the path check below.
+#   - Raw-format files (photos, PDFs, office documents, email and bank exports,
+#     archives, audio, video) newly added under knowledge/ or workspaces/ — raw
+#     data stays in its own system or the person's file store. Diff-scoped, added
+#     files only.
 #   - Domain-profile authoring (deterministic subset of authoring.md): file:line
 #     citations in profiles; "(verified <date>)" temporal markers. Excludes _raw/
 #     and the exobrain meta-domain.
+#   - Shell scripts that do not parse (`bash -n`) — a `*.sh` or any file with a
+#     bash or sh shebang, in changed files only.
+#   - Python that does not compile — a `*.py` or any file with a python shebang,
+#     in changed files only, under this machine's python3.
 #   - Skills registry integrity (delegated to skills-validate.sh).
 #   - Cron registry shape — every per-scope crons.json (delegated to
 #     openclaw-cron-sync.py --check; no gateway access, no openclaw binary).
@@ -52,19 +68,28 @@ VIOLATIONS=()
 record() { VIOLATIONS+=("$1"); }
 
 # find_repo <find-expr...> — list repo files matching the expression, PRUNING
-# clone/generated/vendor dirs so find never descends into them. A plain
-# `-not -path` only filters output while find still walks the whole tree, which
-# on a big checkout (large src/ clones, agent worktrees) makes the validator —
-# and the pre-push hook that runs it — take minutes. Pruning keeps it sub-second.
+# clone/generated/vendor/cache dirs so find never descends into them. A plain
+# `-not -path` only filters output while find still walks the whole tree, and
+# every check that calls this walks it again — on a checkout carrying large
+# src/ clones, agent worktrees, or workspace `_cache/` exports, that makes the
+# validator and the pre-push hook that runs it take minutes. `_cache` and the
+# name-matched dirs are pruned at any depth, as .gitignore ignores them.
 find_repo() {
     find "$REPO_DIR" \
         \( -path "$REPO_DIR/.git" -o -path "$REPO_DIR/.claude" -o -path "$REPO_DIR/src" \
            -o -path "$REPO_DIR/.src" -o -path "$REPO_DIR/.worktrees" \
            -o -path "$REPO_DIR/.agent-worktrees" -o -path "$REPO_DIR/.agent-runs" \
            -o -path "$REPO_DIR/.agent-control" -o -path "$REPO_DIR/.agents" \
-           -o -path "$REPO_DIR/tmp" -o -name node_modules -o -name __pycache__ \) -prune \
+           -o -path "$REPO_DIR/tmp" -o -name node_modules -o -name __pycache__ \
+           -o -name _cache \) -prune \
         -o "$@" -print 2>/dev/null
 }
+
+# grep_files <grep-args...> — grep the newline-separated file list on stdin,
+# batched through xargs. A loop that greps one file at a time starts a process
+# per file, which across a repo is most of the validator's runtime; one call
+# per batch lists files and matches in the same order the loop would have.
+grep_files() { tr '\n' '\0' | xargs -0 -r grep "$@" 2>/dev/null; }
 
 # ---------------------------------------------------------------------------
 # AGENTS.md placement — the scope flag. Any dir may carry one (it becomes a scope);
@@ -94,18 +119,18 @@ ALLOWED_UPPERCASE=$'AGENTS\nREADME\nCLAUDE\nCODEX\nOPENCLAW\nSKILL\nMEMORY\nTIME
 
 while IFS= read -r f; do
     [[ -z "$f" ]] && continue
-    base="$(basename "$f" .md)"
+    base="${f##*/}"; base="${base%.md}"
     # Lowercase-or-mixed-case files are fine here; only flag ALL-UPPERCASE
     # (or UPPER_WITH_UNDERSCORES / UPPER-WITH-DASHES) names.
     if [[ "$base" =~ ^[A-Z][A-Z0-9_-]*$ ]]; then
-        if ! grep -qxF "$base" <<<"$ALLOWED_UPPERCASE"; then
+        if [[ $'\n'"$ALLOWED_UPPERCASE"$'\n' != *$'\n'"$base"$'\n'* ]]; then
             record "Custom UPPERCASE filename: ${f#"$REPO_DIR"/} (use lowercase kebab-case unless it's a standard convention)"
         fi
     fi
 done < <(find_repo -name '*.md' -not -path '*/_raw/*')
 
 # ---------------------------------------------------------------------------
-# JSON syntax — skills.json files, scopes.json files
+# JSON syntax — skills.json, scopes.json, and mounts.json files
 # ---------------------------------------------------------------------------
 
 while IFS= read -r f; do
@@ -113,7 +138,7 @@ while IFS= read -r f; do
     if ! jq -e . "$f" >/dev/null 2>&1; then
         record "Invalid JSON: ${f#"$REPO_DIR"/}"
     fi
-done < <(find_repo \( -name 'skills.json' -o -name 'scopes.json' \))
+done < <(find_repo \( -name 'skills.json' -o -name 'scopes.json' -o -name 'mounts.json' \))
 
 # ---------------------------------------------------------------------------
 # scopes.json shape (optional file) — each entry needs type + collection; no
@@ -131,6 +156,33 @@ if [[ -f "$REPO_DIR/scopes.json" ]] && jq -e . "$REPO_DIR/scopes.json" >/dev/nul
             record "scopes.json: collection '$collection' is not a simple kebab-case segment"
         fi
     done < <(jq -r '(.scopes // [])[] | [(.type // ""), (.collection // "")] | @tsv' "$REPO_DIR/scopes.json" 2>/dev/null)
+fi
+
+# ---------------------------------------------------------------------------
+# mounts.json shape (optional file) — see knowledge/exobrain/mounts.md. A name
+# becomes a path (src/<name>/) and the prefix of its index rows, so it is a unique
+# kebab-case segment that no local domain already uses; the audience is required
+# because an agent recording a fact decides by it which repository may hold it.
+# ---------------------------------------------------------------------------
+
+if [[ -f "$REPO_DIR/mounts.json" ]] && jq -e . "$REPO_DIR/mounts.json" >/dev/null 2>&1; then
+    if ! jq -e '(.mounts // []) | type == "array"' "$REPO_DIR/mounts.json" >/dev/null 2>&1; then
+        record "mounts.json: 'mounts' must be an array"
+    else
+        while IFS=$'\x1f' read -r m_name m_repo m_audience m_skip_ok; do
+            if [[ -z "$m_name" ]]; then record "mounts.json: entry missing 'name'"; continue; fi
+            [[ "$m_name" =~ ^[a-z0-9][a-z0-9-]*$ ]] || record "mounts.json: name '$m_name' is not a kebab-case segment"
+            [[ -n "$m_repo" ]] || record "mounts.json: mount '$m_name' missing 'repo'"
+            [[ -n "$m_audience" ]] || record "mounts.json: mount '$m_name' missing 'audience' (who can read that repository)"
+            [[ "$m_skip_ok" == true ]] || record "mounts.json: mount '$m_name' 'skip_domains' must be an array of domain names"
+            [[ -d "$REPO_DIR/knowledge/$m_name" ]] && record "mounts.json: mount '$m_name' collides with the local domain knowledge/$m_name"
+        done < <(jq -r '.mounts // [] | .[] | [(.name // "" | tostring), (.repo // "" | tostring), (.audience // "" | tostring),
+                    ((.skip_domains // []) | (type == "array" and all(type == "string")) | tostring)] | join("\u001f")' \
+                    "$REPO_DIR/mounts.json" 2>/dev/null)
+        while IFS= read -r dup; do
+            [[ -n "$dup" ]] && record "mounts.json: duplicate mount name '$dup'"
+        done < <(jq -r '(.mounts // [])[] | .name // empty' "$REPO_DIR/mounts.json" 2>/dev/null | sort | uniq -d)
+    fi
 fi
 
 # ---------------------------------------------------------------------------
@@ -186,16 +238,16 @@ fi
 # `# exobrain-allow-bash4` and says why.
 # ---------------------------------------------------------------------------
 
-while IFS= read -r f; do
-    [[ -n "$f" ]] || continue
-    grep -qF 'exobrain-allow-bash4' "$f" 2>/dev/null && continue
-    rel="${f#"$REPO_DIR"/}"
-    while IFS= read -r hit; do
-        [[ -n "$hit" ]] || continue
-        record "bash 4 construct in $rel:${hit%%:*} — macOS ships bash 3.2 at /bin/bash"
-    done < <(grep -nE '(^|[;&|(`]|[[:space:]])(mapfile|readarray)[[:space:]]|declare[[:space:]]+-A' "$f" 2>/dev/null \
-             | grep -vE '^[0-9]+:[[:space:]]*#')
-done < <(find_repo -type f -name '*.sh' -not -path '*/_raw/*')
+_sh_files="$(find_repo -type f -name '*.sh' -not -path '*/_raw/*')"
+_bash4_optout=$'\n'"$(printf '%s\n' "$_sh_files" | grep_files -lF 'exobrain-allow-bash4')"$'\n'
+while IFS= read -r hit; do
+    [[ -n "$hit" ]] || continue
+    f="${hit%%:*}"; rest="${hit#*:}"
+    [[ "$_bash4_optout" == *$'\n'"$f"$'\n'* ]] && continue
+    record "bash 4 construct in ${f#"$REPO_DIR"/}:${rest%%:*} — macOS ships bash 3.2 at /bin/bash"
+done < <(printf '%s\n' "$_sh_files" \
+         | grep_files -HnE '(^|[;&|(`]|[[:space:]])(mapfile|readarray)[[:space:]]|declare[[:space:]]+-A' \
+         | grep -vE '^[^:]*:[0-9]+:[[:space:]]*#')
 
 # ---------------------------------------------------------------------------
 # Empty-array expansion — the same bash 3.2, which treats an empty array as
@@ -208,10 +260,7 @@ done < <(find_repo -type f -name '*.sh' -not -path '*/_raw/*')
 # ---------------------------------------------------------------------------
 
 _empty_arrays="$(
-    while IFS= read -r f; do
-        [[ -n "$f" ]] || continue
-        grep -oE '[A-Za-z_][A-Za-z0-9_]*=\(\)' "$f" 2>/dev/null
-    done < <(find_repo -type f -name '*.sh' -not -path '*/_raw/*') | sed 's/=()$//' | sort -u
+    printf '%s\n' "$_sh_files" | grep_files -ohE '[A-Za-z_][A-Za-z0-9_]*=\(\)' | sed 's/=()$//' | sort -u
 )"
 
 if [[ -n "$_empty_arrays" ]]; then
@@ -221,17 +270,15 @@ if [[ -n "$_empty_arrays" ]]; then
     # A guarded expansion contains the bare form as a substring, so strip the
     # guards from the line before looking for what is left.
     _guard_re='\$\{[A-Za-z_][A-Za-z0-9_]*\[[@*]\]\+"\$\{!?[A-Za-z_][A-Za-z0-9_]*\[[@*]\]\}"\}'
-    while IFS= read -r f; do
-        [[ -n "$f" ]] || continue
-        rel="${f#"$REPO_DIR"/}"
-        while IFS= read -r hit; do
-            [[ -n "$hit" ]] || continue
-            record "unguarded array expansion in $rel:${hit%%:*} — write \${name[@]+\"\${name[@]}\"}; bash 3.2 errors on an empty array under set -u"
-        done < <(grep -nE "$_bare_re" "$f" 2>/dev/null \
-                 | sed -E "s/$_guard_re//g" \
-                 | grep -E "$_bare_re" \
-                 | grep -vE '^[0-9]+:[[:space:]]*#')
-    done < <(find_repo -type f -name '*.sh' -not -path '*/_raw/*')
+    while IFS= read -r hit; do
+        [[ -n "$hit" ]] || continue
+        f="${hit%%:*}"; rest="${hit#*:}"
+        record "unguarded array expansion in ${f#"$REPO_DIR"/}:${rest%%:*} — write \${name[@]+\"\${name[@]}\"}; bash 3.2 errors on an empty array under set -u"
+    done < <(printf '%s\n' "$_sh_files" \
+             | grep_files -HnE "$_bare_re" \
+             | sed -E "s/$_guard_re//g" \
+             | grep -E "$_bare_re" \
+             | grep -vE '^[^:]*:[0-9]+:[[:space:]]*#')
 fi
 
 # ---------------------------------------------------------------------------
@@ -281,6 +328,7 @@ if [[ -f "$COMPAT_LEDGER" ]]; then
     # comment, in any language — so a doc or a test that merely quotes the string
     # "COMPAT 0001" isn't mistaken for live transitional code. The ledger is skipped
     # because its convention section shows an example marker.
+    _compat_marker_re='^[[:space:]]*(#|//|--|/\*|\*|<!--)[[:space:]]*COMPAT [0-9]{4}'
     while IFS= read -r f; do
         [[ -z "$f" || "$f" == "$COMPAT_LEDGER" ]] && continue
         while IFS= read -r marker; do
@@ -302,8 +350,8 @@ if [[ -f "$COMPAT_LEDGER" ]]; then
                 compat_row_lists "$mid" "$rel" || \
                     record "COMPAT $mid marker in a file its ledger row doesn't list: $rel"
             fi
-        done < <(grep -IhE '^[[:space:]]*(#|//|--|/\*|\*|<!--)[[:space:]]*COMPAT [0-9]{4}' "$f" 2>/dev/null)
-    done < <(find_repo -type f -not -path '*/_raw/*')
+        done < <(grep -IhE "$_compat_marker_re" "$f" 2>/dev/null)
+    done < <(find_repo -type f -not -path '*/_raw/*' | grep_files -IlE "$_compat_marker_re")
 fi
 
 # ---------------------------------------------------------------------------
@@ -354,6 +402,138 @@ if [[ -n "$default_ref" ]]; then
             record "machine-specific path outside host scope — use a relative path, an env var, or host scope (AGENTS.md § Conventions): $f:${hit%%:*}"
         done < <(grep -InE '/(Users|home)/[A-Za-z0-9._-]+/' "$REPO_DIR/$f" 2>/dev/null | head -5)
     done < <(git -C "$REPO_DIR" diff --name-only "$default_ref...HEAD" 2>/dev/null)
+fi
+
+# ---------------------------------------------------------------------------
+# Shell syntax — a script that does not parse fails only when something runs it,
+# which for a rarely-run script or a test stub can be long after the change that
+# broke it. `bash -n` parses without executing. Diff-scoped like the path check
+# above: a script's syntax changes only when it is edited, and parsing costs a
+# process per script. A script is recognised by its shebang as well as its
+# extension, so an extensionless command stub is covered, and a file whose
+# shebang names another shell is left alone rather than misjudged.
+# ---------------------------------------------------------------------------
+
+if [[ -n "$default_ref" ]]; then
+    _shell_shebang='^#!.*[/[:space:]](ba)?sh([[:space:]]|$)'
+    while IFS= read -r f; do
+        [[ -z "$f" ]] && continue
+        case "$f" in */_raw/*|tmp/*) continue ;; esac
+        [[ -f "$REPO_DIR/$f" && ! -L "$REPO_DIR/$f" ]] || continue
+        shebang="$(head -n 1 "$REPO_DIR/$f" 2>/dev/null)"
+        if [[ "$shebang" == '#!'* ]]; then
+            [[ "$shebang" =~ $_shell_shebang ]] || continue
+        else
+            [[ "$f" == *.sh ]] || continue    # no shebang: only a .sh is known to be shell
+        fi
+        err="$(bash -n "$REPO_DIR/$f" 2>&1)" && continue
+        first="$(printf '%s\n' "$err" | head -n 1)"
+        line="$(sed -nE 's/^.*: line ([0-9]+): .*$/\1/p' <<<"$first")"
+        record "shell syntax error in $f:${line:-?} — ${first#*: line *: }"
+    done < <(git -C "$REPO_DIR" diff --name-only "$default_ref...HEAD" 2>/dev/null)
+fi
+
+# ---------------------------------------------------------------------------
+# Python syntax — the same gap as shell, closed the same way and diff-scoped
+# alike. Changed files are compiled in one python3 process with compile(), which
+# also catches what a parse alone lets through (a `return` outside a function)
+# and writes no bytecode. A file is Python by its .py or its shebang. It compiles
+# under this machine's python3, so syntax newer than that fails here — as the
+# script would when run here.
+# ---------------------------------------------------------------------------
+
+_py_compile_all() {   # compile each path; print "path:line — message" per failure
+    python3 - "$@" <<'PY'
+import sys
+for path in sys.argv[1:]:
+    try:
+        with open(path, "rb") as fh:
+            compile(fh.read(), path, "exec", dont_inherit=True)
+    except SyntaxError as e:
+        print(f"{path}:{e.lineno or '?'} — {e.msg}")
+    except (OSError, ValueError) as e:
+        print(f"{path}:? — {e}")
+PY
+}
+
+if [[ -n "$default_ref" ]] && command -v python3 >/dev/null 2>&1; then
+    _py_shebang='^#!.*[/[:space:]]python[0-9.]*([[:space:]]|$)'
+    _py_changed=()
+    while IFS= read -r f; do
+        [[ -z "$f" ]] && continue
+        case "$f" in */_raw/*|tmp/*) continue ;; esac
+        [[ -f "$REPO_DIR/$f" && ! -L "$REPO_DIR/$f" ]] || continue
+        if [[ "$f" != *.py ]]; then
+            [[ "$(head -n 1 "$REPO_DIR/$f" 2>/dev/null)" =~ $_py_shebang ]] || continue
+        fi
+        _py_changed+=("$f")
+    done < <(git -C "$REPO_DIR" diff --name-only "$default_ref...HEAD" 2>/dev/null)
+    if [[ ${#_py_changed[@]} -gt 0 ]]; then
+        while IFS= read -r hit; do
+            [[ -n "$hit" ]] && record "python syntax error in $hit"
+        done < <(cd "$REPO_DIR" && _py_compile_all ${_py_changed[@]+"${_py_changed[@]}"})
+    fi
+fi
+
+# ---------------------------------------------------------------------------
+# Links escaping the repository — a relative markdown link whose target climbs
+# above the repo root breaks in every other clone, and from a checkout mounted in
+# another instance (its src/<name>/) it reaches into that instance, which a mount
+# never references (knowledge/exobrain/mounts.md). Diff-scoped like the path
+# check above; _raw/ exempt.
+# ---------------------------------------------------------------------------
+
+# link_escapes <repo-relative-file> <relative-target> — true when the target,
+# resolved from the file's directory, climbs above the repository root.
+link_escapes() {
+    local dir depth=0 seg
+    dir="$(dirname "$1")"
+    [[ "$dir" == "." ]] || depth="$(awk -F/ '{print NF}' <<< "$dir")"
+    local IFS=/
+    for seg in $2; do
+        case "$seg" in
+            ""|.) ;;
+            ..)   depth=$((depth - 1)); (( depth >= 0 )) || return 0 ;;
+            *)    depth=$((depth + 1)) ;;
+        esac
+    done
+    return 1
+}
+
+if [[ -n "$default_ref" ]]; then
+    while IFS= read -r f; do
+        [[ "$f" == *.md ]] || continue
+        case "$f" in _raw/*|*/_raw/*|tmp/*) continue ;; esac
+        [[ -f "$REPO_DIR/$f" ]] || continue
+        while IFS= read -r hit; do
+            [[ -n "$hit" ]] || continue
+            target="${hit#*:](}"; target="${target%%#*}"
+            case "$target" in ""|*://*|mailto:*|/*|"~"*) continue ;; esac
+            if link_escapes "$f" "$target"; then
+                record "relative link escapes the repository — link inside it, or name the other repository (knowledge/exobrain/mounts.md): $f:${hit%%:*}"
+            fi
+        done < <(grep -noE '\]\([^)[:space:]]+' "$REPO_DIR/$f" 2>/dev/null)
+    done < <(git -C "$REPO_DIR" diff --name-only "$default_ref...HEAD" 2>/dev/null)
+fi
+
+# ---------------------------------------------------------------------------
+# Raw data — the exobrain holds what was made from data; the data stays in its own
+# system or the person's file store (AGENTS.md § Synthesized knowledge, not raw data). A file
+# in an unambiguously raw format newly ADDED under knowledge/ or workspaces/ is
+# blocked; files already tracked are left alone. Text formats (CSV, JSON, …) pass,
+# being as often derived as raw, and so do PNG, SVG, and GIF, the formats charts
+# and recordings of the work itself come in.
+# ---------------------------------------------------------------------------
+
+RAW_FORMAT_RE='\.(jpe?g|heic|heif|tiff?|bmp|webp|pdf|docx?|xlsx?|xlsm|pptx?|odt|ods|numbers|pages|key|eml|mbox|msg|ofx|qfx|qbo|ged|zip|7z|rar|tar|gz|tgz|mp3|m4a|wav|flac|ogg|mov|mp4|m4v|avi|mkv)$'
+if [[ -n "$default_ref" ]]; then
+    while IFS= read -r f; do
+        [[ -n "$f" ]] || continue
+        case "$f" in knowledge/*|workspaces/*) ;; *) continue ;; esac
+        if grep -qiE "$RAW_FORMAT_RE" <<< "$f"; then
+            record "raw-format file added — keep raw data in its own system or the person's file store, and link it (AGENTS.md § Synthesized knowledge, not raw data): $f"
+        fi
+    done < <(git -C "$REPO_DIR" diff --name-only --diff-filter=A "$default_ref...HEAD" 2>/dev/null)
 fi
 
 # ---------------------------------------------------------------------------

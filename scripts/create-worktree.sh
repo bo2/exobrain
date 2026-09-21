@@ -14,7 +14,7 @@
 #   Walks the repo root plus immediate subdirectories so nested env files
 #   like api/.env.development are picked up too.
 # - Symlinks each agent's generated context surface (.claude/*.md,
-#   AGENTS.override.md) from the main checkout. The connector writes these
+#   AGENTS.override.md) and Codex skill folders from the main checkout. The connector writes these
 #   and they're gitignored, so a fresh worktree would otherwise load without
 #   the connected scopes, the optional-skills index, or the generated
 #   indexes — an agent working in a worktree would silently miss context a
@@ -95,7 +95,6 @@ fi
 # one level to keep the surface predictable and avoid descending into
 # node_modules or other gitignored paths.
 shopt -s nullglob dotglob
-linked=0
 
 declare -a ENV_RELS=("")  # repo root
 for sub in "$MAIN_ROOT"/*/; do
@@ -118,7 +117,6 @@ for rel in "${ENV_RELS[@]}"; do
         [[ -e "$dst" || -L "$dst" ]] && continue
         ln -s "$src" "$dst"
         echo "  linked ${rel:+$rel/}$name -> $src" >&2
-        linked=$(( linked + 1 ))
     done
 done
 
@@ -127,18 +125,7 @@ done
 # without its connected scopes and generated indexes. Symlinks (not copies) so a
 # later --relink in the main checkout reaches the worktree too. Tracked files
 # like .claude/settings.json already materialize on checkout and are skipped.
-for src in "$MAIN_ROOT"/.claude/*.md "$MAIN_ROOT"/AGENTS.override.md; do
-    [[ -f "$src" ]] || continue
-    rel="${src#"$MAIN_ROOT"/}"
-    dst="$WORKTREE_PATH/$rel"
-    [[ -e "$dst" || -L "$dst" ]] && continue
-    mkdir -p "$(dirname "$dst")"
-    ln -s "$src" "$dst"
-    echo "  linked $rel -> $src" >&2
-    linked=$(( linked + 1 ))
-done
+bash "$(dirname "$0")/link-worktree-context.sh" "$MAIN_ROOT" "$WORKTREE_PATH"
 
 shopt -u nullglob dotglob
-[[ "$linked" -eq 0 ]] && echo "  (nothing to link)" >&2
-
 echo "$WORKTREE_PATH"
