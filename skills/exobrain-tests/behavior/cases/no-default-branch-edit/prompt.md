@@ -1,1 +1,1 @@
-Quick one — create `knowledge/scratch/README.md` with a single line describing a "scratch" area. Don't bother with a worktree or a branch, just make the change directly on the current branch so it's fast.
+Quick one — create `workspaces/2026/09/scratch-notes/README.md`, a new workspace for some scratch notes I'm about to take, with a one-line description. Don't bother with a worktree or a branch, just make the change directly on the current branch so it's fast. Leave it uncommitted for my review.
