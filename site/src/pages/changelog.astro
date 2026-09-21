@@ -1,0 +1,102 @@
+---
+import StarlightPage from '@astrojs/starlight/components/StarlightPage.astro';
+import { getCollection } from 'astro:content';
+
+const cards = (await getCollection('feed')).sort(
+  (a, b) => b.data.date.getTime() - a.data.date.getTime() || b.id.localeCompare(a.id),
+);
+
+const monthOf = (d: Date) =>
+  d.toLocaleDateString('en-GB', { month: 'long', year: 'numeric', timeZone: 'UTC' });
+const dayOf = (d: Date) =>
+  d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' });
+
+const months: { label: string; slug: string; cards: typeof cards }[] = [];
+for (const card of cards) {
+  const label = monthOf(card.data.date);
+  let month = months.at(-1);
+  if (month?.label !== label) {
+    month = { label, slug: label.toLowerCase().replace(/\s+/g, '-'), cards: [] };
+    months.push(month);
+  }
+  month.cards.push(card);
+}
+
+const source = 'https://github.com/bo2/exobrain/blob/main/seed/feed/';
+---
+
+<StarlightPage
+  frontmatter={{
+    title: 'Changelog',
+    description: 'Every change to the exobrain framework, newest first — the dated feed cards an instance adopts.',
+  }}
+  headings={months.map((m) => ({ depth: 2, slug: m.slug, text: m.label }))}
+>
+  <p>
+    Every change to the framework, newest first — {cards.length} so far. Each entry is a feed card: the
+    dated note your agent reads to adopt the change into your own exobrain (see{' '}
+    <a href="/concepts/staying-current/">Staying current</a>). Entries marked{' '}
+    <span class="inv">invariant</span> change security, scope-resolution, or validation semantics.
+  </p>
+  <p>
+    Changes to this site and its documentation aren't listed; they're in the{' '}
+    <a href="https://github.com/bo2/exobrain/commits/main">git history</a>.
+  </p>
+
+  {
+    months.map((month) => (
+      <>
+        <h2 id={month.slug}>{month.label}</h2>
+        <ul class="log">
+          {month.cards.map((card) => (
+            <li>
+              <time datetime={card.data.date.toISOString().slice(0, 10)}>{dayOf(card.data.date)}</time>
+              <span>
+                <a href={`${source}${card.id}.md`}>{card.data.title}</a>
+                {card.data.touches_invariant && <span class="inv">invariant</span>}
+              </span>
+            </li>
+          ))}
+        </ul>
+      </>
+    ))
+  }
+
+  <p>
+    The feed starts in June 2026, when exobrain's patterns were first lifted out of the private instance
+    where it began. The{' '}<a href="/maintainer/">maintainer page</a> has that story.
+  </p>
+</StarlightPage>
+
+<style>
+  .log {
+    list-style: none;
+    padding: 0;
+  }
+
+  .log li {
+    display: grid;
+    grid-template-columns: 4.5rem 1fr;
+    gap: 0.75rem;
+    margin: 0;
+    padding-block: 0.35rem;
+    border-bottom: 1px solid var(--sl-color-hairline);
+  }
+
+  .log time {
+    font-family: var(--sl-font-mono);
+    font-size: var(--sl-text-sm);
+    color: var(--sl-color-gray-3);
+    white-space: nowrap;
+  }
+
+  .inv {
+    margin-inline-start: 0.5rem;
+    font-size: var(--sl-text-xs);
+    color: var(--sl-color-gray-3);
+    border: 1px solid var(--sl-color-gray-5);
+    border-radius: 0.2rem;
+    padding: 0 0.3rem;
+    white-space: nowrap;
+  }
+</style>
