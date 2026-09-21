@@ -4,28 +4,8 @@
   opacity: 1;
 }
 
-/* The landing page is a document, not a pitch. The splash hero keeps its
-   structure and gives up its scale: a title at heading size and a lead
-   sentence, both at the size the rest of the site uses. */
-.hero {
-  padding-block: 1.5rem 0.25rem;
-}
-
-.hero h1 {
-  font-size: var(--sl-text-3xl);
-  font-weight: 600;
-  line-height: 1.2;
-}
-
-.hero .tagline {
-  font-size: var(--sl-text-lg);
-  line-height: 1.5;
-  color: var(--sl-color-white);
-}
-
-/* Splash pages span the full container, which is far too wide a measure for
-   prose. The landing page reads as a document, so hold it to one. */
-main:has(.hero) .sl-markdown-content,
-main:has(.hero) .hero .tagline {
-  max-width: 80ch;
+/* The landing prompt is two long lines that have to read whole in the
+   content column, with the always-visible copy button clear of the text. */
+.sl-markdown-content .prompt .expressive-code {
+  --ec-codeFontSize: 0.8rem;
 }
