@@ -14,6 +14,10 @@
 # Exit: 0 all passed | 1 some failed | 2 harness error.
 set -uo pipefail
 
+# A caller's opt-out (persist.sh run with the review skipped) must not reach the
+# harnesses that test the review gate itself.
+unset EXOBRAIN_SKIP_AUTHORING_REVIEW
+
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 INSTANCE_DIR="$(cd "$SCRIPT_DIR/../../.." && pwd)"   # repo root: unit→exobrain-tests→skills→root
 
@@ -25,6 +29,7 @@ authoring-review|test-authoring-review.sh|scripts/authoring-review.sh
 compat-ledger|test-compat-ledger.sh|the compat-shim gates in validate-exobrain.sh + exobrain-healthcheck.sh
 openclaw-cron-sync|test-openclaw-cron-sync.sh|scripts/openclaw-cron-sync.py (crons.json validation + gateway reconciliation)
 mounts|test-mounts.sh|scripts/mounts.sh, the mounted knowledge index, and the mount checks in the healthcheck and validator
+agent-attribution|test-agent-attribution.sh|scripts/strip-agent-attribution.sh (the commit-msg hook) and the agent-attribution check in validate-exobrain.sh
 raw-data|test-raw-data.sh|the raw-format gate in validate-exobrain.sh (raw data added under knowledge/ or workspaces/)
 script-syntax|test-script-syntax.sh|the syntax gates in validate-exobrain.sh (bash -n and python compile over changed scripts)
 validator-scan|test-validator-scan.sh|find_repo pruning in validate-exobrain.sh (gitignored bulk directories are never walked)

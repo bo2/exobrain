@@ -30,8 +30,8 @@
 # --sweep.
 #
 # A detached or swept land is unattended: nobody is there to act on an authoring
-# finding, so the review's findings go into the PR body for the curator instead
-# of blocking. The review's deterministic proof gate (exit 2) blocks either way,
+# finding, so the review's findings are posted as a comment review on the PR for
+# the curator instead of blocking. The review's deterministic proof gate (exit 2) blocks either way,
 # and so does the validator. A foreground land blocks on every finding.
 #
 # --context <file> copies that file into the PR body as the session's handover to
@@ -71,7 +71,8 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 MACHINERY_FLAG="--machinery-verified"
 MACHINERY_VERIFIED="${MACHINERY_VERIFIED:-0}"
 UNIT_SUITE="skills/exobrain-tests/unit/run.sh"
-# PR-body section headings; findings-pending.sh finds unattended lands by the second.
+# CONTEXT_HEADING opens the --context section of the PR body; FINDINGS_HEADING opens
+# the review an unattended land posts, which is how findings-pending.sh finds it.
 CONTEXT_HEADING="## Source context (from the session that made this change)"
 FINDINGS_HEADING="## Authoring review (unattended land, not blocking)"
 LOCK_STALE_MINUTES=30
@@ -216,6 +217,18 @@ pr_state() {
     (cd "$1" && gh pr list --head "$2" --state all --json number,state --jq '.[0] | select(. != null) | "\(.number) \(.state)"' 2>/dev/null) || true
 }
 
+# post_findings_review <worktree> <number> — post REVIEW_NOTE's findings as a
+# comment review on PR <number>, unless an earlier run of this land already did.
+post_findings_review() {
+    local posted findings
+    posted="$(cd "$1" && gh pr view "$2" --json reviews --jq '.reviews[].body' 2>/dev/null)" || posted=""
+    [[ "$posted" == *"$FINDINGS_HEADING"* ]] && return 0
+    findings="$(sed -n '/flagged/,/^For a deeper/p' <<< "$REVIEW_NOTE" | sed -e '1d' -e '$d' | cat -s)"
+    log "posting the authoring findings as a review on PR $2"
+    (cd "$1" && gh pr review "$2" --comment --body "$FINDINGS_HEADING"$'\n\n'"$findings") \
+        || die "posting the authoring review on PR $2 failed"
+}
+
 # land <worktree path> [message] [timeline summary] [author]
 land() {
     local wt="$1" message="${2:-}" tl_summary="${3:-}" author="${4:-}"
@@ -303,7 +316,7 @@ land() {
         [[ -z "$review_out" ]] || echo "$review_out"
         if (( review_rc != 0 )); then
             if (( review_rc == 1 && UNATTENDED )); then
-                log "unattended land: the findings go into the PR body instead of blocking"
+                log "unattended land: the findings go into a review on the PR instead of blocking"
                 REVIEW_NOTE="$review_out"
             else
                 die "authoring review flagged violations — fix, amend, then re-run"
@@ -335,9 +348,6 @@ land() {
             if [[ -n "$CONTEXT_NOTE" ]]; then
                 body="$body"$'\n\n'"$CONTEXT_HEADING"$'\n\n'"$CONTEXT_NOTE"
             fi
-            if [[ -n "$REVIEW_NOTE" ]]; then
-                body="$body"$'\n\n'"$FINDINGS_HEADING"$'\n\n'"$(sed -n '/flagged/,/^For a deeper/p' <<< "$REVIEW_NOTE" | sed -e '1d' -e '$d' | cat -s)"
-            fi
             log "opening PR: $title"
             if (( DRY_RUN )); then :; else
                 (cd "$wt" && gh pr create --base "$default" --head "$branch" --title "$title" --body "$body") || die "gh pr create failed"
@@ -346,6 +356,7 @@ land() {
         fi
         if (( ! DRY_RUN )); then
             [[ -n "$number" ]] || die "no PR found for $branch after creating one"
+            [[ -z "$REVIEW_NOTE" ]] || post_findings_review "$wt" "$number"
             log "squash-merging PR $number"
             if ! (cd "$wt" && gh pr merge "$number" --squash 2>&1 | sed 's/^/    /'; exit "${PIPESTATUS[0]}"); then
                 # Usually a conflict with what landed on the default branch since

@@ -7,7 +7,8 @@ MAIN_ROOT="$(cd "$1" && pwd -P)"
 WORKTREE_PATH="$(cd "$2" && pwd -P)"
 shopt -s nullglob
 
-for src in "$MAIN_ROOT"/.claude/*.md "$MAIN_ROOT"/AGENTS.override.md; do
+for src in "$MAIN_ROOT"/.claude/*.md "$MAIN_ROOT"/.claude/settings.local.json \
+           "$MAIN_ROOT"/AGENTS.override.md; do
     [[ -f "$src" ]] || continue
     rel="${src#"$MAIN_ROOT"/}"
     dst="$WORKTREE_PATH/$rel"

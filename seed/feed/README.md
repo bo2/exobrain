@@ -17,6 +17,7 @@ title: Short imperative title
 date: 2026-06-07
 tags: [scopes, scripts]        # free-form; helps filtering
 touches_invariant: false       # true if it changes security / scope-resolution / validation semantics
+optional: false                # true for a pattern the seed offers without recommending (see below)
 files: [scripts/connect-agent.sh]   # optional: seed paths this change touches (hint for the copy path)
 ---
 
@@ -33,6 +34,10 @@ An optional concrete snippet showing one way to do it. Adapt, don't paste.
 What to watch when porting to a divergent setup; which invariant (if any) to preserve.
 ```
 
+## Optional cards
+
+Most cards are recommended: `exobrain-evolve` proposes them by default and the instance vetoes the ones that don't fit. A card marked `optional: true` is a pattern the seed **offers without recommending** — a preference that some instances hold and others deliberately don't, such as a hook that rewrites commit messages. Evolve sorts it under its **Optional** category, which is confirmed card by card unless the instance says otherwise. Its Problem names whose preference it serves, so the instance can decide on its own terms. Optionality is about the instance's stance, not the card's size: a small recommended fix stays recommended.
+
 ## Adoption ledger
 
-Each downstream exobrain records which cards it has absorbed in its own `adopted-feed.md` **at its repo root** (not in the meta-domain — the ledger is mutable instance state, kept out of the seed-synced concept docs) — card ID, date adopted, and a one-line note on how it was applied (copied / rewired). Its header also records the **seed repository URL** that instance updates from, so `exobrain-evolve` knows where to pull the cache (`src/exobrain-seed/`) — the seed address is instance data, committed in that instance, not a per-machine setting. `exobrain-evolve` diffs this feed's card IDs against that ledger to show only what's new. The ledger answers *"am I current? did I get the fix for X?"* in a world with no shared code. (This canonical seed publishes the feed and keeps no ledger of its own.)
+Each downstream exobrain records which cards it has settled in its own `adopted-feed.md` **at its repo root** (not in the meta-domain — the ledger is mutable instance state, kept out of the seed-synced concept docs) — card ID, date, and a one-line note on the outcome: how it was applied (copied / rewired / already-present), or declined and why. A declined card stays out of the next run's list, so a preference the instance settled once is not asked again. Its header also records the **seed repository URL** that instance updates from, so `exobrain-evolve` knows where to pull the cache (`src/exobrain-seed/`) — the seed address is instance data, committed in that instance, not a per-machine setting. `exobrain-evolve` diffs this feed's card IDs against that ledger to show only what's new. The ledger answers *"am I current? did I get the fix for X?"* in a world with no shared code. (This canonical seed publishes the feed and keeps no ledger of its own.)

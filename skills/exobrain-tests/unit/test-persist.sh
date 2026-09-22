@@ -105,8 +105,9 @@ EOF
 }
 
 # setup_fake_gh — a `gh` on PATH: `pr list --head <b>` reports the PR from a state
-# file, `pr create` records one, `pr merge --squash` squash-merges the branch into
-# the bare origin's main (refusing on conflict, as the forge would).
+# file, `pr create` records one, `pr review` appends a review body to
+# pr-review-<n> and `pr view` prints them back, `pr merge --squash` squash-merges
+# the branch into the bare origin's main (refusing on conflict, as the forge would).
 setup_fake_gh() {
     FAKE_BIN="$TEST_DIR/bin"; mkdir -p "$FAKE_BIN"
     local state="$TEST_DIR/prs"; : > "$state"
@@ -128,6 +129,12 @@ case "\$sub" in
     printf '%s %s OPEN %s\n' "\$n" "\$head" "\$title" >> "\$STATE"
     printf '%s\n' "\$body" > "$TEST_DIR/pr-body-\$n"
     echo "https://forge.test/pr/\$n" ;;
+  "pr review")
+    n="\$1"; body=""
+    while [[ \$# -gt 0 ]]; do case "\$1" in --body) body="\$2"; shift 2;; *) shift;; esac; done
+    printf '%s\n' "\$body" >> "$TEST_DIR/pr-review-\$n" ;;
+  "pr view")
+    [[ ! -f "$TEST_DIR/pr-review-\$1" ]] || cat "$TEST_DIR/pr-review-\$1" ;;
   "pr merge")
     n="\$1"; line="\$(awk -v n="\$n" '\$1==n' "\$STATE")"
     [[ -n "\$line" ]] || { echo "gh: no PR \$n" >&2; exit 1; }
@@ -469,16 +476,18 @@ test_detach_refuses_unverified_machinery_in_the_foreground() {
     assert_no_file "$MAIN/.git/persist-logs/dt-b.log" "nothing was started"
 }
 
-test_detached_land_records_findings_in_the_pr_body() {
+test_detached_land_posts_findings_as_a_pr_review() {
     setup_repo
     local wt; wt="$(add_worktree dt-c)"
     commit_in "$wt" knowledge/plain/x.md "x" "Change x"
     FAKE_REVIEW_EXIT=1 persist "$wt" --detach >/dev/null || return 1
     wait_for_log "$MAIN/.git/persist-logs/dt-c.log" "landed dt-c as PR 1" || return 1
-    local body; body="$(cat "$TEST_DIR/pr-body-1")"
-    assert_contains "$body" "## Authoring review (unattended land, not blocking)" || return 1
-    assert_contains "$body" "a session echo" || return 1
-    assert_not_contains "$body" "For a deeper" "the trailer is trimmed"
+    local review; review="$(cat "$TEST_DIR/pr-review-1")"
+    assert_contains "$review" "## Authoring review (unattended land, not blocking)" || return 1
+    assert_contains "$review" "a session echo" || return 1
+    assert_not_contains "$review" "For a deeper" "the trailer is trimmed" || return 1
+    assert_contains "$(cat "$REC")" "gh pr review 1 --comment" "a comment review, not an approval" || return 1
+    assert_not_contains "$(cat "$TEST_DIR/pr-body-1")" "Authoring review" "the PR body stays the change's own"
 }
 
 test_detached_land_still_blocks_on_the_proof_gate() {
@@ -556,12 +565,25 @@ test_sweep_fails_on_a_stale_dirty_worktree() {
     assert_contains "$out" "1 skipped, 0 awaiting verification, 0 stale"
 }
 
-test_swept_land_records_findings_in_the_pr_body() {
+test_swept_land_posts_findings_as_a_pr_review() {
     setup_repo
     local wt; wt="$(add_worktree sw-find)"; commit_in "$wt" knowledge/plain/x.md x "Change x"
     local out; out="$(sweep PERSIST_QUIET_MINUTES=0 FAKE_REVIEW_EXIT=1 2>&1)" || { echo "$out"; return 1; }
-    assert_contains "$out" "findings go into the PR body" || return 1
-    assert_contains "$(cat "$TEST_DIR/pr-body-1")" "a session echo"
+    assert_contains "$out" "findings go into a review on the PR" || return 1
+    assert_contains "$(cat "$TEST_DIR/pr-review-1")" "a session echo"
+}
+
+# A land killed after posting its review, then resumed, must not post it again.
+test_resumed_land_posts_the_findings_review_once() {
+    setup_repo
+    local wt; wt="$(add_worktree sw-again)"; commit_in "$wt" knowledge/plain/x.md x "Change x"
+    local heading; heading="$(grep '^FINDINGS_HEADING=' "$SCRIPTS_DIR/persist.sh" | cut -d'"' -f2)"
+    git -C "$wt" push -q -u origin sw-again
+    (cd "$wt" && PATH="$FAKE_BIN:$PATH" gh pr create --base main --head sw-again --title "Change x" --body "" >/dev/null)
+    (cd "$wt" && PATH="$FAKE_BIN:$PATH" gh pr review 1 --comment --body "$heading"$'\n\nearlier findings')
+    local out; out="$(sweep PERSIST_QUIET_MINUTES=0 FAKE_REVIEW_EXIT=1 2>&1)" || { echo "$out"; return 1; }
+    assert_contains "$out" "landed sw-again as PR 1" || return 1
+    assert_eq 1 "$(grep -c 'gh pr review' "$REC")" "no second review posted"
 }
 
 test_sweep_reports_a_failed_land_and_continues() {
@@ -613,13 +635,14 @@ run_test option_without_its_value_is_a_usage_error   test_option_without_its_val
 run_test context_file_lands_in_the_pr_body           test_context_file_lands_in_the_pr_body
 run_test detach_commits_returns_and_lands_in_the_background test_detach_commits_returns_and_lands_in_the_background
 run_test detach_refuses_unverified_machinery_in_the_foreground test_detach_refuses_unverified_machinery_in_the_foreground
-run_test detached_land_records_findings_in_the_pr_body test_detached_land_records_findings_in_the_pr_body
+run_test detached_land_posts_findings_as_a_pr_review test_detached_land_posts_findings_as_a_pr_review
 run_test detached_land_still_blocks_on_the_proof_gate test_detached_land_still_blocks_on_the_proof_gate
 run_test sweep_lands_claimed_and_quiet_skips_fresh_and_dirty test_sweep_lands_claimed_and_quiet_skips_fresh_and_dirty
 run_test sweep_honors_a_claim_that_asserted_machinery test_sweep_honors_a_claim_that_asserted_machinery
 run_test sweep_fails_on_machinery_that_waited_too_long test_sweep_fails_on_machinery_that_waited_too_long
 run_test sweep_fails_on_a_stale_dirty_worktree       test_sweep_fails_on_a_stale_dirty_worktree
-run_test swept_land_records_findings_in_the_pr_body  test_swept_land_records_findings_in_the_pr_body
+run_test swept_land_posts_findings_as_a_pr_review  test_swept_land_posts_findings_as_a_pr_review
+run_test resumed_land_posts_the_findings_review_once test_resumed_land_posts_the_findings_review_once
 run_test sweep_reports_a_failed_land_and_continues   test_sweep_reports_a_failed_land_and_continues
 run_test stale_lock_is_taken_over                    test_stale_lock_is_taken_over
 

@@ -1,4 +1,5 @@
 {
+  "attribution": { "commit": "", "pr": "" },
   "hooks": {
     "SessionStart": [
       {

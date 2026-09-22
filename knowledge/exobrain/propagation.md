@@ -26,10 +26,10 @@ The `exobrain-evolve` skill is the single way an instance moves forward — ther
 
 1. **Fetch** the seed into `src/exobrain-seed/` (pull if the cache exists, else clone) from the seed URL recorded in the adoption-ledger header — not a tracked remote.
 2. **Diff** the feed's card IDs against this instance's adoption ledger; the unadopted cards are the changes since last adoption.
-3. **Triage** — permissive by default; the human can veto a card that doesn't fit this setup.
+3. **Triage** — the agent sorts the new cards by category (mandatory, recommended, optional, probably not needed) and the human decides once per category: apply, confirm card by card, or skip (`exobrain-evolve` step 3).
 4. **Apply each card** — *copy* the seed's files where this instance is undiverged; *re-synthesize* where it diverged or where structure differs. Preserve invariants exactly.
 5. **Validate** and re-link.
-6. **Record** the adopted card IDs in the ledger.
+6. **Record** every decided card in the ledger — adopted or declined.
 
 ## The harvest workflow
 

@@ -6,9 +6,10 @@
 #   skills/exobrain-repair-findings/tests/test-findings-pending.sh            # run all
 #   skills/exobrain-repair-findings/tests/test-findings-pending.sh <pattern>  # filter by name
 #
-# A fake `gh` on PATH serves PR bodies and labels from a JSON fixture, so the tests
-# pin the qualifying rule itself: a body that merely mentions the phrase does not
-# qualify (a PR about the persist machinery does that), only one carrying the heading.
+# A fake `gh` on PATH serves merged PRs — labels and reviews — from a JSON fixture
+# and applies the script's own --jq filter to them, so the tests pin the qualifying
+# rule itself: only a review opening with the heading qualifies, not a PR body or a
+# review that merely mentions it.
 # No network, no credentials, nothing touching the real repo or a real forge.
 
 set -uo pipefail
@@ -44,57 +45,54 @@ assert_not_contains() { [[ "$1" != *"$2"* ]] || { echo "ASSERT_NOT_CONTAINS${3:+
 HEADING="$(bash "$SCRIPTS_DIR/findings-pending.sh" --heading)"
 LABEL="$(bash "$SCRIPTS_DIR/findings-pending.sh" --label)"
 
-# setup_gh — a `gh` on PATH backed by $TEST_DIR/prs.json, a map of
-# number → {title, body, labels}. `search prs` lists every number whose body
-# mentions the search phrase; `pr view` serves one PR's fields as TSV.
+# setup_gh — a `gh` on PATH backed by $TEST_DIR/prs.json, an array of
+# {number, title, body, labels: [{name}], reviews: [{body}]}. `pr list` serves it
+# newest first through the caller's --jq filter, as the forge would.
 setup_gh() {
     FAKE_BIN="$TEST_DIR/bin"; mkdir -p "$FAKE_BIN"
+    echo '[]' > "$TEST_DIR/prs.json"
     cat > "$FAKE_BIN/gh" <<EOF
 #!/usr/bin/env bash
 set -uo pipefail
 DATA="$TEST_DIR/prs.json"
-case "\$1 \$2" in
-  "search prs")
-    jq -r 'to_entries | map(select(.value.body | test("unattended land"))) | sort_by(.key | tonumber) | reverse | .[].key' "\$DATA" ;;
-  "pr view")
-    n="\$3"
-    jq -r --arg n "\$n" '.[\$n] | [((.labels // []) | join(",")), .title, .body] | @tsv' "\$DATA" ;;
-  *) echo "fake gh: unsupported: \$*" >&2; exit 2 ;;
-esac
+[[ "\$1 \$2" == "pr list" ]] || { echo "fake gh: unsupported: \$*" >&2; exit 2; }
+filter="."
+while [[ \$# -gt 0 ]]; do case "\$1" in --jq) filter="\$2"; shift 2;; *) shift;; esac; done
+jq -r "sort_by(.number) | reverse | \$filter" "\$DATA"
 EOF
     chmod +x "$FAKE_BIN/gh"
 }
 
-# add_pr <number> <title> <body>  — writes into the fixture; labels via add_label.
-add_pr() {
-    [[ -f "$TEST_DIR/prs.json" ]] || echo '{}' > "$TEST_DIR/prs.json"
-    jq --arg n "$1" --arg t "$2" --arg b "$3" '.[$n] = {title: $t, body: $b, labels: []}' \
-        "$TEST_DIR/prs.json" > "$TEST_DIR/prs.t" && mv "$TEST_DIR/prs.t" "$TEST_DIR/prs.json"
+# fixture <jq update> [--arg name value]… — apply one update to prs.json.
+fixture() {
+    local f="$TEST_DIR/prs.json" expr="$1"; shift
+    jq "$@" "$expr" "$f" > "$f.t" && mv "$f.t" "$f"
 }
-add_label() {
-    jq --arg n "$1" --arg l "$2" '.[$n].labels += [$l]' \
-        "$TEST_DIR/prs.json" > "$TEST_DIR/prs.t" && mv "$TEST_DIR/prs.t" "$TEST_DIR/prs.json"
-}
-with_findings() { printf -- '- %s\n\n%s\n\n%s\n' "$1" "$HEADING" "knowledge/x.md: a finding -- fix it."; }
+add_pr()     { fixture '. += [{number: ($n|tonumber), title: $t, body: $b, labels: [], reviews: []}]' --arg n "$1" --arg t "$2" --arg b "${3:-}"; }
+add_label()  { fixture 'map(if .number == ($n|tonumber) then .labels += [{name: $l}] else . end)' --arg n "$1" --arg l "$2"; }
+add_review() { fixture 'map(if .number == ($n|tonumber) then .reviews += [{body: $r}] else . end)' --arg n "$1" --arg r "$2"; }
+findings()   { printf -- '%s\n\n%s\n' "$HEADING" "knowledge/x.md: a finding -- fix it."; }
 pending() { PATH="$FAKE_BIN:$PATH" bash "$SCRIPTS_DIR/findings-pending.sh" "$@"; }
 
 # ---------------------------------------------------------------------------
 
 test_lists_only_prs_carrying_the_heading() {
     setup_gh
-    add_pr 10 "Recorded a fact"     "$(with_findings "Recorded a fact")"
-    add_pr 11 "Machinery change"    "This PR is about an unattended land, but carries no findings of its own."
-    add_pr 12 "Another fact"        "$(with_findings "Another fact")"
+    add_pr 10 "Recorded a fact";  add_review 10 "$(findings)"
+    add_pr 11 "Machinery change"; add_review 11 "Reviewed: this changes how an unattended land records findings."
+    add_pr 12 "Another fact";     add_review 12 "Looks fine."; add_review 12 "$(findings)"
+    add_pr 13 "Body only"         "$(findings)"
     local out; out="$(pending)" || return 1
     assert_contains "$out" $'10\tRecorded a fact' || return 1
-    assert_contains "$out" $'12\tAnother fact' || return 1
-    assert_not_contains "$out" "Machinery change" "a body merely mentioning the phrase does not qualify"
+    assert_contains "$out" $'12\tAnother fact' "found among other reviews" || return 1
+    assert_not_contains "$out" "Machinery change" "a review merely mentioning findings does not qualify" || return 1
+    assert_not_contains "$out" "Body only" "the heading in a PR body does not qualify"
 }
 
 test_repaired_label_excludes_a_pr() {
     setup_gh
-    add_pr 10 "Fixed already" "$(with_findings "Fixed already")"; add_label 10 "$LABEL"
-    add_pr 11 "Still pending" "$(with_findings "Still pending")"
+    add_pr 10 "Fixed already"; add_review 10 "$(findings)"; add_label 10 "$LABEL"
+    add_pr 11 "Still pending"; add_review 11 "$(findings)"
     local out; out="$(pending)" || return 1
     assert_not_contains "$out" "Fixed already" || return 1
     assert_contains "$out" $'11\tStill pending'
@@ -102,15 +100,15 @@ test_repaired_label_excludes_a_pr() {
 
 test_other_labels_do_not_exclude() {
     setup_gh
-    add_pr 10 "Labelled otherwise" "$(with_findings "Labelled otherwise")"; add_label 10 "documentation"
+    add_pr 10 "Labelled otherwise"; add_review 10 "$(findings)"; add_label 10 "documentation"
     assert_contains "$(pending)" $'10\tLabelled otherwise'
 }
 
 test_oldest_first() {
     setup_gh
-    add_pr 30 "Third"  "$(with_findings Third)"
-    add_pr 10 "First"  "$(with_findings First)"
-    add_pr 20 "Second" "$(with_findings Second)"
+    add_pr 30 "Third";  add_review 30 "$(findings)"
+    add_pr 10 "First";  add_review 10 "$(findings)"
+    add_pr 20 "Second"; add_review 20 "$(findings)"
     local out; out="$(pending)" || return 1
     assert_eq "10 20 30" "$(cut -f1 <<< "$out" | tr '\n' ' ' | sed 's/ $//')"
 }
@@ -129,7 +127,7 @@ test_heading_matches_the_one_persist_writes() {
 }
 
 test_unknown_argument_is_a_usage_error() {
-    setup_gh; add_pr 10 "x" "$(with_findings x)"
+    setup_gh; add_pr 10 "x"; add_review 10 "$(findings)"
     pending --nope >/dev/null 2>&1; local rc=$?
     assert_eq 2 "$rc" "exit code" || return 1
     pending --limit abc >/dev/null 2>&1; rc=$?
