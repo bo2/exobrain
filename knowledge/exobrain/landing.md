@@ -9,7 +9,7 @@ Every exobrain change reaches the default branch the same way: a branch in its o
 | Used by | A terminal session or a scheduled job | A chat turn (the reply goes to a chat channel) |
 | Command | `scripts/persist.sh` | `scripts/persist.sh --detach` |
 | The agent replies | After the merge, naming the PR | Right after the commit, naming no PR |
-| Authoring-review findings | Block the land until fixed | Go into the PR body; the land carries on |
+| Authoring-review findings | Block the land until fixed | Posted as a review on the PR; the land carries on |
 | A step that fails | Stops the land; the session fixes it and re-runs | Retried by the sweep |
 
 Push, review, PR and merge take minutes, so a chat reply doesn't wait for them. When the agent says it saved something, the change is committed on its branch and reaches the default branch a few minutes later. Until then, only the turn that made the change can read it back, so a follow-up question asked in that gap can miss it.
@@ -19,7 +19,7 @@ Push, review, PR and merge take minutes, so a chat reply doesn't wait for them. 
 1. The script commits, then hands the rest to a background process that logs to `.git/persist-logs/<branch>.log` in the main checkout.
 2. That process runs the same steps as an attended land (`exobrain-persist` step 4).
 3. The validator and the new-shared-skill proof gate block as usual. A land they stop, or that dies or hits a conflict, stays claimed on its branch, and the next sweep retries it.
-4. The authoring review does not block. Its findings go into the PR under **Authoring review (unattended land, not blocking)**, and the PR merges anyway, so the flagged text sits on the default branch until it is repaired.
+4. The authoring review does not block. Its findings are posted as a review on the PR, headed **Authoring review (unattended land, not blocking)**, and the PR merges anyway, so the flagged text sits on the default branch until it is repaired.
 
 ## The sweep
 

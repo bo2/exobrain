@@ -396,32 +396,40 @@ skills_resolve_external_json() {
     '
 }
 
+# skills_extract_description <skill_md> — the frontmatter `description`, as one
+# line. Reads a plain or quoted single-line value, and folds a YAML block scalar
+# (`>` or `|`, with any chomping indicator) by space-joining its indented
+# continuation lines: every consumer renders this in a one-row index.
 skills_extract_description() {
     local file="$1"
     [[ -f "$file" ]] || { echo ""; return 0; }
     awk '
-        BEGIN { in_fm = 0 }
-        /^---$/ { in_fm = !in_fm; if (!in_fm) exit; next }
-        in_fm && block {
-            if (/^[^[:space:]]/) exit
-            sub(/^[[:space:]]+/, "")
-            sub(/[[:space:]]+$/, "")
-            if (length($0)) summary = summary (length(summary) ? " " : "") $0
-            next
+        BEGIN { squote = sprintf("%c", 39) }
+        function emit(   s) {
+            emitted = 1
+            s = buf
+            gsub(/[[:space:]]+/, " ", s)
+            sub(/^ /, "", s); sub(/ $/, "", s)
+            if (s != "") print s
         }
-        in_fm && /^description:/ {
-            sub(/^description:[[:space:]]*/, "")
-            # Fold YAML block scalars to one line for the generated table.
-            if ($0 ~ /^[>|][+-]?[[:space:]]*(#.*)?$/) { block = 1; next }
-            if (length($0) >= 2 && (substr($0, 1, 1) == "\"" || substr($0, 1, 1) == "'\''")) {
-                q = substr($0, 1, 1)
-                sub("^" q, "")
-                sub(q "$", "")
+        NR == 1 && /^---[[:space:]]*$/ { in_fm = 1; next }
+        !in_fm { next }
+        /^---[[:space:]]*$/ { if (folding) emit(); exit }
+        folding {
+            if ($0 ~ /^[[:space:]]/ || $0 ~ /^[[:space:]]*$/) { buf = buf " " $0; next }
+            emit(); exit   # an unindented line is the next key: the block ended
+        }
+        /^description[[:space:]]*:/ {
+            buf = $0
+            sub(/^description[[:space:]]*:[[:space:]]*/, "", buf)
+            if (buf ~ /^[>|][0-9+-]*[[:space:]]*$/) { folding = 1; buf = ""; next }
+            q = substr(buf, 1, 1)
+            if (length(buf) >= 2 && (q == "\"" || q == squote) && substr(buf, length(buf), 1) == q) {
+                buf = substr(buf, 2, length(buf) - 2)
             }
-            print
-            exit
+            emit(); exit
         }
-        END { if (block) print summary }
+        END { if (folding && !emitted) emit() }
     ' "$file"
 }
 

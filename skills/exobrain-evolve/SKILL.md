@@ -22,7 +22,7 @@ way — **copy** the seed's files where this instance hasn't diverged them,
 this instance's `knowledge/exobrain/propagation.md`.
 
 **Be permissive by default** — prefer to take improvements, adapting as needed.
-This is a procedure; follow it, keeping the user in control of what's adopted.
+This is a procedure; follow it — the user picks what's adopted (step 3).
 
 ## Framework files
 
@@ -47,16 +47,31 @@ it, so always pull-or-clone rather than assuming it's there.
 
 ## 2. Find what's new since last update
 
-- Read this instance's adoption ledger: `adopted-feed.md` (repo root) — the card IDs already adopted.
+- Read this instance's adoption ledger: `adopted-feed.md` (repo root) — the card IDs already settled here, adopted or declined.
 - Read `$SRC/seed/feed/` — every card. **New** = cards whose `id` is not in the ledger, oldest first.
 - If there are no new cards, say so — but still run the drift check (step 5), then stop.
 
-## 3. Triage — permissive
+## 3. Triage — sort, then ask once per category
 
-List the new cards: id · title · one line of what changes · the `touches_invariant`
-flag. Default to adopting every card that plausibly applies to this setup; only set
-aside one that clearly doesn't fit (a feature for a scope type or tool this instance
-doesn't use). Let the user veto or narrow the selection.
+Sort every new card into one of four categories, by reading it against this setup:
+
+| Category | What lands here |
+|---|---|
+| **Mandatory** | A card this instance breaks or drifts without: `touches_invariant: true`, a fix to a framework file this instance carries, or one a later card in the list depends on. |
+| **Recommended** | The seed's default — a change that plausibly applies here. |
+| **Optional** | `optional: true` in the frontmatter (a preference the seed offers without recommending), or one you judge to be a preference here. |
+| **Probably not needed** | A feature for a scope type, tool, or agent this instance doesn't use. |
+
+Show the sorted list — id · title · one line of what changes, under its category
+heading — then ask **one question**: for each non-empty category, does the user
+want it **applied automatically**, **confirmed card by card**, or **skipped**?
+Propose: mandatory and recommended applied, optional confirmed, probably-not-needed
+skipped. **Wait for the answer** — this step is never skipped, and a card is
+applied only under a category the user chose to apply or confirmed one by one.
+Then walk the confirm-by-card categories, one pick per card.
+
+A skipped category's cards are recorded as declined (step 7); tell the user so
+when asking. The user can move a card between categories at either step.
 
 ## 4. Apply each adopted card
 
@@ -97,11 +112,14 @@ Fix anything that breaks before recording.
 
 ## 7. Record
 
-Append each adopted card to `adopted-feed.md` (repo root): id, title, today's date,
-and how you applied it (copied / rewired / already-present). An "already-present" row
-must cite the concrete artifact it was verified against (a file, a helper, a behavior)
-— a vague citation is a smell that the check was shallow. That ledger is your
-provenance — it's how the next update knows where you left off.
+Append each card the user decided to `adopted-feed.md` (repo root): id, title, today's
+date, and the outcome — how you applied it (copied / rewired / already-present), or
+**declined** with the reason — the user's, or the category it was skipped under. An "already-present" row must cite the
+concrete artifact it was verified against (a file, a helper, a behavior) — a vague
+citation is a smell that the check was shallow. A declined row is what keeps the card
+out of the next run's list; a card deferred without a decision gets no row and
+comes back. That ledger is your provenance — it's how the next
+update knows where you left off.
 
 ## Notes
 

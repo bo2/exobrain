@@ -45,10 +45,10 @@ A domain or workspace holds what was made from data; the data itself stays where
 | Partially processed material no simple call reproduces — search results, a source sweep's findings, reference sets (IDs, links) into another system | `_raw/` |
 | Raw data a call can retrieve again — an email, an issue, an API or query result | Its own system; `_raw/` keeps the call (command and parameters) |
 | Raw data with a native home — a photo in a synced photo library, a document in a documents tree, a statement at the bank | Its own system; the citing file links it |
-| Raw data with no native home — a photo sent in chat, a PDF from a site that won't keep it | The person's file store: the raw-data folder the person scope names, in a subfolder mirroring the citing file's repo path; the citing file links it |
+| Raw data with no native home — a photo sent in chat, a PDF from a site that won't keep it | A file store: the raw-data folder a connected scope names, in a subfolder mirroring the citing file's repo path; the citing file links it |
 | Working copies for processing | A gitignored `_cache/` or `tmp/` |
 
-A person scope's `AGENTS.md` names the raw-data folder and the tool that reaches it; until it does, ask the person where such a file should go rather than committing it.
+The scope whose people share the folder names it and the tool that reaches it in its `AGENTS.md` — a person scope for a personal folder, a shared scope for one several people use; until one does, ask the person where such a file should go rather than committing it.
 
 `validate-exobrain.sh` blocks a file in an unambiguously raw format — photos, PDFs, office documents, email and bank exports, GEDCOM, archives, audio, video — newly added under `knowledge/` or `workspaces/`. Files already tracked are left alone. CSV, JSON, and other text formats pass the gate, as do PNG, SVG, and GIF, because they are as often derived as raw (a chart, a recording of the work); for those, the table decides.
 

@@ -73,6 +73,11 @@ Exit: `0` all passed · `1` some failed · `2` harness error (including an unkno
   sections of each agent's knowledge index (no foreign summary reaches one), worktree
   resolution, sync leaving dirty/off-branch/diverged checkouts untouched, offline
   staleness, and the mount checks in the healthcheck and validator.
+- **`test-agent-attribution.sh`** — `strip-agent-attribution.sh`, which the
+  `commit-msg` hook runs: agent trailers and footers go in any case, a human
+  co-author and prose about the rule stay, a clean message is left untouched; its
+  pattern matches the validator's, and the validator rejects a commit that bypassed
+  the hook.
 - **`test-raw-data.sh`** — `validate-exobrain.sh`'s raw-format gate: a photo, PDF, or
   bank export newly added under `knowledge/` or `workspaces/` is caught (any extension
   case), while an already-tracked file, text/SQL/chart formats, and paths outside those
@@ -89,8 +94,8 @@ Exit: `0` all passed · `1` some failed · `2` harness error (including an unkno
   exit codes, and the directories never walked; every `--all` column under its own
   heading whatever fields a declaration omits (an owner-less one included).
 - **`findings-pending`** (`skills/exobrain-repair-findings/tests/test-findings-pending.sh`)
-  — the repair skill's detector against a fake `gh`: only merged PRs whose body carries
-  the findings heading qualify, the repaired label excludes one, the list comes out
+  — the repair skill's detector against a fake `gh`: only merged PRs with a review opening
+  with the findings heading qualify, the repaired label excludes one, the list comes out
   oldest first, and the heading matches the one `persist.sh` writes.
 - **`test-authoring-review.sh`** — `authoring-review.sh`'s engine call: inherited proxy
   env is stripped (else a proxied push silently skips the review), and a reported
@@ -109,8 +114,8 @@ Exit: `0` all passed · `1` some failed · `2` harness error (including an unkno
   machinery gate in both halves (the unit suite the script runs, the flag the agent
   asserts, and the claim that carries it into a sweep), timeline rows, resume after an
   interrupted run, conflict handling, the no-remote fast-forward, `--detach`
-  (foreground commit and gate refusal, background land), findings recorded in the PR
-  body by an unattended land, `--context`, and `--sweep`'s claimed / quiet / dirty /
+  (foreground commit and gate refusal, background land), findings an unattended land posts
+  as a PR review (once, across a resume), `--context`, and `--sweep`'s claimed / quiet / dirty /
   awaiting-verification / stale rules.
 
 ### Add a unit harness

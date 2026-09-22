@@ -538,16 +538,19 @@ fi
 
 # ---------------------------------------------------------------------------
 # Agent-neutral history (CLAUDE.md § Git history hygiene, feed card 0024) —
-# outgoing commit messages carry no agent attribution. Line-anchored so a rule
-# *describing* the forbidden footer inline doesn't false-positive.
+# outgoing commit messages carry no agent attribution. The commit-msg hook strips
+# it at commit time; this catches a commit that bypassed the hook. Line-anchored
+# so a rule *describing* the forbidden footer inline doesn't false-positive.
 # ---------------------------------------------------------------------------
 
+# Kept identical to the one in strip-agent-attribution.sh (the unit suite checks).
+AGENT_ATTRIBUTION_RE='^(co-authored-by:[[:space:]]*(claude|codex|openclaw)|(🤖[[:space:]]*)?generated with[[:space:]]+\[?(claude|codex|openclaw))'
 if [[ -n "$default_ref" ]]; then
     while IFS= read -r hit; do
         [[ -z "$hit" ]] && continue
         record "agent attribution in outgoing commit message: $hit"
     done < <(git -C "$REPO_DIR" log --format='%s%n%b' "$default_ref..HEAD" 2>/dev/null \
-             | grep -i -E '^(co-authored-by:[[:space:]]*claude|🤖?[[:space:]]*generated with)' | head -10)
+             | grep -i -E "$AGENT_ATTRIBUTION_RE" | head -10)
 fi
 
 # ---------------------------------------------------------------------------

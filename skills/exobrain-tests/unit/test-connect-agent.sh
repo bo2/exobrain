@@ -70,6 +70,7 @@ setup_fake_exobrain() {
     cp "$SCRIPTS_DIR/skills-validate.sh"        "$repo/scripts/"
     cp "$SCRIPTS_DIR/create-worktree.sh"        "$repo/scripts/"
     cp "$SCRIPTS_DIR/exobrain-healthcheck.sh"   "$repo/scripts/"
+    cp "$SCRIPTS_DIR/strip-agent-attribution.sh" "$repo/scripts/"
     if [[ -f "$SCRIPTS_DIR/link-worktree-context.sh" ]]; then
         cp "$SCRIPTS_DIR/link-worktree-context.sh" "$repo/scripts/"
     fi
@@ -514,6 +515,70 @@ test_unlisted_resolves() {
 }
 
 # ---------------------------------------------------------------------------
+# Tests — description extraction (what the optional-skills index renders)
+# ---------------------------------------------------------------------------
+
+# write_desc <file> <frontmatter-description-lines> — a SKILL.md whose frontmatter
+# carries the given raw `description:` text, verbatim.
+write_desc() { mkdir -p "$(dirname "$1")"; printf -- '---\nname: s\n%b\n---\n# body\ndescription: body line, not frontmatter\n' "$2" > "$1"; }
+
+test_description_single_line_forms() {
+    local f="$TEST_DIR/s/SKILL.md"
+    write_desc "$f" 'description: a plain one liner'
+    assert_eq "a plain one liner" "$(skills_extract_description "$f")" "plain scalar" || return 1
+    write_desc "$f" 'description: "a quoted one liner"'
+    assert_eq "a quoted one liner" "$(skills_extract_description "$f")" "double-quoted scalar" || return 1
+    write_desc "$f" "description: 'a quoted one liner'"
+    assert_eq "a quoted one liner" "$(skills_extract_description "$f")" "single-quoted scalar"
+}
+
+# The reported defect: a folded description rendered as the bare fold indicator,
+# leaving the index row blank for exactly the skills it had to describe.
+test_description_folded_block() {
+    local f="$TEST_DIR/s/SKILL.md"
+    write_desc "$f" 'description: >\n  line one\n  line two'
+    assert_eq "line one line two" "$(skills_extract_description "$f")" "folded block joined" || return 1
+    write_desc "$f" 'description: |\n  line one\n  line two'
+    assert_eq "line one line two" "$(skills_extract_description "$f")" "literal block joined" || return 1
+    write_desc "$f" 'description: >-\n  chomped'
+    assert_eq "chomped" "$(skills_extract_description "$f")" "chomping indicator accepted" || return 1
+    write_desc "$f" 'description: >\n  para one\n\n  para two'
+    assert_eq "para one para two" "$(skills_extract_description "$f")" "blank line inside the block folded"
+}
+
+# A block scalar must stop at the next key and at the frontmatter fence — bleeding
+# into either one puts YAML or body prose in the index row.
+test_description_block_stops_at_boundaries() {
+    local f="$TEST_DIR/s/SKILL.md"
+    write_desc "$f" 'description: >\n  the description\nname: not-the-description'
+    assert_eq "the description" "$(skills_extract_description "$f")" "stops at the next key" || return 1
+    write_desc "$f" 'description: >\n  the description'
+    assert_eq "the description" "$(skills_extract_description "$f")" "stops at the closing fence"
+}
+
+test_description_absent_or_body_only() {
+    local f="$TEST_DIR/s/SKILL.md"
+    printf -- '---\nname: s\n---\n# body\ndescription: body line\n' > "$f"
+    assert_eq "" "$(skills_extract_description "$f")" "no frontmatter description" || return 1
+    printf -- '# body\ndescription: body line\n' > "$f"
+    assert_eq "" "$(skills_extract_description "$f")" "body text is not frontmatter" || return 1
+    assert_eq "" "$(skills_extract_description "$TEST_DIR/s/missing.md")" "missing file"
+}
+
+# End to end: a folded description has to survive into the generated index, which
+# is the only thing telling the agent what an un-loaded optional skill does.
+test_optional_index_carries_folded_description() {
+    local r; r="$(setup_fake_exobrain)"; add_person "$r" people/alice
+    declare_skill "$r" global optme optional force
+    write_desc "$r/skills/optme/SKILL.md" 'description: >\n  folded across\n  two lines'
+    write_config "$r" people/alice/hosts/h1
+    wire_sandbox "$r" claude >/dev/null 2>&1 || return 1
+    local i; i="$(claude_index "$r")"
+    assert_contains "$i" "folded across two lines" "folded description rendered in the index" || return 1
+    assert_not_contains "$i" "| > |" "no bare fold indicator as the summary"
+}
+
+# ---------------------------------------------------------------------------
 # Tests — tools resolution
 # ---------------------------------------------------------------------------
 
@@ -860,6 +925,21 @@ test_hooks_install_into_repo_from_other_cwd() {
         bash "$r/scripts/connect-agent.sh" claude --handle alice --host h1) >/dev/null 2>&1 || return 1
     assert_file "$r/.git/hooks/post-merge" "hooks installed in the repo" || return 1
     assert_no_file "$TEST_DIR/elsewhere/.git" "nothing created in the caller's cwd"
+}
+
+# Whatever the committing agent was told to append, a connected checkout's history
+# stays agent-neutral: the commit-msg hook strips the attribution as the commit is made.
+test_commit_msg_hook_strips_agent_attribution() {
+    local r; r="$(setup_fake_exobrain)"; add_person "$r" people/alice
+    write_config "$r" people/alice/hosts/h1
+    fresh_clone_claude_dir "$r"
+    connect_flags "$r" claude >/dev/null 2>&1 || return 1
+    assert_file "$r/.git/hooks/commit-msg" "commit-msg hook installed" || return 1
+    git -C "$r" -c user.email=t@example.com -c user.name=t -c commit.gpgsign=false \
+        commit -q --allow-empty -m $'Change x\n\nCo-Authored-By: Claude Opus 5 <noreply@anthropic.com>' 2>/dev/null || return 1
+    local msg; msg="$(git -C "$r" log -1 --format=%B)"
+    assert_contains "$msg" "Change x" "message kept" || return 1
+    assert_not_contains "$msg" "Co-Authored-By" "trailer stripped"
 }
 
 # ---------------------------------------------------------------------------
@@ -1250,6 +1330,19 @@ test_codex_worktree_linker_preserves_owned_files() {
     assert_eq 'owned skill' "$(cat "$wt/.agents/skills/core/SKILL.md")"
 }
 
+# Claude's per-machine settings (permission allowlists, gitignored) follow the
+# worktree, or every session there starts with a bare permission set.
+test_worktree_links_claude_local_settings() {
+    local r; r="$(setup_fake_exobrain)"
+    mkdir -p "$r/.claude"; printf '{"permissions":{}}\n' > "$r/.claude/settings.local.json"
+    git -C "$r" config core.hooksPath /dev/null
+    git -C "$r" add -A
+    git -C "$r" -c user.email=t@t -c user.name=t commit -qm fixture || return 1
+    local wt; wt="$(cd "$r" && bash scripts/create-worktree.sh feature 2>/dev/null)" || return 1
+    [[ -L "$wt/.claude/settings.local.json" ]] || { echo "settings.local.json not linked"; return 1; }
+    assert_eq '{"permissions":{}}' "$(cat "$wt/.claude/settings.local.json")"
+}
+
 test_codex_health_missing_surfaces() {
     local r out; r="$(setup_fake_exobrain)"
     write_config "$r" "" codex; touch "$r/.codex"
@@ -1334,6 +1427,7 @@ run_test "codex does not create home"          test_codex_does_not_create_home
 run_test "codex worktree discovers local skills" test_codex_worktree_skills
 run_test "codex worktree rewire preserves main" test_codex_worktree_rewire_preserves_main
 run_test "codex worktree keeps owned files"     test_codex_worktree_linker_preserves_owned_files
+run_test "worktree links claude local settings" test_worktree_links_claude_local_settings
 run_test "codex health catches missing surfaces" test_codex_health_missing_surfaces
 run_test "codex health checks active worktree"  test_codex_health_checks_worktree
 run_test "codex health ignores personal home"  test_codex_health_ignores_personal_home
@@ -1354,6 +1448,7 @@ run_test "relink, no agent: every connected"    test_relink_all_connected_agents
 run_test "relink, no agent: none connected"     test_relink_all_nothing_connected
 run_test "relink, no agent: refuses flags"      test_relink_all_refuses_other_flags
 run_test "hooks install into repo, other cwd"  test_hooks_install_into_repo_from_other_cwd
+run_test "commit-msg hook strips attribution"  test_commit_msg_hook_strips_agent_attribution
 run_test "validate flags bash 4 constructs"    test_validate_flags_bash4_constructs
 run_test "validate honors bash 4 opt-out"      test_validate_bash4_optout_honored
 run_test "validate flags unguarded arrays"     test_validate_flags_unguarded_array_expansion
@@ -1362,6 +1457,11 @@ run_test "validate spares never-empty arrays"  test_validate_ignores_never_empty
 run_test "validate clean"                      test_validate_clean
 run_test "validate dangling override"          test_validate_dangling_override
 run_test "fetcher accepts --leaves"            test_fetcher_accepts_leaves_no_external
+run_test "description single-line forms"      test_description_single_line_forms
+run_test "description folded block"           test_description_folded_block
+run_test "description block boundaries"       test_description_block_stops_at_boundaries
+run_test "description absent"                 test_description_absent_or_body_only
+run_test "index carries folded description"   test_optional_index_carries_folded_description
 run_test "external resolve plan"               test_external_resolve_plan
 run_test "flags connect existing host"         test_flags_connect_existing_host
 run_test "flags person-only when host missing" test_flags_person_only_when_host_missing
