@@ -4,14 +4,17 @@
 # The suite always tests a COPY of the instance it is installed in, never the live
 # tree. provision_self snapshots REPO_DIR at HEAD (committed state); provision_working_tree
 # snapshots the current working tree (uncommitted local changes) so a change can be tested
-# before it lands. finalize_template then validates the snapshot, neutralizes hooks,
-# commits a `main` base branch for worktree cases, and refuses any github origin (a scratch
-# instance must never point at a real remote).
+# before it lands. Either sets SNAPSHOT_TREE to the git tree it copied — the run's record
+# of exactly what it tested. finalize_template then validates the snapshot, neutralizes
+# hooks, commits a `main` base branch for worktree cases, and refuses any github origin (a
+# scratch instance must never point at a real remote).
 
 # provision_self <dest> — tracked files of REPO_DIR at HEAD, no .git/src/tmp bloat.
 provision_self() {
     local dest="$1"
     mkdir -p "$dest"
+    SNAPSHOT_TREE="$(git -C "$REPO_DIR" rev-parse 'HEAD^{tree}')" \
+        || { err "[provision] cannot resolve HEAD of the current instance"; return 1; }
     git -C "$REPO_DIR" archive HEAD | tar -x -C "$dest" \
         || { err "[provision] git archive of the current instance failed"; return 1; }
 }
@@ -32,6 +35,7 @@ provision_working_tree() {
         err "[provision] could not snapshot the working tree"; return 1
     fi
     rm -f "$tmp_index"
+    SNAPSHOT_TREE="$tree"
     git -C "$REPO_DIR" archive "$tree" | tar -x -C "$dest" \
         || { err "[provision] git archive of the working-tree snapshot failed"; return 1; }
 }
@@ -76,4 +80,17 @@ make_run_copy() {
     local template="$1" dest="$2"
     mkdir -p "$(dirname "$dest")"
     cp -R "$template" "$dest"
+}
+
+# wire_scopes <instance> <agent> <person> <leaf>... — connect the instance to the given
+# scope leaves through its own connector, as a real checkout connected to them loads
+# them (--wire-sandbox writes nothing outside the instance). <person> keeps owner-only
+# skills in reach, as the real connection's person id does. Wired per copy, not once
+# on the template: the connector links skills by absolute path. Without leaves the
+# instance stays unwired and loads only the global scope.
+wire_scopes() {
+    local inst="$1" agent="$2" person="$3"; shift 3
+    jq -n --arg p "$person" '{connected_scopes: $ARGS.positional} + (if $p == "" then {} else {person: $p} end)' \
+        --args "$@" >"$inst/.exobrain.json" || return 1
+    CODEX_HOME="$inst/.codex" bash "$inst/scripts/connect-agent.sh" "$agent" --wire-sandbox
 }

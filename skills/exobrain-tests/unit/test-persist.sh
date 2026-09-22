@@ -87,7 +87,7 @@ EOF
     printf -- '---\nname: tracked\ntimeline: true\n---\n# Tracked\n' > "$seed/knowledge/tracked/README.md"
     printf -- '---\nname: plain\n---\n# Plain\n' > "$seed/knowledge/plain/README.md"
     printf '# p\n' > "$seed/people/p/AGENTS.md"
-    printf '.exobrain.json\n' > "$seed/.gitignore"
+    printf '.exobrain.json\ntmp/\n' > "$seed/.gitignore"
     git -C "$seed" init -q -b main; git_id "$seed"
     git -C "$seed" add -A; git -C "$seed" commit -q -m "Seed"
 
@@ -175,6 +175,28 @@ persist() {
 
 # sweep [env…] — run --sweep from the main checkout with the fake gh.
 sweep() { (cd "$MAIN" && PATH="$FAKE_BIN:$PATH" env "$@" scripts/persist.sh --sweep); }
+
+# write_run <worktree> <run name> <tree> [jq filter] — record a behavioral run under the
+# worktree's tmp/test-runs, as the behavior suite does: by default one that qualifies
+# (every case met, an agent-driven case passed, claude, no scope wired). The filter
+# edits it into the variant a test needs.
+write_run() {
+    local dir="$1/tmp/test-runs/$2"; mkdir -p "$dir"
+    jq -n --arg tree "$3" '{
+        cases: [{name: "claude/some-case", verdict: "PASS", passes: 1, errors: 0, total: 1, threshold: "all", profile: "action"}],
+        all_met: true, tree: $tree, source: "head", agents: ["claude"], scopes: [], harness_error: false
+    } | '"${4:-.}" > "$dir/summary.json"
+}
+
+head_tree() { git -C "$1" rev-parse 'HEAD^{tree}'; }
+
+# working_tree <worktree> — the tree `behavior/run.sh --working-tree` records: the
+# working state staged into a fresh index.
+working_tree() {
+    local idx; idx="$(mktemp)"; rm -f "$idx"
+    GIT_INDEX_FILE="$idx" git -C "$1" add -A && GIT_INDEX_FILE="$idx" git -C "$1" write-tree
+    rm -f "$idx"
+}
 
 # age_files <days> <path…> — backdate mtimes.
 age_files() {
@@ -276,7 +298,7 @@ test_machinery_gate_blocks_until_verified() {
 test_machinery_unit_suite_failure_stops_before_push() {
     setup_repo
     local wt; wt="$(add_worktree feat-e2)"
-    commit_in "$wt" skills/s/SKILL.md "# s" "Add a shared skill"
+    commit_in "$wt" scripts/tool.sh "#!/bin/sh" "Add a tool"
     local out; out="$(FAKE_UNIT_EXIT=1 persist "$wt" --machinery-verified 2>&1)"; local rc=$?
     assert_eq 1 "$rc" "exit code" || return 1
     assert_contains "$out" "unit suite failed" || return 1
@@ -285,13 +307,120 @@ test_machinery_unit_suite_failure_stops_before_push() {
     assert_file "$wt" "worktree kept"
 }
 
-test_person_scope_is_not_machinery() {
+test_person_scope_docs_are_not_gated() {
     setup_repo
     local wt; wt="$(add_worktree feat-f)"
-    commit_in "$wt" people/p/skills/s/SKILL.md "# s" "Add a person skill"
+    commit_in "$wt" people/p/tools/t.md "# t" "Add a person tool doc"
     persist "$wt" >/dev/null || return 1
-    assert_not_contains "$(cat "$REC")" "unit" "no unit suite for a person-scope change" || return 1
+    assert_not_contains "$(cat "$REC")" "unit" "no unit suite for a person-scope doc" || return 1
+    assert_eq "Add a person tool doc (#1)" "$(origin_log | head -1)"
+}
+
+test_spec_change_needs_a_covering_run() {
+    setup_repo
+    local wt; wt="$(add_worktree feat-spec)"
+    commit_in "$wt" AGENTS.md "# Exobrain, reworded" "Reword the root spec"
+    local out; out="$(persist "$wt" 2>&1)"; local rc=$?
+    assert_eq 3 "$rc" "exit code" || return 1
+    assert_contains "$out" "AGENTS.md — needs a passing run since its last edit" || return 1
+    assert_contains "$out" "behavior/run.sh --working-tree" "names the command" || return 1
+    assert_not_contains "$out" "--machinery-verified" "a spec gap offers no flag" || return 1
+    out="$(persist "$wt" --machinery-verified 2>&1)"; rc=$?
+    assert_eq 3 "$rc" "the author's word does not clear a spec" || return 1
+    origin_has_branch feat-spec && { echo "pushed despite the gate"; return 1; }
+    assert_not_contains "$(cat "$REC")" "unit" "no unit suite for a spec-only change" || return 1
+    write_run "$wt" 20260101-000000 "$(head_tree "$wt")"
+    out="$(persist "$wt" 2>&1)" || { echo "$out"; return 1; }
+    assert_eq "Reword the root spec (#1)" "$(origin_log | head -1)" || return 1
+    assert_contains "$(cat "$TEST_DIR/pr-body-1")" "## Behavioral verification" || return 1
+    assert_contains "$(cat "$TEST_DIR/pr-body-1")" "- run 20260101-000000 (claude): claude/some-case 1/1"
+}
+
+test_a_run_before_a_later_spec_edit_does_not_count() {
+    setup_repo
+    local wt; wt="$(add_worktree feat-late)"
+    commit_in "$wt" AGENTS.md "# Exobrain v2" "Reword the root spec"
+    write_run "$wt" r1 "$(head_tree "$wt")"
+    commit_in "$wt" AGENTS.md "# Exobrain v3" "Reword it again"
+    persist "$wt" >/dev/null 2>&1; local rc=$?
+    assert_eq 3 "$rc" "the run tested an older spec" || return 1
+    commit_in "$wt" knowledge/tracked/x.md "x" "Record a fact"
+    write_run "$wt" r2 "$(git -C "$wt" rev-parse 'HEAD~1^{tree}')"
+    persist "$wt" >/dev/null || { echo "a later non-spec edit voided the run"; return 1; }
+    assert_eq "Reword the root spec (#1)" "$(origin_log | head -1)"
+}
+
+test_runs_that_do_not_count() {
+    setup_repo
+    local wt tree f; wt="$(add_worktree feat-weak)"
+    commit_in "$wt" AGENTS.md "# Exobrain v2" "Reword the root spec"
+    tree="$(head_tree "$wt")"
+    for f in '.all_met = false' '.harness_error = true' 'del(.tree)' 'del(.harness_error)' \
+             '.cases[0].name = "claude/smoke"' '.cases[0].profile = "static"' \
+             '.cases[0].verdict = "INFO"' '.tree = "0000000000000000000000000000000000000000"'; do
+        rm -rf "$wt/tmp/test-runs"; write_run "$wt" r "$tree" "$f"
+        persist "$wt" >/dev/null 2>&1
+        assert_eq 3 "$?" "a run with $f does not count" || return 1
+    done
+    origin_has_branch feat-weak && { echo "pushed on a run that does not count"; return 1; }
+    return 0
+}
+
+test_person_scope_spec_needs_its_scope_wired() {
+    setup_repo
+    local wt; wt="$(add_worktree feat-pspec)"
+    commit_in "$wt" people/p/skills/s/SKILL.md "# s" "Add a person skill"
+    write_run "$wt" guest "$(head_tree "$wt")"
+    local out; out="$(persist "$wt" 2>&1)"; local rc=$?
+    assert_eq 3 "$rc" "an unwired run never loaded the skill" || return 1
+    assert_contains "$out" "people/p/skills/s/SKILL.md — needs a passing run since its last edit, wired to people/p" || return 1
+    write_run "$wt" wired "$(head_tree "$wt")" '.scopes = ["people/p/hosts/h"]'
+    persist "$wt" >/dev/null || { echo "a run wired below the scope loads it"; return 1; }
     assert_eq "Add a person skill (#1)" "$(origin_log | head -1)"
+}
+
+test_a_sibling_scope_does_not_cover() {
+    setup_repo
+    local wt; wt="$(add_worktree feat-sib)"
+    commit_in "$wt" people/p/AGENTS.md "# p, reworded" "Reword a person spec"
+    write_run "$wt" r "$(head_tree "$wt")" '.scopes = ["people/pq"]'
+    persist "$wt" >/dev/null 2>&1
+    assert_eq 3 "$?" "people/pq is not in people/p's chain"
+}
+
+test_sidecar_needs_its_agent() {
+    setup_repo
+    local wt; wt="$(add_worktree feat-codex)"
+    commit_in "$wt" CODEX.md "# Codex notes" "Add a Codex sidecar"
+    write_run "$wt" claude-only "$(head_tree "$wt")"
+    local out; out="$(persist "$wt" 2>&1)"; local rc=$?
+    assert_eq 3 "$rc" "claude never loads CODEX.md" || return 1
+    assert_contains "$out" "CODEX.md — needs a passing run since its last edit with codex" || return 1
+    write_run "$wt" both "$(head_tree "$wt")" '.agents = ["claude", "codex"]'
+    persist "$wt" >/dev/null || return 1
+    assert_eq "Add a Codex sidecar (#1)" "$(origin_log | head -1)"
+}
+
+test_openclaw_sidecar_needs_the_flag() {
+    setup_repo
+    local wt; wt="$(add_worktree feat-oc)"
+    commit_in "$wt" people/p/OPENCLAW.md "# OpenClaw notes" "Add an OpenClaw sidecar"
+    local out; out="$(persist "$wt" 2>&1)"; local rc=$?
+    assert_eq 3 "$rc" "exit code" || return 1
+    assert_contains "$out" "people/p/OPENCLAW.md" || return 1
+    assert_contains "$out" "--machinery-verified" || return 1
+    persist "$wt" --machinery-verified >/dev/null || return 1
+    assert_eq "Add an OpenClaw sidecar (#1)" "$(origin_log | head -1)"
+}
+
+test_uncommitted_spec_matches_a_working_tree_run() {
+    setup_repo
+    local wt; wt="$(add_worktree feat-dirty-spec)"
+    printf '# Exobrain, uncommitted\n' > "$wt/AGENTS.md"
+    write_run "$wt" r "$(working_tree "$wt")" '.source = "working-tree"'
+    persist "$wt" -m "Reword the root spec" >/dev/null || return 1
+    assert_eq "Reword the root spec (#1)" "$(origin_log | head -1)" || return 1
+    assert_eq "" "$(git -C "$MAIN" status --porcelain)" "the staging area was never touched"
 }
 
 test_timeline_row_for_tracked_domain_only() {
@@ -539,6 +668,27 @@ test_sweep_honors_a_claim_that_asserted_machinery() {
     assert_eq "Add a tool (#1)" "$(origin_log | head -1)"
 }
 
+test_sweep_lands_a_verified_spec_change() {
+    setup_repo
+    local done_ wait_
+    done_="$(add_worktree sw-verified)"; commit_in "$done_" AGENTS.md "# v2" "Reword the root spec"
+    write_run "$done_" r "$(head_tree "$done_")"
+    wait_="$(add_worktree sw-unverified)"; commit_in "$wait_" people/p/AGENTS.md "# p v2" "Reword a person spec"
+    local out; out="$(sweep PERSIST_QUIET_MINUTES=0 2>&1)" || { echo "$out"; return 1; }
+    assert_contains "$out" "sweep: 1 landed, 0 skipped, 1 awaiting verification, 0 stale, 0 failed" || return 1
+    assert_no_file "$done_" "the verified spec change landed" || return 1
+    assert_file "$wait_" "the unverified one waits"
+}
+
+# The flag on the sweep's own command line vouches for nothing; only a claim does.
+test_sweep_never_vouches_for_machinery() {
+    setup_repo
+    local mach; mach="$(add_worktree sw-vouch)"; commit_in "$mach" scripts/tool.sh "#!/bin/sh" "Add a tool"
+    local out; out="$(cd "$MAIN" && PATH="$FAKE_BIN:$PATH" PERSIST_QUIET_MINUTES=0 scripts/persist.sh --sweep --machinery-verified 2>&1)"
+    assert_contains "$out" "skip sw-vouch: touches shared machinery" || return 1
+    assert_file "$mach"
+}
+
 test_sweep_fails_on_machinery_that_waited_too_long() {
     setup_repo
     local wt; wt="$(add_worktree sw-old)"
@@ -619,7 +769,15 @@ run_test refuses_default_branch_and_main_checkout    test_refuses_default_branch
 run_test nothing_to_land_is_a_noop                   test_nothing_to_land_is_a_noop
 run_test machinery_gate_blocks_until_verified        test_machinery_gate_blocks_until_verified
 run_test machinery_unit_suite_failure_stops_before_push test_machinery_unit_suite_failure_stops_before_push
-run_test person_scope_is_not_machinery               test_person_scope_is_not_machinery
+run_test person_scope_docs_are_not_gated             test_person_scope_docs_are_not_gated
+run_test spec_change_needs_a_covering_run            test_spec_change_needs_a_covering_run
+run_test a_run_before_a_later_spec_edit_does_not_count test_a_run_before_a_later_spec_edit_does_not_count
+run_test runs_that_do_not_count                      test_runs_that_do_not_count
+run_test person_scope_spec_needs_its_scope_wired     test_person_scope_spec_needs_its_scope_wired
+run_test a_sibling_scope_does_not_cover              test_a_sibling_scope_does_not_cover
+run_test sidecar_needs_its_agent                     test_sidecar_needs_its_agent
+run_test openclaw_sidecar_needs_the_flag             test_openclaw_sidecar_needs_the_flag
+run_test uncommitted_spec_matches_a_working_tree_run test_uncommitted_spec_matches_a_working_tree_run
 run_test timeline_row_for_tracked_domain_only        test_timeline_row_for_tracked_domain_only
 run_test timeline_summary_defaults_to_commit_subject test_timeline_summary_defaults_to_commit_subject
 run_test review_failure_stops_before_push            test_review_failure_stops_before_push
@@ -639,6 +797,8 @@ run_test detached_land_posts_findings_as_a_pr_review test_detached_land_posts_fi
 run_test detached_land_still_blocks_on_the_proof_gate test_detached_land_still_blocks_on_the_proof_gate
 run_test sweep_lands_claimed_and_quiet_skips_fresh_and_dirty test_sweep_lands_claimed_and_quiet_skips_fresh_and_dirty
 run_test sweep_honors_a_claim_that_asserted_machinery test_sweep_honors_a_claim_that_asserted_machinery
+run_test sweep_lands_a_verified_spec_change          test_sweep_lands_a_verified_spec_change
+run_test sweep_never_vouches_for_machinery           test_sweep_never_vouches_for_machinery
 run_test sweep_fails_on_machinery_that_waited_too_long test_sweep_fails_on_machinery_that_waited_too_long
 run_test sweep_fails_on_a_stale_dirty_worktree       test_sweep_fails_on_a_stale_dirty_worktree
 run_test swept_land_posts_findings_as_a_pr_review  test_swept_land_posts_findings_as_a_pr_review

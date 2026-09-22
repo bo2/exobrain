@@ -66,6 +66,7 @@ The connector resolves identity by **name-match** — your handle and hostname m
 | **Skills** | Per-`(name, scope, owner)` tier (`always`/`optional`/`off`) | `skills_resolve` in `scripts/skills-registry.sh` |
 | **Sidecar specs** | Each scope's `AGENTS.md` + agent sidecar, linked side by side; the agent reads all | `scripts/connect-agent.sh` |
 | **Tools catalog** | Per-tool docs `tools/<name>.md` + group/person/host overlays (by tool name) | globbed by scope; deeper scope wins |
+| **Behavior cases** | The suite's global cases + each scope's `tests/behavior/<case>/` along a wired chain | `skills/exobrain-tests/behavior/run.sh --scope`; deeper scope wins by case name |
 
 Skills are the only resolver that uses `off` to actively shadow a shallower scope; sidecars and tool overlays merge additively. The `scope` value of a skill entry is the scope's repo-relative path (or `global` / `external`), so the same skill name at two scopes never collides — they link with distinct path-derived suffixes (`name.people__alex`).
 

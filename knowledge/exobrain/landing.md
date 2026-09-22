@@ -19,11 +19,12 @@ Push, review, PR and merge take minutes, so a chat reply doesn't wait for them. 
 1. The script commits, then hands the rest to a background process that logs to `.git/persist-logs/<branch>.log` in the main checkout.
 2. That process runs the same steps as an attended land (`exobrain-persist` step 4).
 3. The validator and the new-shared-skill proof gate block as usual. A land they stop, or that dies or hits a conflict, stays claimed on its branch, and the next sweep retries it.
-4. The authoring review does not block. Its findings are posted as a review on the PR, headed **Authoring review (unattended land, not blocking)**, and the PR merges anyway, so the flagged text sits on the default branch until it is repaired.
+4. The verification gate blocks too, and a land it stops is not retried. A change to an agent spec (`exobrain-persist` step 3) needs a passing behavior run, which a chat turn doesn't make, so the change waits on its branch until someone in a terminal verifies it and lands it. Until then the new rule does not apply.
+5. The authoring review does not block. Its findings are posted as a review on the PR, headed **Authoring review (unattended land, not blocking)**, and the PR merges anyway, so the flagged text sits on the default branch until it is repaired.
 
 ## The sweep
 
-`scripts/persist.sh --sweep`, a scheduled job on the host that runs the chat agent, lands whatever a land left behind: a claimed land that stopped, or a committed branch nobody landed. It never lands uncommitted edits, or a shared-machinery change whose claim carries no `--machinery-verified` assertion — that one waits for an agent's behavioral verification. It reports those as stale once they have waited too long, and the report fails the job and sends its alert. The exact rules are in `exobrain-persist` § Landing later.
+`scripts/persist.sh --sweep`, a scheduled job on the host that runs the chat agent, lands whatever a land left behind: a claimed land that stopped, or a committed branch nobody landed. It never lands uncommitted edits, a shared-machinery change whose claim carries no `--machinery-verified` assertion, or an agent spec change no passing behavior run covers — those wait for an agent's behavioral verification. It reports those as stale once they have waited too long, and the report fails the job and sends its alert. The exact rules are in `exobrain-persist` § Landing later.
 
 ## Who fixes the findings
 
