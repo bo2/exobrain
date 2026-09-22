@@ -8,7 +8,7 @@ Three layers, cheapest first, each scoped to what only it can check:
 
 1. **Deterministic validator** — fast, grep-safe rules only. A rule whose own description contains the forbidden pattern can't be grep-gated; anything judgment-shaped moves up a layer.
 2. **LLM judgment review** — a model pass over the diff against an authoring rubric, fed the diff explicitly as data. Advisory: it degrades open (a missing or failing engine never blocks) and fails only on reported violations.
-3. **Behavioral verification** — changes to shared machinery (anything that alters other people's agents) don't ship until behaviorally tested, enforced as a script gate or as an explicit protocol step at persist; pure docs and personal scopes are exempt.
+3. **Behavioral verification** — changes to shared machinery (anything that alters other people's agents) don't ship until behaviorally tested; pure docs are exempt, and a scope that loads for its author alone may be. Where a harness can run the change, the gate reads the harness's own record of a passing run — the exact state it tested and the context it loaded — so a run that predates the last edit, or never loaded the changed scope, doesn't count. The author's word is the fallback only for what no harness runs.
 
 **Anti-reflexive clearing — for blocking gates.** The flag that clears a *blocking* gate is documented only inside the gate's own failure message, so it cannot be passed without reading what it asserts. An advisory gate may document its skip openly — the distinction is whether bypass must be a read-and-understood act. Either way, audit for silent waivers — and close the audit: a gate that can be waived silently isn't a gate, and an audit finding without a landed resolution is just a note.
 

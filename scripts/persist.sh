@@ -18,9 +18,14 @@
 # failed pull, a merged PR whose worktree was never removed — finishes the land
 # instead of failing on it.
 #
-# A change touching shared machinery (root scripts/ and skills/, the registries,
-# the global-scope specs) is gated: the script runs the deterministic unit suite
-# itself, and lands only when --machinery-verified asserts the agent-judged half
+# Two kinds of change are verified before they land (exobrain-persist skill, step 3).
+# An agent spec at any scope — AGENTS.md, a CLAUDE.md or CODEX.md sidecar, a SKILL.md —
+# lands only when a passing behavioral run recorded under the worktree's tmp/test-runs
+# covers it: the run tested this change's specs as they are now, wired the spec's scope,
+# and for a sidecar ran that sidecar's agent. The PR body lists the runs. The rest of
+# the shared machinery — root scripts, root skills' code, the registries, OpenClaw
+# sidecars — is gated on the author's word: the script runs the deterministic unit
+# suite itself, and lands only when --machinery-verified asserts the agent-judged half
 # (the behavior suite, and exobrain-ab where the change alters behavior).
 #
 # --detach commits in the foreground, then hands the rest of the land to a
@@ -45,15 +50,16 @@
 # `persist-requested` marker survives a kill), or one that is clean, ahead of the
 # default branch, and quiet for at least PERSIST_QUIET_MINUTES (default 60) — so
 # a session still committing to its branch is left alone. A dirty worktree is
-# never touched, and neither is one whose machinery diff carries no
-# --machinery-verified claim: both wait for a person or an agent, so neither
-# fails the sweep. One that has waited PERSIST_STALE_DAYS (default 2) is reported
+# never touched, and neither is one the verification gate would refuse (a spec no
+# passing run covers, or a machinery diff whose claim carries no
+# --machinery-verified): both wait for a person or an agent, so neither fails the
+# sweep. One that has waited PERSIST_STALE_DAYS (default 2) is reported
 # as stale and does fail it, so a scheduled sweep's alert names it — finish and
 # land it, or remove it.
 #
 # Exit: 0 landed (or nothing to land) · 1 a step failed or the sweep found a stale
 # worktree (the branch keeps whatever progress was made; re-run to resume) ·
-# 2 usage · 3 the machinery gate (the message says how to clear it).
+# 2 usage · 3 the verification gate (the message says how to clear it).
 #
 # Lands serialize on a lock in the main checkout's .git, so two of them — a chat
 # turn and the sweep, say — never race on the main checkout's pull or worktree
@@ -150,18 +156,8 @@ release_lock() { [[ -n "$LOCK_DIR" ]] && rm -rf "$LOCK_DIR"; LOCK_DIR=""; }
 # Land one worktree
 # ---------------------------------------------------------------------------
 
-DRY_RUN=0; PR_TITLE=""; UNATTENDED=0; REVIEW_NOTE=""; CONTEXT_FILE=""; CONTEXT_NOTE=""
+DRY_RUN=0; PR_TITLE=""; UNATTENDED=0; REVIEW_NOTE=""; CONTEXT_FILE=""; CONTEXT_NOTE=""; VERIFY_NOTE=""
 run() { if (( DRY_RUN )); then log "would: $*"; else "$@"; fi; }
-
-# machinery_refusal <paths> — say how to clear the machinery gate, and exit 3.
-machinery_refusal() {
-    {
-        echo "persist: this change touches shared machinery, which must be behaviorally verified before it lands (exobrain-persist skill, step 3):"
-        echo "$1" | sed 's/^/    /'
-        echo "persist: this script runs the unit suite ($UNIT_SUITE) itself; run the behavior suite (and exobrain-ab where the change alters behavior), then re-run with $MACHINERY_FLAG to assert that it happened"
-    } >&2
-    exit 3
-}
 
 # author_id <main root> — who a timeline row is attributed to.
 author_id() {
@@ -174,14 +170,138 @@ author_id() {
     git -C "$1" config user.name 2>/dev/null || echo "unknown"
 }
 
-# machinery_paths <worktree> <base> — changed paths (committed + working tree)
-# that shape other agents' behavior: root scripts, root skills, the registries,
-# and the global-scope specs. Person/host scopes are exempt.
-machinery_paths() {
+# ---------------------------------------------------------------------------
+# Verification gate
+# ---------------------------------------------------------------------------
+
+# Agent specs at any scope, verified by a behavioral run: every AGENTS.md, Claude or
+# Codex sidecar, and SKILL.md.
+SPEC_RE='(^|/)((AGENTS|CLAUDE|CODEX)(\.[^/]*)?|SKILL)\.md$'
+# The rest of the machinery that shapes agents, verified on the author's word: root
+# scripts, root skills' code, the registries, and OpenClaw sidecars at any scope (no
+# behavioral harness runs OpenClaw).
+MACHINERY_RE='^(scripts/|skills/|skills\.json$|scopes\.json$|skills\.schema\.json$)|(^|/)OPENCLAW(\.[^/]*)?\.md$'
+
+# changed_paths <worktree> <base> — paths changed on the branch, committed or not.
+changed_paths() {
     {
         git -C "$1" diff --name-only "$2"...HEAD 2>/dev/null
         git -C "$1" status --porcelain --untracked-files=all | cut -c4- | sed 's/^.* -> //'
-    } | sort -u | grep -E '^(scripts/|skills/|skills\.json$|scopes\.json$|skills\.schema\.json$|AGENTS\.md$|CLAUDE\.md$|CODEX\.md$|OPENCLAW\.md$)' || true
+    } | sort -u
+}
+
+spec_paths()      { changed_paths "$1" "$2" | grep -E "$SPEC_RE" || true; }
+machinery_paths() { changed_paths "$1" "$2" | grep -E "$MACHINERY_RE" | grep -vE "$SPEC_RE" || true; }
+
+# worktree_tree <worktree> — the tree the worktree's current state commits as,
+# uncommitted changes included, built in a copy of its index so the real staging
+# area is never touched.
+worktree_tree() {
+    local idx src tree rc
+    idx="$(mktemp)"
+    src="$(git -C "$1" rev-parse --git-path index)"; [[ "$src" = /* ]] || src="$1/$src"
+    cp "$src" "$idx" 2>/dev/null || rm -f "$idx"
+    tree="$(GIT_INDEX_FILE="$idx" git -C "$1" add -A 2>/dev/null && GIT_INDEX_FILE="$idx" git -C "$1" write-tree 2>/dev/null)"
+    rc=$?
+    rm -f "$idx"
+    (( rc == 0 )) && [[ -n "$tree" ]] && echo "$tree"
+}
+
+# qualifying_runs <worktree> <tree> — the behavioral runs under the worktree's
+# tmp/test-runs that verify <tree>'s specs, one "<run dir>|<agents>|<scopes>" line each
+# (comma-separated lists). A run qualifies when every case it ran met its threshold with
+# no harness error, at least one passing case drove an agent and is not the smoke check,
+# and no spec differs between the tree it tested and <tree>.
+qualifying_runs() {
+    local wt="$1" tree="$2" s tested diff
+    command -v jq >/dev/null || return 0
+    for s in "$wt"/tmp/test-runs/*/summary.json; do
+        [[ -f "$s" ]] || continue
+        tested="$(jq -r 'select(.all_met == true and .harness_error == false
+                    and any(.cases[]; .verdict == "PASS" and .profile != "static" and (.name | endswith("/smoke") | not)))
+                  | .tree // empty' "$s" 2>/dev/null)"
+        [[ -n "$tested" ]] || continue
+        diff="$(git -C "$wt" diff --name-only "$tested" "$tree" 2>/dev/null)" || continue
+        grep -qE "$SPEC_RE" <<< "$diff" && continue
+        printf '%s|%s|%s\n' "$(dirname "$s")" "$(jq -r '.agents | join(",")' "$s")" "$(jq -r '.scopes | join(",")' "$s")"
+    done
+}
+
+# spec_scope <spec> — the scope a spec loads from: a SKILL.md's is the directory
+# holding its skills/, any other spec's is its own directory; "" is the global scope.
+spec_scope() {
+    case "$1" in
+        */skills/*/SKILL.md) echo "${1%%/skills/*}" ;;
+        skills/*/SKILL.md)   echo "" ;;
+        */*)                 echo "${1%/*}" ;;
+        *)                   echo "" ;;
+    esac
+}
+
+# spec_agent <spec> — the one agent that loads a sidecar; empty for a spec every agent loads.
+spec_agent() {
+    case "${1##*/}" in
+        CLAUDE.md|CLAUDE.*.md) echo claude ;;
+        CODEX.md|CODEX.*.md)   echo codex ;;
+    esac
+}
+
+# spec_gaps <worktree> <base> — the changed specs no qualifying run covers, one per
+# line with what a covering run needs. A run covers a spec when it wired the spec's
+# scope (every run loads the global scope) and, for a sidecar, ran the sidecar's agent.
+spec_gaps() {
+    local wt="$1" base="$2" specs tree runs="" p scope need covered dir agents scopes leaf
+    specs="$(spec_paths "$wt" "$base")"
+    [[ -n "$specs" ]] || return 0
+    tree="$(worktree_tree "$wt")"
+    [[ -n "$tree" ]] && runs="$(qualifying_runs "$wt" "$tree")"
+    while IFS= read -r p; do
+        [[ -n "$p" ]] || continue
+        scope="$(spec_scope "$p")"; need="$(spec_agent "$p")"; covered=0
+        while IFS='|' read -r dir agents scopes; do
+            [[ -n "$dir" ]] || continue
+            [[ -z "$need" || ",$agents," == *",$need,"* ]] || continue
+            if [[ -z "$scope" ]]; then covered=1; break; fi
+            for leaf in ${scopes//,/ }; do
+                if [[ "$leaf" == "$scope" || "$leaf" == "$scope/"* ]]; then covered=1; break 2; fi
+            done
+        done <<< "$runs"
+        (( covered )) || echo "$p — needs a passing run since its last edit${need:+ with $need}${scope:+, wired to $scope}"
+    done <<< "$specs"
+}
+
+# verification_note <worktree> <tree> — the qualifying runs, one line each, for the PR body.
+verification_note() {
+    local dir
+    while IFS='|' read -r dir _ _; do
+        [[ -n "$dir" ]] || continue
+        jq -r --arg run "${dir##*/}" '"- run \($run) (\(.agents | join(", "))\(if (.scopes | length) > 0 then "; scopes: " + (.scopes | join(", ")) else "" end)): " + ([.cases[] | "\(.name) \(.passes)/\(.total)"] | join(", "))' "$dir/summary.json"
+    done < <(qualifying_runs "$1" "$2")
+}
+
+# gate_refusal <worktree> <base> — why the gate refuses this change, empty when it
+# doesn't. Specs need covering runs; other machinery needs the author's flag
+# (MACHINERY_VERIFIED).
+gate_refusal() {
+    local wt="$1" base="$2" gaps machinery=""
+    gaps="$(spec_gaps "$wt" "$base")"
+    [[ "${MACHINERY_VERIFIED:-0}" == "1" ]] || machinery="$(machinery_paths "$wt" "$base")"
+    if [[ -n "$gaps" ]]; then
+        echo "persist: this change edits agent specs, which land only with a passing behavioral run that covers them (exobrain-persist skill, step 3):"
+        echo "$gaps" | sed 's/^/    /'
+        echo "persist: from this worktree run skills/exobrain-tests/behavior/run.sh --working-tree --cases <the cases this change could move> [--scope <scope>], then re-run persist. A run counts once every case it ran met its threshold, one of them agent-driven and not the smoke check."
+    fi
+    if [[ -n "$machinery" ]]; then
+        echo "persist: this change touches shared machinery, which must be verified before it lands (exobrain-persist skill, step 3):"
+        echo "$machinery" | sed 's/^/    /'
+        echo "persist: this script runs the unit suite ($UNIT_SUITE) itself; run the behavior suite (and exobrain-ab where the change alters behavior), then re-run with $MACHINERY_FLAG to assert that it happened"
+    fi
+}
+
+# refuse_at_gate <worktree> <base> — exit 3 with the gate's refusal when it has one.
+refuse_at_gate() {
+    local refusal; refusal="$(gate_refusal "$1" "$2")"
+    [[ -z "$refusal" ]] || { echo "$refusal" >&2; exit 3; }
 }
 
 # timeline_rows <worktree> <base> <summary> <author> — append one row per
@@ -212,9 +332,19 @@ timeline_rows() {
     done < <(cd "$wt" && grep -rl --include=README.md -E '^timeline:[[:space:]]*true' knowledge workspaces 2>/dev/null || true)
 }
 
-# pr_state <worktree> <branch> — "<number> <STATE>" for the branch's PR, or empty.
+# pr_state <worktree> <branch> — "<number> <STATE>" for this change's PR, or empty.
+# A branch name gets reused, so a merged or closed PR counts only when the commits
+# it carried are in this branch's history; an open one is this change's by definition.
 pr_state() {
-    (cd "$1" && gh pr list --head "$2" --state all --json number,state --jq '.[0] | select(. != null) | "\(.number) \(.state)"' 2>/dev/null) || true
+    local wt="$1" branch="$2" n state oid
+    while read -r n state oid; do
+        [[ -n "$n" ]] || continue
+        if [[ "$state" == OPEN ]] || { [[ -n "$oid" ]] && git -C "$wt" merge-base --is-ancestor "$oid" HEAD 2>/dev/null; }; then
+            echo "$n $state"; return 0
+        fi
+    done < <(cd "$wt" && gh pr list --head "$branch" --state all --json number,state,headRefOid \
+                 --jq '.[] | "\(.number) \(.state) \(.headRefOid)"' 2>/dev/null)
+    return 0
 }
 
 # post_findings_review <worktree> <number> — post REVIEW_NOTE's findings as a
@@ -262,18 +392,21 @@ land() {
         if [[ "$MACHINERY_VERIFIED" == "1" ]]; then echo machinery-verified > "$marker"; else touch "$marker"; fi
     fi
 
-    # Refresh the base so "ahead of" and the machinery diff mean current trunk.
+    # Refresh the base so "ahead of" and the gate's diff mean current trunk.
     if has_remote "$main"; then
         git -C "$main" fetch --quiet origin "$default" 2>/dev/null || warn "fetch failed; measuring against the last known $base"
     fi
 
-    # ---- machinery gate --------------------------------------------------
-    local machinery
-    machinery="$(machinery_paths "$wt" "$base")"
-    if [[ -n "$machinery" && "$MACHINERY_VERIFIED" != "1" ]]; then
+    # ---- verification gate -------------------------------------------------
+    local refusal machinery
+    refusal="$(gate_refusal "$wt" "$base")"
+    if [[ -n "$refusal" ]]; then
         rm -f "$marker"
-        machinery_refusal "$machinery"
+        echo "$refusal" >&2
+        exit 3
     fi
+    [[ -z "$(spec_paths "$wt" "$base")" ]] || VERIFY_NOTE="$(verification_note "$wt" "$(worktree_tree "$wt")")"
+    machinery="$(machinery_paths "$wt" "$base")"
     if [[ -n "$machinery" && -x "$wt/$UNIT_SUITE" ]]; then
         log "machinery changed — running $UNIT_SUITE"
         (( DRY_RUN )) || (cd "$wt" && "$UNIT_SUITE") || die "unit suite failed — fix, amend, then re-run"
@@ -345,6 +478,9 @@ land() {
             # The branch's first commit names the change; later ones refine it.
             title="${PR_TITLE:-$(git -C "$wt" log --reverse --format=%s "$base"..HEAD | head -1)}"
             body="$(git -C "$wt" log --reverse --format='- %s%n%n%b' "$base"..HEAD | sed -e 's/[[:space:]]*$//' | cat -s)"
+            if [[ -n "$VERIFY_NOTE" ]]; then
+                body="$body"$'\n\n'"## Behavioral verification"$'\n\n'"$VERIFY_NOTE"
+            fi
             if [[ -n "$CONTEXT_NOTE" ]]; then
                 body="$body"$'\n\n'"$CONTEXT_HEADING"$'\n\n'"$CONTEXT_NOTE"
             fi
@@ -427,8 +563,11 @@ sweep() {
     default="$(default_branch "$main")" || die "cannot resolve the default branch"
     has_remote "$main" && git -C "$main" fetch --quiet origin "$default" 2>/dev/null
     base="$(base_ref "$main" "$default")"
+    # Vouching for machinery is an author's act, never the sweep's: only a claim
+    # that carried the flag counts (see land).
+    MACHINERY_VERIFIED=0
 
-    local failed=0 landed=0 skipped=0 stale=0 waiting=0 path branch gitdir reason age
+    local failed=0 landed=0 skipped=0 stale=0 waiting=0 path branch gitdir reason age claimed
     while IFS='|' read -r path branch; do
         [[ -n "$path" && "$path" != "$main" ]] || continue
         [[ -d "$path" ]] || { warn "worktree missing on disk: $path (git worktree prune)"; continue; }
@@ -453,17 +592,18 @@ sweep() {
         else
             reason="clean, ahead of $default, quiet for ${quiet}m"
         fi
-        # A machinery diff lands only on an agent's behavioral verification, which
-        # the sweep can't do. Without that claim the worktree waits — not a sweep
-        # failure until it has waited long enough to be rotting.
-        if [[ -n "$(machinery_paths "$path" "$base")" ]] \
-           && ! grep -qx 'machinery-verified' "$gitdir/persist-requested" 2>/dev/null; then
+        # A diff the verification gate refuses needs verification the sweep can't
+        # do (see the gate in land); a claim that carried the flag vouches for
+        # machinery. Without that the worktree waits — not a sweep failure until it
+        # has waited long enough to be rotting.
+        claimed=0; grep -qx 'machinery-verified' "$gitdir/persist-requested" 2>/dev/null && claimed=1
+        if [[ -n "$(MACHINERY_VERIFIED=$claimed gate_refusal "$path" "$base")" ]]; then
             age="$(commit_age_days "$path")"
             if (( age >= stale_days )); then
-                warn "stale: $branch has waited ${age}d for the behavioral verification its machinery diff needs ($path) — verify and land it, or remove the worktree"
+                warn "stale: $branch has waited ${age}d for the behavioral verification its diff needs ($path) — verify and land it, or remove the worktree"
                 stale=$((stale + 1))
             else
-                log "skip $branch: touches shared machinery — needs an agent's behavioral verification"
+                log "skip $branch: touches shared machinery or agent specs — needs an agent's behavioral verification"
                 waiting=$((waiting + 1))
             fi
             continue
@@ -536,10 +676,7 @@ main() {
             log "committed on $branch"
         fi
         # Refuse at the gate here, where the caller still sees it.
-        if [[ "$MACHINERY_VERIFIED" != "1" ]]; then
-            local mach; mach="$(machinery_paths "$wt" "$(base_ref "$main" "$default")")"
-            [[ -z "$mach" ]] || machinery_refusal "$mach"
-        fi
+        refuse_at_gate "$wt" "$(base_ref "$main" "$default")"
         logf="$main/.git/persist-logs/$branch.log"
         detach "$wt" "$logf" ${passthrough[@]+"${passthrough[@]}"}
         log "land of $branch started in the background (log: $logf); a failure is retried by the sweep"

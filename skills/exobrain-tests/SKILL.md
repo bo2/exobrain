@@ -92,7 +92,9 @@ Exit: `0` all passed · `1` some failed · `2` harness error (including an unkno
   asserting the exact set of violations its fixture raises.
 - **`test-skills-validate.sh`** / **`test-skills-status.sh`** — every registry error,
   exit codes, and the directories never walked; every `--all` column under its own
-  heading whatever fields a declaration omits (an owner-less one included).
+  heading whatever fields a declaration omits (an owner-less one included), and a
+  catalog walk that finds every scope wherever the checkout sits (a `src/` parent
+  included) but none in a clone, worktree, vendored, or cache directory.
 - **`findings-pending`** (`skills/exobrain-repair-findings/tests/test-findings-pending.sh`)
   — the repair skill's detector against a fake `gh`: only merged PRs with a review opening
   with the findings heading qualify, the repaired label excludes one, the list comes out
@@ -111,12 +113,17 @@ Exit: `0` all passed · `1` some failed · `2` harness error (including an unkno
   spared, `{ROOT}` expanded, the linked-worktree refusal.
 - **`test-persist.sh`** — `persist.sh`: the full land against a bare origin and a fake
   `gh` (commit, gates, push, PR, squash-merge, main fast-forward, cleanup), the
-  machinery gate in both halves (the unit suite the script runs, the flag the agent
-  asserts, and the claim that carries it into a sweep), timeline rows, resume after an
-  interrupted run, conflict handling, the no-remote fast-forward, `--detach`
-  (foreground commit and gate refusal, background land), findings an unattended land posts
-  as a PR review (once, across a resume), `--context`, and `--sweep`'s claimed / quiet / dirty /
-  awaiting-verification / stale rules.
+  verification gate (which run records cover a spec change — tested tree, wired scope,
+  sidecar agent — and, for the rest of the machinery, the unit suite the script runs,
+  the flag the agent asserts, and the claim that carries it into a sweep), timeline
+  rows, resume after an interrupted run, conflict handling, the no-remote fast-forward,
+  `--detach` (foreground commit and gate refusal, background land), findings an
+  unattended land posts as a PR review (once, across a resume), `--context`, and
+  `--sweep`'s claimed / quiet / dirty / unverified / stale rules.
+- **`test-behavior-runner.sh`** — `behavior/run.sh` against a fake instance and a fake
+  `claude`: the run record `persist.sh` reads (tested tree for HEAD and working-tree
+  snapshots, agents, scopes, case profiles, harness errors) and `--scope` (every run copy
+  wired, the chain's own cases added, innermost wins).
 
 ### Add a unit harness
 
@@ -138,13 +145,15 @@ $SUITE/run.sh --smoke                       # trivial case, cheap self-test (one
 $SUITE/run.sh                               # all cases, all available agents
 $SUITE/run.sh --agents claude               # one agent only
 $SUITE/run.sh --cases worktree-first,no-secret-in-tracked-file --runs 3
+$SUITE/run.sh --working-tree --scope people/<id>/hosts/<host> --cases <c>   # a scope spec, pre-land
 $SUITE/run.sh --build-only                  # provision + validate the template, stop (no agents)
 $SUITE/run.sh --list                        # list cases
 ```
 
 Flags: `--agents <a1,a2>` (default `claude,codex`), `--cases <c1,c2>`, `--runs <N>`,
-`--smoke`, `--working-tree` (snapshot uncommitted local changes, not HEAD), `--keep`
-(retain instance copies), `--build-only`, `--list`. Requires `jq`
+`--smoke`, `--working-tree` (snapshot uncommitted local changes, not HEAD), `--scope
+<leaf>` (repeatable: wire a scope leaf into every run copy), `--keep` (retain instance
+copies), `--build-only`, `--list`. Requires `jq`
 and at least one requested agent CLI on PATH and runnable, logged in. Exit: `0` all
 met threshold, `1` some below, `2` harness/setup error.
 
@@ -164,6 +173,17 @@ met threshold, `1` some below, `2` harness/setup error.
 
 Artifacts land under `tmp/test-runs/<ts>/` (gitignored). The **LLM-judge always runs
 on `claude`** regardless of the agent under test, so verdicts are consistent.
+
+**Scope wiring.** A run copy loads only the global scope. `--scope <leaf>` wires each
+copy through its own connector (`connect-agent.sh <agent> --wire-sandbox`) to that leaf
+and its scope ancestors, with this checkout's person id, the way a connected checkout
+loads them — so a person- or host-scope spec is in the context under test. It also adds
+the chain's own cases (below).
+
+**The run record.** `summary.json` records what the run tested: the snapshot's git
+`tree`, its `source` (`head` / `working-tree`), the `agents` run, the `scopes` wired,
+each case's verdict and `profile`, and `harness_error`. `scripts/persist.sh` reads it to
+decide whether a spec change is verified — the `exobrain-persist` skill, step 3.
 
 ### Permission profiles
 
@@ -212,6 +232,11 @@ portable to any instance; `$1` = instance dir), `check.sh` (`$1` instance, `$2`
 transcript, `$3` engine exit; exit `0`/`1`/`2`; source `"$HARNESS_LIB/check-helpers.sh"`
 for assertions), and optional `rubric.md` (PASS CRITERIA for the LLM judge via
 `judge_case`). Keep fixtures self-seeded — never assume seed-specific structure.
+
+A case that tests a scope's own rule lives with that scope instead, at
+`<scope>/tests/behavior/<name>/`, in the same layout. It runs only when `--scope` wires a
+leaf at or below that scope, against the real scope rather than a fixture; a scope case
+shadows a global case of the same name (innermost wins).
 
 ## onboarding/ — the real-environment suite
 

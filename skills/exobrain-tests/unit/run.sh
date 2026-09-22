@@ -35,7 +35,8 @@ script-syntax|test-script-syntax.sh|the syntax gates in validate-exobrain.sh (ba
 validator-scan|test-validator-scan.sh|find_repo pruning in validate-exobrain.sh (gitignored bulk directories are never walked)
 validator-checks|test-validator-checks.sh|the whole-tree checks in validate-exobrain.sh (UPPERCASE names, bash 4 constructs, empty-array expansions, COMPAT markers)
 skills-validate|test-skills-validate.sh|scripts/skills-validate.sh (every registry error, undeclared dirs as info, exit codes, the dirs it never walks)
-skills-status|test-skills-status.sh|scripts/skills-status.sh --all (every column under its heading, whatever fields a declaration omits)
+skills-status|test-skills-status.sh|scripts/skills-status.sh --all (columns under their headings whatever a declaration omits, and a walk that finds every scope wherever the checkout sits)
+behavior-runner|test-behavior-runner.sh|skills/exobrain-tests/behavior/run.sh (the record of what a run tested, which the persist gate reads, and --scope wiring)
 persist|test-persist.sh|scripts/persist.sh (the one-command land from a worktree, its gates and resume paths, --detach, and --sweep)
 findings-pending|../../exobrain-repair-findings/tests/test-findings-pending.sh|skills/exobrain-repair-findings/scripts/findings-pending.sh (merged PRs carrying unrepaired authoring findings)'
 

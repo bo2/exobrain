@@ -54,9 +54,13 @@ if $show_all; then
                 printf '%s\t%s\t%s\t%s\t%s\t%s\n' "$n" "$scope" "${own:--}" "$tr" "$frc" "${desc:0:64}"
             done < <(jq -r '(.skills // [])[] | select(has("from") | not)
                         | [(.name // ""), (.owner // ""), (.tier // ""), (if .force then "force" else "-" end), (if .source then "ext" else "" end)] | join("\u001f")' "$jf" 2>/dev/null)
-        done < <(find "$REPO_DIR" -name skills.json \
-                    -not -path '*/.git/*' -not -path '*/node_modules/*' -not -path '*/src/*' \
-                    -not -path "$REPO_DIR/seed/*" -not -path '*/tmp/*' | sort)
+        # Pruned by directory name, not filtered by -not -path: a path filter still
+        # walks everything it hides, and an unanchored '*/src/*' also matches a
+        # checkout that itself sits under a src/ directory, hiding every file in it.
+        # -name only ever matches below the starting point. _cache is gitignored
+        # bulk, so it can hold no committed registry.
+        done < <(find "$REPO_DIR" \( -name .git -o -name node_modules -o -name src -o -name tmp \
+                    -o -name _cache -o -path "$REPO_DIR/seed" \) -prune -o -name skills.json -print | sort)
     } | column -t -s$'\t'
     exit 0
 fi
