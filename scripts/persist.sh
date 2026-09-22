@@ -332,9 +332,19 @@ timeline_rows() {
     done < <(cd "$wt" && grep -rl --include=README.md -E '^timeline:[[:space:]]*true' knowledge workspaces 2>/dev/null || true)
 }
 
-# pr_state <worktree> <branch> — "<number> <STATE>" for the branch's PR, or empty.
+# pr_state <worktree> <branch> — "<number> <STATE>" for this change's PR, or empty.
+# A branch name gets reused, so a merged or closed PR counts only when the commits
+# it carried are in this branch's history; an open one is this change's by definition.
 pr_state() {
-    (cd "$1" && gh pr list --head "$2" --state all --json number,state --jq '.[0] | select(. != null) | "\(.number) \(.state)"' 2>/dev/null) || true
+    local wt="$1" branch="$2" n state oid
+    while read -r n state oid; do
+        [[ -n "$n" ]] || continue
+        if [[ "$state" == OPEN ]] || { [[ -n "$oid" ]] && git -C "$wt" merge-base --is-ancestor "$oid" HEAD 2>/dev/null; }; then
+            echo "$n $state"; return 0
+        fi
+    done < <(cd "$wt" && gh pr list --head "$branch" --state all --json number,state,headRefOid \
+                 --jq '.[] | "\(.number) \(.state) \(.headRefOid)"' 2>/dev/null)
+    return 0
 }
 
 # post_findings_review <worktree> <number> — post REVIEW_NOTE's findings as a

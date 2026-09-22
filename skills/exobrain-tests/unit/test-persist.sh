@@ -104,8 +104,8 @@ EOF
     setup_fake_gh
 }
 
-# setup_fake_gh — a `gh` on PATH: `pr list --head <b>` reports the PR from a state
-# file, `pr create` records one, `pr review` appends a review body to
+# setup_fake_gh — a `gh` on PATH: `pr list --head <b>` reports every PR of that head
+# branch from a state file (number, state, and the head commit it was opened at), `pr create` records one, `pr review` appends a review body to
 # pr-review-<n> and `pr view` prints them back, `pr merge --squash` squash-merges
 # the branch into the bare origin's main (refusing on conflict, as the forge would).
 setup_fake_gh() {
@@ -120,13 +120,13 @@ sub="\${1:-} \${2:-}"; shift 2 || true
 case "\$sub" in
   "pr list")
     head=""; while [[ \$# -gt 0 ]]; do case "\$1" in --head) head="\$2"; shift 2;; *) shift;; esac; done
-    awk -v b="\$head" '\$2==b {print \$1" "\$3}' "\$STATE" | tail -1 ;;
+    awk -v b="\$head" '\$2==b {print \$1" "\$3" "\$4}' "\$STATE" | sort -rn ;;
   "pr create")
     head=""; title=""; body=""
     while [[ \$# -gt 0 ]]; do case "\$1" in --head) head="\$2"; shift 2;; --title) title="\$2"; shift 2;; --body) body="\$2"; shift 2;; --base) shift 2;; *) shift;; esac; done
     git -C "\$ORIGIN" rev-parse --verify --quiet "refs/heads/\$head" >/dev/null || { echo "gh: branch \$head not on origin" >&2; exit 1; }
     n=\$(( \$(wc -l < "\$STATE") + 1 ))
-    printf '%s %s OPEN %s\n' "\$n" "\$head" "\$title" >> "\$STATE"
+    printf '%s %s OPEN %s %s\n' "\$n" "\$head" "\$(git -C "\$ORIGIN" rev-parse "refs/heads/\$head")" "\$title" >> "\$STATE"
     printf '%s\n' "\$body" > "$TEST_DIR/pr-body-\$n"
     echo "https://forge.test/pr/\$n" ;;
   "pr review")
@@ -138,7 +138,7 @@ case "\$sub" in
   "pr merge")
     n="\$1"; line="\$(awk -v n="\$n" '\$1==n' "\$STATE")"
     [[ -n "\$line" ]] || { echo "gh: no PR \$n" >&2; exit 1; }
-    head="\$(echo "\$line" | awk '{print \$2}')"; title="\$(echo "\$line" | cut -d' ' -f4-)"
+    head="\$(echo "\$line" | awk '{print \$2}')"; title="\$(echo "\$line" | cut -d' ' -f5-)"
     rm -rf "\$SCRATCH"; git clone -q "\$ORIGIN" "\$SCRATCH"
     git -C "\$SCRATCH" config user.email gh@t.test; git -C "\$SCRATCH" config user.name gh
     git -C "\$SCRATCH" checkout -q main
@@ -238,6 +238,20 @@ test_lands_committed_branch() {
     assert_contains "$(cat "$REC")" "review" "authoring review ran" || return 1
     assert_not_contains "$(cat "$REC")" "unit" "no machinery, no unit suite" || return 1
     assert_no_file "$MAIN/.git/exobrain-persist.lock" "lock released"
+}
+
+# A branch name reused after its PR merged: the forge still lists that PR under the
+# name, and reading it as this change's would skip the push and merge, then remove
+# the worktree with the change still unlanded.
+test_merged_pr_of_an_earlier_branch_of_the_same_name_is_not_this_one() {
+    setup_repo
+    local wt; wt="$(add_worktree feat-again)"
+    printf '1 feat-again MERGED 0000000000000000000000000000000000000000 An earlier change\n' > "$TEST_DIR/prs"
+    commit_in "$wt" knowledge/plain/x.md "x" "Add x again"
+    local out; out="$(persist "$wt" 2>&1)" || { echo "$out"; return 1; }
+    assert_not_contains "$out" "already merged" || return 1
+    assert_eq "Add x again (#2)" "$(origin_log | head -1)" "a new PR carried the change" || return 1
+    assert_no_file "$wt" "worktree removed after a real land"
 }
 
 test_commits_dirty_work_with_message() {
@@ -763,6 +777,7 @@ test_stale_lock_is_taken_over() {
 # ---------------------------------------------------------------------------
 
 run_test lands_committed_branch                      test_lands_committed_branch
+run_test merged_pr_of_an_earlier_branch_of_the_same_name_is_not_this_one test_merged_pr_of_an_earlier_branch_of_the_same_name_is_not_this_one
 run_test commits_dirty_work_with_message             test_commits_dirty_work_with_message
 run_test dirty_work_without_message_is_usage_error   test_dirty_work_without_message_is_usage_error
 run_test refuses_default_branch_and_main_checkout    test_refuses_default_branch_and_main_checkout
