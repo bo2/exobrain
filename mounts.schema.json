@@ -2,43 +2,78 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://exobrain.local/schemas/mounts.json",
   "title": "Mounts registry",
-  "description": "Other exobrain instances whose knowledge domains this one reads from a local checkout. Lives at the repo root. Each machine enables a mount, and may point it at an existing checkout, in its gitignored .exobrain.json under mounts.<name> ({enabled, path}); by default the checkout is src/<name>/ in the main checkout. Only knowledge domains are indexed — never the mount's specs, hooks, skills, tools, scopes, or its own mounts. See knowledge/exobrain/mounts.md.",
+  "description": "Shared knowledge repositories this instance reads from a local checkout, each with its charter, plus this instance's own charter. Lives at the repo root. A mount is a content-only repository (knowledge domains, workspaces, a README — never specs, scripts, skills, tools, or scopes). Each machine enables a mount, and may point it at an existing checkout, in its gitignored .exobrain.json under mounts.<name> ({enabled, path}); by default the checkout is src/<name>/ in the main checkout. Only the domains a charter holds are indexed, each with the description the charter gives it. See knowledge/exobrain/mounts.md.",
   "type": "object",
   "additionalProperties": false,
+  "$defs": {
+    "ids": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "type": "string", "pattern": "^[a-z0-9][a-z0-9._-]*$" },
+      "description": "Person ids, as the people/ collection names them."
+    },
+    "never": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "What does not belong in the repository. topics are judged by the authoring review; terms are matched literally and patterns as regular expressions by the isolation gate.",
+      "properties": {
+        "topics":   { "type": "array", "items": { "type": "string" } },
+        "terms":    { "type": "array", "items": { "type": "string" } },
+        "patterns": { "type": "array", "items": { "type": "string" } }
+      }
+    }
+  },
   "properties": {
     "$schema": {
       "type": "string",
       "format": "uri-reference",
       "description": "Path or URL to this schema, for editor autocomplete and validation."
     },
+    "instance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["audience"],
+      "description": "This instance's own charter, relative to its mounts: who reads this repository, and what of it never goes into a mount.",
+      "properties": {
+        "audience": { "$ref": "#/$defs/ids" },
+        "never":    { "$ref": "#/$defs/never" }
+      }
+    },
     "mounts": {
       "type": "array",
-      "description": "One entry per mounted instance.",
+      "description": "One entry per mounted repository, carrying its charter.",
       "items": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["name", "repo", "audience"],
+        "required": ["name", "repo", "audience", "purpose", "holds"],
         "properties": {
           "name": {
             "type": "string",
             "pattern": "^[a-z0-9][a-z0-9-]*$",
-            "description": "Unique kebab-case id. Names the default checkout (src/<name>/) and prefixes each mounted domain in the knowledge index (<name>/<domain>); must not equal a local domain's directory name."
+            "description": "Unique kebab-case id. Names the default checkout (src/<name>/), prefixes each mounted domain in the knowledge index (<name>/<domain>), and is the citation prefix (<name>:<path>); must not equal a local domain's directory name."
           },
           "repo": {
             "type": "string",
             "minLength": 1,
-            "description": "Clone URL of the mounted instance. An existing checkout is accepted when its origin is the same repository in any URL spelling."
+            "description": "Clone URL of the repository. An existing checkout is accepted when its origin is the same repository in any URL spelling."
           },
           "audience": {
+            "$ref": "#/$defs/ids",
+            "description": "Who can read that repository. Shown in the knowledge index; a fact is recorded there only when everyone named here may read it, and the isolation gate runs on a land whose target audience includes someone the source's does not."
+          },
+          "purpose": {
             "type": "string",
             "minLength": 1,
-            "description": "Who can read that repository, shown beside its domains in the knowledge index — a fact is recorded there only when everyone named here may read it."
+            "description": "One line: what the repository is for. Written here, shown as the mount's index heading."
           },
-          "skip_domains": {
-            "type": "array",
-            "items": { "type": "string" },
-            "description": "Domain directory names of the mount left out of the index — typically its own framework meta-domain, which duplicates this instance's."
-          }
+          "holds": {
+            "type": "object",
+            "minProperties": 1,
+            "propertyNames": { "pattern": "^[a-z0-9][a-z0-9._-]*$" },
+            "additionalProperties": { "type": "string", "minLength": 1 },
+            "description": "The knowledge domains the repository carries, by directory name, each with a one-line description written here. Only these are indexed, and the description is the index row's summary — no text the mount's audience writes reaches an auto-loaded surface. A domain in the checkout outside this list is reported as charter drift; a land touching one is refused."
+          },
+          "never": { "$ref": "#/$defs/never" }
         }
       }
     }

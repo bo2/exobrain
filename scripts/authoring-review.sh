@@ -10,7 +10,14 @@
 # before a substantial spec/domain edit. Not wired into the pre-push hook — that
 # gate stays fast and deterministic (validate-exobrain.sh only), so ordinary pushes
 # aren't taxed by a per-push model round-trip.
-#   scripts/authoring-review.sh [<base-ref>]   # default base: origin's default branch
+#   scripts/authoring-review.sh [<base-ref>] [--repo <dir>] [--lens <file>]
+#
+# The base defaults to origin's default branch. --repo reviews another checkout — a
+# mount's worktree, which has no scripts of its own — against that repository's
+# base. --lens adds a file's text to the prompt ahead of the diff: the audience
+# lens scripts/mount-isolation.py --lens writes, which names who reads the target
+# and which roots' facts may not appear; with a lens, changed workspace files are
+# reviewed too, since that is where a boundary is most often crossed.
 #
 # Engine: claude (headless, read-only) if installed, else codex; if neither is
 # available — or the checker errors/times out — it DEGRADES OPEN (exit 0), so a
@@ -24,11 +31,23 @@ set -uo pipefail
 [[ "${EXOBRAIN_SKIP_AUTHORING_REVIEW:-}" == "1" ]] && exit 0
 
 REPO_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+BASE=""; LENS_FILE=""
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --repo)   [[ -n "${2:-}" && -d "$2" ]] || { echo "authoring-review: --repo needs a directory" >&2; exit 2; }
+                  REPO_DIR="$(cd "$2" && pwd)"; shift ;;
+        --lens)   [[ -n "${2:-}" && -f "$2" ]] || { echo "authoring-review: --lens needs a file" >&2; exit 2; }
+                  LENS_FILE="$2"; shift ;;
+        -*)       echo "authoring-review: unknown argument: $1" >&2; exit 2 ;;
+        *)        BASE="$1" ;;
+    esac
+    shift
+done
 
-# Default base: this instance's default branch on origin, resolved the same way
-# validate-exobrain.sh and create-worktree.sh resolve it. An instance whose trunk
-# isn't named "main" would otherwise be reviewed against a ref that doesn't exist.
-BASE="${1:-}"
+# Default base: the reviewed repository's default branch on origin, resolved the
+# same way validate-exobrain.sh and create-worktree.sh resolve it. A repository
+# whose trunk isn't named "main" would otherwise be reviewed against a ref that
+# doesn't exist.
 if [[ -z "$BASE" ]]; then
     BASE="$(git -C "$REPO_DIR" symbolic-ref --quiet --short refs/remotes/origin/HEAD 2>/dev/null || true)"
     if [[ -z "$BASE" ]]; then
@@ -217,6 +236,8 @@ while IFS= read -r f; do
         */_raw/*) continue ;;
         knowledge/*.md|AGENTS.md|*/AGENTS.md|*/AGENTS.*.md|CLAUDE.md|*/CLAUDE.md|CODEX.md|*/CODEX.md|OPENCLAW.md|*/OPENCLAW.md|*/SKILL.md)
             [[ -f "$REPO_DIR/$f" ]] && files+=("$f") ;;
+        workspaces/*.md)
+            [[ -n "$LENS_FILE" && -f "$REPO_DIR/$f" ]] && files+=("$f") ;;
     esac
 done < <(git -C "$REPO_DIR" diff --name-only "$BASE...HEAD" -- '*.md' 2>/dev/null)
 [[ ${#files[@]} -eq 0 ]] && exit 0
@@ -300,10 +321,13 @@ Output:
 - Otherwise output one finding per line as: <path>: <rule> -- <concrete fix>.
   No preamble, no praise, no summary.
 
-Diff under review:
 RUBRIC_EOF
 }
-PROMPT="$(emit_rubric)"$'\n'"$diff_text"
+PROMPT="$(emit_rubric)"
+if [[ -n "$LENS_FILE" ]]; then
+    PROMPT="$PROMPT"$'\n'"$(cat "$LENS_FILE")"$'\n'
+fi
+PROMPT="$PROMPT"$'\n'"Diff under review:"$'\n'"$diff_text"
 
 # ---------------------------------------------------------------------------
 # 3. Run the review (claude → codex → degrade open). Time-bounded.

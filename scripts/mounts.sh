@@ -1,20 +1,24 @@
 #!/usr/bin/env bash
-# mounts.sh — manage this checkout's mounts: other exobrain instances whose
-# knowledge domains it reads from a local checkout. mounts.json declares them;
+# mounts.sh — manage this checkout's mounts: shared knowledge repositories it
+# reads from a local checkout. mounts.json declares each with its charter;
 # .exobrain.json holds each machine's state. See knowledge/exobrain/mounts.md.
 #
-#   mounts.sh status [<name>]               # each declared mount and its checkout; no network
-#   mounts.sh enable <name> [--path <dir>]  # clone into src/<name>/ (or verify <dir>), then enable
-#   mounts.sh disable <name>                # stop indexing it; the checkout stays where it is
-#   mounts.sh sync [<name>]                 # fetch, then fast-forward a clean checkout on its default branch
+#   mounts.sh status [<name>]                 # each declared mount: charter, checkout, drift; no network
+#   mounts.sh enable <name> [--path <dir>]    # clone into src/<name>/ (or verify <dir>), enable, relink
+#   mounts.sh enable <name> --default-path    # drop a path override and use (or clone into) src/<name>/
+#   mounts.sh disable <name>                  # stop indexing it and relink; the checkout stays where it is
+#   mounts.sh sync [<name>]                   # fetch, then fast-forward a clean checkout on its default branch
+#   mounts.sh worktree <name> <branch>        # a worktree of the mount's checkout for a change to it; prints its path
 #
 # A pull of this instance runs sync from the post-merge and post-rewrite hooks
-# connect-agent.sh installs. enable and disable write only .exobrain.json and the
-# new clone; neither relinks,
-# so run scripts/connect-agent.sh --relink afterwards for the knowledge index to
-# follow. sync never resets, stashes, rebases, or switches branches: a
-# checkout that is dirty, off its default branch, ahead, or diverged is reported
-# and left as it is. Each repository's default branch is resolved from its origin.
+# connect-agent.sh installs. enable, disable, and a sync that changes the domain
+# set relink every connected agent (scripts/connect-agent.sh --relink) so the
+# knowledge index follows. sync never resets, stashes, rebases, or switches
+# branches: a checkout that is dirty, off its default branch, ahead, or diverged
+# is reported and left as it is. Each repository's default branch is resolved
+# from its origin. A change to a mount is made in a worktree of its checkout
+# and landed with scripts/persist.sh --repo <worktree>; the checkout itself never
+# holds edits.
 #
 # Exit: 0 ok | 1 a mount needs attention | 2 usage error.
 
@@ -29,13 +33,14 @@ REPO_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 # shellcheck source=skills-registry.sh
 source "$SCRIPT_DIR/skills-registry.sh"
 
-usage() { sed -n '2,17s/^# \{0,1\}//p' "$0"; }
+usage() { sed -n '2,22s/^# \{0,1\}//p' "$0"; }
 die_usage() { echo "mounts.sh: $1" >&2; echo "Run: scripts/mounts.sh --help" >&2; exit 2; }
 
 command -v jq >/dev/null 2>&1 || { echo "mounts.sh: jq is required" >&2; exit 2; }
 
 # declared_field <name> <field#> — a field of the mount's mounts.json entry
-# (1 name, 2 repo, 3 audience, 4 skip_domains); empty when undeclared.
+# (1 name, 2 repo, 3 audience, 4 purpose, 5 held domains, comma-joined); empty
+# when undeclared.
 declared_field() {
     local want="$1" n="$2" row
     row="$(mounts_list "$REPO_DIR" | awk -F$'\x1f' -v w="$want" '$1 == w { print; exit }')"
@@ -83,7 +88,19 @@ set_state() {
         > "$cfg.tmp.$$" && mv "$cfg.tmp.$$" "$cfg"
 }
 
-relink_hint() { echo "  Next: scripts/connect-agent.sh --relink"; }
+# relink — regenerate every connected agent's surface so the index follows a
+# change in mount state or domains; prints the command instead when nothing is
+# connected here or the connector is missing.
+relink() {
+    local connector="$SCRIPT_DIR/connect-agent.sh" cfg
+    cfg="$(mounts_config_file "$REPO_DIR")"
+    if [[ -x "$connector" && -f "$cfg" ]] && jq -e '(.agents // []) | length > 0' "$cfg" >/dev/null 2>&1; then
+        echo "  Relinking …"
+        if "$connector" --relink >/dev/null 2>&1; then echo "  ✓ relinked"; return 0; fi
+        echo "  ! relink failed — run: scripts/connect-agent.sh --relink"; return 1
+    fi
+    echo "  Next: scripts/connect-agent.sh --relink"
+}
 
 # default_branch <dir> [online] — the origin's default branch. With "online", an
 # unset origin/HEAD is asked of the remote first; offline, the conventional names
@@ -132,11 +149,14 @@ cmd_status() {
     [[ -z "$only" ]] || require_declared "$only"
     rows="$(mounts_list "$REPO_DIR")"
     if [[ -z "$rows" ]]; then echo "No mounts declared (mounts.json)."; return 0; fi
-    while IFS=$'\x1f' read -r name repo audience skip; do
+    local purpose holds rc=0 kind dname
+    while IFS=$'\x1f' read -r name repo audience purpose holds; do
         [[ -n "$name" ]] && mount_name_ok "$name" || continue
         [[ -z "$only" || "$name" == "$only" ]] || continue
         dir="$(mount_dir "$REPO_DIR" "$name")"
-        echo "$name — readable by $audience"
+        echo "$name — ${purpose:-(no purpose declared)}"
+        echo "  readable by: ${audience:-(no audience declared)}"
+        echo "  holds: ${holds//,/, }"
         echo "  repo:  $repo"
         if ! mount_enabled "$REPO_DIR" "$name"; then
             echo "  state: not enabled on this machine — scripts/mounts.sh enable $name"
@@ -145,26 +165,43 @@ cmd_status() {
         else
             echo "  path:  $dir"
             echo "  state: $(state_line "$dir" "$(default_branch "$dir")") · $(fetch_age "$dir")"
+            while IFS=' ' read -r kind dname; do
+                [[ -n "$kind" ]] || continue
+                case "$kind" in
+                    unheld)  echo "  drift: knowledge/$dname in the checkout is outside the charter — add it to holds or remove it there" ;;
+                    missing) echo "  drift: held domain '$dname' is not in the checkout" ;;
+                esac
+                rc=1
+            done < <(mount_charter_drift "$dir" "$holds")
+            if mount_has_framework "$dir"; then
+                echo "  drift: the checkout carries framework files (AGENTS.md, scripts/, skills/, people/, tools/) — a mount is content only"
+                rc=1
+            fi
         fi
     done <<< "$rows"
-    return 0
+    return $rc
 }
 
 cmd_enable() {
-    local name="" path_arg=""
+    local name="" path_arg="" reset_path=false
     while [[ $# -gt 0 ]]; do
         case "$1" in
             --path)   path_arg="${2:-}"; [[ -n "$path_arg" ]] || die_usage "--path needs a directory"; shift ;;
             --path=*) path_arg="${1#*=}" ;;
+            --default-path) reset_path=true ;;
             -*)       die_usage "unknown option $1" ;;
             *)        [[ -z "$name" ]] || die_usage "one mount at a time"; name="$1" ;;
         esac
         shift
     done
     [[ -n "$name" ]] || die_usage "enable needs a mount name"
+    [[ -z "$path_arg" ]] || ! $reset_path || die_usage "--path and --default-path exclude each other"
     require_declared "$name"
     local repo dir
     repo="$(declared_field "$name" 2)"
+    if $reset_path; then
+        set_state "$name" 'del(.path)' || return 1
+    fi
     if [[ -n "$path_arg" ]]; then
         case "$path_arg" in
             "~")   path_arg="$HOME" ;;
@@ -201,7 +238,7 @@ cmd_enable() {
         set_state "$name" '.enabled = true' || return 1
     fi
     echo "✓ $name enabled in $(config_write_target)"
-    relink_hint
+    relink
 }
 
 cmd_disable() {
@@ -210,7 +247,25 @@ cmd_disable() {
     require_declared "$name"
     set_state "$name" '.enabled = false'
     echo "✓ $name disabled; its checkout at $(mount_dir "$REPO_DIR" "$name") is left in place"
-    relink_hint
+    relink
+}
+
+# cmd_worktree <name> <branch> — a worktree of the mount's checkout, made with this
+# instance's create-worktree.sh (the mount has no scripts of its own), for a change
+# to the mount. Prints the worktree path; land it with persist.sh --repo <path>.
+cmd_worktree() {
+    local name="${1:-}" branch="${2:-}" dir wt
+    [[ -n "$name" && -n "$branch" ]] || die_usage "worktree needs a mount name and a branch"
+    [[ $# -le 2 ]] || die_usage "worktree takes a mount name and a branch"
+    require_declared "$name"
+    mount_enabled "$REPO_DIR" "$name" || { echo "✗ $name is not enabled on this machine — scripts/mounts.sh enable $name" >&2; return 1; }
+    dir="$(mount_dir "$REPO_DIR" "$name")"
+    is_checkout "$dir" || { echo "✗ $name: no checkout at $dir — scripts/mounts.sh enable $name" >&2; return 1; }
+    [[ -x "$SCRIPT_DIR/create-worktree.sh" ]] || { echo "✗ scripts/create-worktree.sh is missing" >&2; return 1; }
+    git -C "$dir" fetch --quiet origin 2>/dev/null || echo "  (could not fetch origin — branching off the checkout as it is)" >&2
+    wt="$(cd "$dir" && bash "$SCRIPT_DIR/create-worktree.sh" "$branch")" || return 1
+    echo "  Land it with: scripts/persist.sh --repo $wt -m \"<message>\"" >&2
+    echo "$wt"
 }
 
 # domain_set <dir> — the mount's domain dirs, one line, to tell whether a sync
@@ -250,8 +305,8 @@ sync_one() {
     fi
     echo "✓ $name: fast-forwarded $behind commit(s) to origin/$def"
     if [[ "$(domain_set "$dir")" != "$before" ]]; then
-        echo "  Its domains changed; the knowledge index follows on relink:"
-        relink_hint
+        echo "  Its domains changed; the knowledge index follows:"
+        relink || true
     fi
     return 0
 }
@@ -280,6 +335,7 @@ case "${1:-}" in
     enable)         shift; cmd_enable "$@" ;;
     disable)        shift; cmd_disable "$@" ;;
     sync)           shift; cmd_sync "$@" ;;
+    worktree)       shift; cmd_worktree "$@" ;;
     -h|--help|help) usage ;;
     "")             usage >&2; exit 2 ;;
     *)              die_usage "unknown command '$1'" ;;

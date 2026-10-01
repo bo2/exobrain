@@ -39,10 +39,12 @@
       "Bash(scripts/skills-validate.sh:*)",
       "Bash(scripts/skills-promote.sh:*)",
       "Bash(scripts/create-worktree.sh:*)",
+      "Bash(scripts/mounts.sh:*)",
       "Bash(scripts/exobrain-healthcheck.sh:*)",
       "Bash(./scripts/connect-agent.sh:*)",
       "Bash(./scripts/validate-exobrain.sh:*)",
-      "Bash(./scripts/create-worktree.sh:*)"
+      "Bash(./scripts/create-worktree.sh:*)",
+      "Bash(./scripts/mounts.sh:*)"
     ],
     "deny": [
       "Bash(gh:*)",
