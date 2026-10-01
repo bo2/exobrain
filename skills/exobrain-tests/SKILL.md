@@ -68,11 +68,14 @@ Exit: `0` all passed · `1` some failed · `2` harness error (including an unkno
   reconcile (against a fake `openclaw` CLI). Codex regressions cover personal-home
   isolation, worktree skill discovery and context rewiring, missing-surface
   healthchecks, and multiline skill descriptions in the generated index.
-- **`test-mounts.sh`** — mounts: `mounts.sh` enable/disable/sync/status against a bare
-  mounted instance whose default branch is not a conventional name, the mounted
-  sections of each agent's knowledge index (no foreign summary reaches one), worktree
-  resolution, sync leaving dirty/off-branch/diverged checkouts untouched, offline
-  staleness, and the mount checks in the healthcheck and validator.
+- **`test-mounts.sh`** — mounts: `mounts.sh` enable/disable/sync/status/worktree
+  against a bare content-only repository whose default branch is not a conventional
+  name, the mounted sections of each agent's knowledge index (held domains only, no
+  foreign summary), charter drift, worktree resolution, sync leaving
+  dirty/off-branch/diverged checkouts untouched, offline staleness, the charter and
+  citation checks in the validator, a mount worktree landed with `persist.sh --repo`,
+  and the isolation gate: its plan in both directions, every leak class, the local
+  overlay, and the review lens blocking an unattended land into a mount.
 - **`test-agent-attribution.sh`** — `strip-agent-attribution.sh`, which the
   `commit-msg` hook runs: agent trailers and footers go in any case, a human
   co-author and prose about the rule stay, a clean message is left untouched; its
@@ -82,6 +85,10 @@ Exit: `0` all passed · `1` some failed · `2` harness error (including an unkno
   bank export newly added under `knowledge/` or `workspaces/` is caught (any extension
   case), while an already-tracked file, text/SQL/chart formats, and paths outside those
   trees pass.
+- **`test-portable-paths.sh`** — `validate-exobrain.sh`'s machine-specific-path gate:
+  an absolute `/Users/…` or `/home/…` path in a changed file is caught, while a
+  relative path through a directory named `home` or `Users`, a `<name>` placeholder,
+  and host scope pass.
 - **`test-script-syntax.sh`** — `validate-exobrain.sh`'s syntax gates: a changed shell
   script that does not parse or changed Python that does not compile is caught, by
   extension or shebang; unchanged files and other shells are left alone.

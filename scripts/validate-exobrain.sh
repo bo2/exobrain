@@ -13,8 +13,11 @@
 #     AI/tool entry-point conventions).
 #   - JSON syntax errors in skills.json, scopes.json, and mounts.json files.
 #   - scopes.json shape (type + collection; reserved/kebab-case rules).
-#   - mounts.json shape (kebab-case unique names, a repo, an audience; no name
-#     colliding with a local knowledge domain).
+#   - mounts.json shape: each mount's charter (kebab-case unique name, repo,
+#     audience as person ids, purpose, held domains with a description each,
+#     an optional never block); no name colliding with a local knowledge domain.
+#   - <mount>:<path> citations in changed markdown that name a file the enabled
+#     mount's checkout does not have. A mount not enabled here is skipped and said so.
 #   - Relative markdown links escaping the repository in changed files — they
 #     break in every other clone, and from a mounted checkout they reach into the
 #     instance that mounts it. Diff-scoped like the path check below.
@@ -55,14 +58,31 @@
 # Exits 0 if clean, 1 with a violation list if anything fails.
 #
 # Usage:
-#   scripts/validate-exobrain.sh             # full validation
-#   scripts/validate-exobrain.sh --quiet     # exit code only, no output
+#   scripts/validate-exobrain.sh                 # full validation
+#   scripts/validate-exobrain.sh --quiet         # exit code only, no output
+#   scripts/validate-exobrain.sh --repo <dir>    # validate another checkout — a mount's
+#                                                # worktree, which has no scripts of its own
+#
+# With --repo the content checks run against that checkout and the checks that
+# need this instance's registries or scripts (skills, crons, scope hooks, the
+# compat ledger) self-skip when the checkout lacks them.
 
 set -uo pipefail
 
-REPO_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+INSTANCE_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+REPO_DIR="$INSTANCE_DIR"
 QUIET=false
-[[ "${1:-}" == "--quiet" ]] && QUIET=true
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --quiet)  QUIET=true ;;
+        --repo)   [[ -n "${2:-}" && -d "$2" ]] || { echo "validate-exobrain: --repo needs a directory" >&2; exit 2; }
+                  REPO_DIR="$(cd "$2" && pwd)"; shift ;;
+        --repo=*) [[ -d "${1#*=}" ]] || { echo "validate-exobrain: --repo needs a directory" >&2; exit 2; }
+                  REPO_DIR="$(cd "${1#*=}" && pwd)" ;;
+        *)        echo "validate-exobrain: unknown argument: $1" >&2; exit 2 ;;
+    esac
+    shift
+done
 
 VIOLATIONS=()
 record() { VIOLATIONS+=("$1"); }
@@ -159,29 +179,69 @@ if [[ -f "$REPO_DIR/scopes.json" ]] && jq -e . "$REPO_DIR/scopes.json" >/dev/nul
 fi
 
 # ---------------------------------------------------------------------------
-# mounts.json shape (optional file) — see knowledge/exobrain/mounts.md. A name
-# becomes a path (src/<name>/) and the prefix of its index rows, so it is a unique
-# kebab-case segment that no local domain already uses; the audience is required
-# because an agent recording a fact decides by it which repository may hold it.
+# mounts.json shape (optional file) — see knowledge/exobrain/mounts.md. Each mount
+# carries its charter. The name becomes a path (src/<name>/) and the prefix of its
+# index rows, so it is a unique kebab-case segment that no local domain already
+# uses. The audience (person ids), the purpose, and the held domains are required:
+# the gate decides by them which repository may hold a fact, and the index shows
+# them. A held domain's description is the one line that reaches an auto-loaded
+# surface, so it must be present. `never`, when present, is an object of string
+# arrays (topics, terms, patterns). The top-level `instance` block, when present,
+# carries the instance's own audience and never list in the same shapes.
 # ---------------------------------------------------------------------------
 
+_ids_re='^[a-z0-9][a-z0-9._-]*$'
 if [[ -f "$REPO_DIR/mounts.json" ]] && jq -e . "$REPO_DIR/mounts.json" >/dev/null 2>&1; then
     if ! jq -e '(.mounts // []) | type == "array"' "$REPO_DIR/mounts.json" >/dev/null 2>&1; then
         record "mounts.json: 'mounts' must be an array"
     else
-        while IFS=$'\x1f' read -r m_name m_repo m_audience m_skip_ok; do
+        while IFS=$'\x1f' read -r m_name m_repo m_aud_ok m_audience m_purpose m_holds_ok m_holds m_never_ok m_legacy; do
             if [[ -z "$m_name" ]]; then record "mounts.json: entry missing 'name'"; continue; fi
             [[ "$m_name" =~ ^[a-z0-9][a-z0-9-]*$ ]] || record "mounts.json: name '$m_name' is not a kebab-case segment"
             [[ -n "$m_repo" ]] || record "mounts.json: mount '$m_name' missing 'repo'"
-            [[ -n "$m_audience" ]] || record "mounts.json: mount '$m_name' missing 'audience' (who can read that repository)"
-            [[ "$m_skip_ok" == true ]] || record "mounts.json: mount '$m_name' 'skip_domains' must be an array of domain names"
+            if [[ "$m_aud_ok" != true || -z "$m_audience" ]]; then
+                record "mounts.json: mount '$m_name' 'audience' must be a non-empty array of person ids (who can read that repository)"
+            else
+                for _id in ${m_audience//,/ }; do
+                    [[ "$_id" =~ $_ids_re ]] || record "mounts.json: mount '$m_name' audience id '$_id' is not a kebab-case id"
+                done
+            fi
+            [[ -n "$m_purpose" ]] || record "mounts.json: mount '$m_name' missing 'purpose' (one line: what the repository is for)"
+            if [[ "$m_holds_ok" != true || -z "$m_holds" ]]; then
+                record "mounts.json: mount '$m_name' 'holds' must be a non-empty object of <domain>: <one-line description> (the domains it carries)"
+            else
+                for _d in ${m_holds//,/ }; do
+                    [[ "$_d" =~ ^[a-z0-9][a-z0-9._-]*$ ]] || record "mounts.json: mount '$m_name' holds '$_d', which is not a kebab-case domain name"
+                done
+            fi
+            [[ "$m_never_ok" == true ]] || record "mounts.json: mount '$m_name' 'never' must be an object of string arrays (topics, terms, patterns)"
+            [[ "$m_legacy" == false ]] || record "mounts.json: mount '$m_name' uses 'skip_domains', which 'holds' replaces (list the domains it carries)"
             [[ -d "$REPO_DIR/knowledge/$m_name" ]] && record "mounts.json: mount '$m_name' collides with the local domain knowledge/$m_name"
-        done < <(jq -r '.mounts // [] | .[] | [(.name // "" | tostring), (.repo // "" | tostring), (.audience // "" | tostring),
-                    ((.skip_domains // []) | (type == "array" and all(type == "string")) | tostring)] | join("\u001f")' \
-                    "$REPO_DIR/mounts.json" 2>/dev/null)
+        done < <(jq -r '
+            def strarr: type == "array" and all(type == "string");
+            def never_ok: (. == null) or (type == "object" and all(.[]; strarr) and (keys - ["topics","terms","patterns"] | length == 0));
+            def holds_ok: type == "object" and all(.[]; type == "string" and length > 0);
+            .mounts // [] | .[] | [
+                (.name // "" | tostring), (.repo // "" | tostring),
+                ((.audience // null) | (strarr and length > 0) | tostring),
+                ((.audience // []) | if strarr then join(",") else "" end),
+                (.purpose // "" | tostring),
+                ((.holds // null) | holds_ok | tostring),
+                ((.holds // {}) | if type == "object" then keys_unsorted | join(",") else "" end),
+                (.never | never_ok | tostring),
+                (has("skip_domains") | tostring)
+            ] | join("\u001f")' "$REPO_DIR/mounts.json" 2>/dev/null)
         while IFS= read -r dup; do
             [[ -n "$dup" ]] && record "mounts.json: duplicate mount name '$dup'"
         done < <(jq -r '(.mounts // [])[] | .name // empty' "$REPO_DIR/mounts.json" 2>/dev/null | sort | uniq -d)
+    fi
+    if jq -e 'has("instance")' "$REPO_DIR/mounts.json" >/dev/null 2>&1; then
+        jq -e '.instance | type == "object" and ((.audience // null) | type == "array" and all(type == "string") and length > 0)' \
+            "$REPO_DIR/mounts.json" >/dev/null 2>&1 \
+            || record "mounts.json: 'instance.audience' must be a non-empty array of person ids"
+        jq -e '.instance.never | (. == null) or (type == "object" and all(.[]; type == "array" and all(type == "string")) and (keys - ["topics","terms","patterns"] | length == 0))' \
+            "$REPO_DIR/mounts.json" >/dev/null 2>&1 \
+            || record "mounts.json: 'instance.never' must be an object of string arrays (topics, terms, patterns)"
     fi
 fi
 
@@ -389,6 +449,10 @@ fi
 # source captures, and any directory holding a Dockerfile — a path inside a
 # container image is fixed by the image, not by the machine. Placeholder forms like
 # /Users/<name>/ don't match, since "<" is not a path character.
+#
+# The leading boundary keeps the pattern off the tail of a RELATIVE path whose
+# second-to-last segment is literally "home" or "Users" — an ordinary directory
+# name, as in `src/components/home/sidebar.tsx`.
 # ---------------------------------------------------------------------------
 
 if [[ -n "$default_ref" ]]; then
@@ -400,7 +464,7 @@ if [[ -n "$default_ref" ]]; then
         while IFS= read -r hit; do
             [[ -z "$hit" ]] && continue
             record "machine-specific path outside host scope — use a relative path, an env var, or host scope (AGENTS.md § Conventions): $f:${hit%%:*}"
-        done < <(grep -InE '/(Users|home)/[A-Za-z0-9._-]+/' "$REPO_DIR/$f" 2>/dev/null | head -5)
+        done < <(grep -InE '(^|[^A-Za-z0-9._/~-])/(Users|home)/[A-Za-z0-9._-]+/' "$REPO_DIR/$f" 2>/dev/null | head -5)
     done < <(git -C "$REPO_DIR" diff --name-only "$default_ref...HEAD" 2>/dev/null)
 fi
 
@@ -514,6 +578,45 @@ if [[ -n "$default_ref" ]]; then
             fi
         done < <(grep -noE '\]\([^)[:space:]]+' "$REPO_DIR/$f" 2>/dev/null)
     done < <(git -C "$REPO_DIR" diff --name-only "$default_ref...HEAD" 2>/dev/null)
+fi
+
+# ---------------------------------------------------------------------------
+# Mount citations — a file in a mount is cited as <mount>:<path> (never linked, since
+# the checkout's location differs per machine), so nothing else keeps such a
+# citation resolving. In changed markdown, each citation of a declared mount is
+# resolved in that mount's checkout when this machine enables it; otherwise the
+# citation is left unchecked and the count is noted. Diff-scoped; _raw/ exempt.
+# ---------------------------------------------------------------------------
+
+if [[ -n "$default_ref" && -f "$REPO_DIR/mounts.json" && -f "$INSTANCE_DIR/scripts/skills-registry.sh" ]] \
+   && jq -e . "$REPO_DIR/mounts.json" >/dev/null 2>&1; then
+    # shellcheck source=skills-registry.sh
+    source "$INSTANCE_DIR/scripts/skills-registry.sh"
+    _cite_unchecked=0
+    _changed_md="$(git -C "$REPO_DIR" diff --name-only "$default_ref...HEAD" 2>/dev/null | grep -E '\.md$' | grep -vE '(^|/)_raw/|^tmp/' || true)"
+    while IFS=$'\x1f' read -r m_name _; do
+        [[ -n "$m_name" ]] && mount_name_ok "$m_name" || continue
+        m_dir=""
+        if mount_enabled "$REPO_DIR" "$m_name"; then
+            m_dir="$(mount_dir "$REPO_DIR" "$m_name")"
+            [[ -d "$m_dir" ]] || m_dir=""
+        fi
+        while IFS= read -r f; do
+            [[ -n "$f" && -f "$REPO_DIR/$f" ]] || continue
+            while IFS= read -r hit; do
+                [[ -n "$hit" ]] || continue
+                target="${hit#*:}"; target="${target#*"$m_name":}"
+                target="${target%.}"
+                if [[ -z "$m_dir" ]]; then _cite_unchecked=$((_cite_unchecked + 1)); continue; fi
+                [[ -e "$m_dir/$target" ]] || \
+                    record "mount citation names a file the mount's checkout does not have (knowledge/exobrain/mounts.md): $f:${hit%%:*} — $m_name:$target"
+            done < <(grep -noE "(^|[^A-Za-z0-9_/.-])${m_name}:(knowledge|workspaces|README\.md)[A-Za-z0-9_./-]*" "$REPO_DIR/$f" 2>/dev/null \
+                     | sed -E "s/^([0-9]+):[^A-Za-z0-9_\/.-]?/\1:/")
+        done <<< "$_changed_md"
+    done < <(mounts_list "$REPO_DIR")
+    if (( _cite_unchecked > 0 )) && ! $QUIET; then
+        echo "note: $_cite_unchecked mount citation(s) not checked — the mount is not enabled on this machine"
+    fi
 fi
 
 # ---------------------------------------------------------------------------

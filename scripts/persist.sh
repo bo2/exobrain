@@ -8,10 +8,22 @@
 #                      [--author <id>] [--context <file>] [--machinery-verified]
 #                      [--dry-run]
 #   scripts/persist.sh --detach [same options]
+#   scripts/persist.sh --repo <worktree> [same options]
 #   scripts/persist.sh --sweep [--dry-run]
 #
-# Run it from inside the worktree holding the change. Uncommitted work is
-# committed with -m (required only when nothing is committed yet); a branch that
+# Run it from inside the worktree holding the change, or name the worktree with
+# --repo: a worktree of a mount's checkout (scripts/mounts.sh worktree), which
+# carries no scripts of its own, lands through this instance's copy — the same
+# steps, with this instance's validator run on it (validate-exobrain.sh --repo)
+# and the timeline author taken from this instance's .exobrain.json. When this
+# instance declares mounts, every land first passes the isolation gate
+# (scripts/mount-isolation.py): a deterministic scan of what the land adds — the
+# commit messages and the --context handover included — against the charters, and
+# the authoring review then runs with the gate's audience lens. A gate finding
+# blocks attended and unattended alike; so does a lens finding on a land into a
+# mount.
+#
+# Uncommitted work is committed with -m (required only when nothing is committed yet); a branch that
 # already carries commits needs no message; the PR is titled after the branch's
 # first commit unless --title says otherwise. Every step checks whether it has
 # already happened, so re-running after an interruption — a killed process, a
@@ -74,6 +86,8 @@ set -uo pipefail
 PATH="$PATH:/opt/homebrew/bin:/usr/local/bin:$HOME/.local/bin"
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+INSTANCE_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+REPO_ARG=""
 MACHINERY_FLAG="--machinery-verified"
 MACHINERY_VERIFIED="${MACHINERY_VERIFIED:-0}"
 UNIT_SUITE="skills/exobrain-tests/unit/run.sh"
@@ -88,7 +102,7 @@ log()  { echo "persist: $*"; }
 warn() { echo "persist: $*" >&2; }
 die()  { echo "persist: $1" >&2; exit "${2:-1}"; }
 
-usage() { grep '^#' "$0" | sed -n '2,63p' | sed 's/^# \{0,1\}//'; }
+usage() { grep '^#' "$0" | sed -n '2,75p' | sed 's/^# \{0,1\}//'; }
 
 # ---------------------------------------------------------------------------
 # Repo geometry
@@ -159,14 +173,18 @@ release_lock() { [[ -n "$LOCK_DIR" ]] && rm -rf "$LOCK_DIR"; LOCK_DIR=""; }
 DRY_RUN=0; PR_TITLE=""; UNATTENDED=0; REVIEW_NOTE=""; CONTEXT_FILE=""; CONTEXT_NOTE=""; VERIFY_NOTE=""
 run() { if (( DRY_RUN )); then log "would: $*"; else "$@"; fi; }
 
-# author_id <main root> — who a timeline row is attributed to.
+# author_id <main root> — who a timeline row is attributed to: EXOBRAIN_AUTHOR, else
+# the person in this instance's .exobrain.json, else the landed repository's own
+# (a mount has none), else git's user.name.
 author_id() {
     if [[ -n "${EXOBRAIN_AUTHOR:-}" ]]; then echo "$EXOBRAIN_AUTHOR"; return; fi
-    local from_cfg=""
-    if [[ -f "$1/.exobrain.json" ]] && command -v jq >/dev/null 2>&1; then
-        from_cfg="$(jq -r '.person // ""' "$1/.exobrain.json" 2>/dev/null)"
-    fi
-    [[ -n "$from_cfg" ]] && { echo "$from_cfg"; return; }
+    local from_cfg="" cfg
+    for cfg in "$INSTANCE_ROOT/.exobrain.json" "$1/.exobrain.json"; do
+        if [[ -f "$cfg" ]] && command -v jq >/dev/null 2>&1; then
+            from_cfg="$(jq -r '.person // ""' "$cfg" 2>/dev/null)"
+        fi
+        if [[ -n "$from_cfg" ]]; then echo "$from_cfg"; return; fi
+    done
     git -C "$1" config user.name 2>/dev/null || echo "unknown"
 }
 
@@ -438,24 +456,65 @@ land() {
     fi
 
     # ---- gates -----------------------------------------------------------
+    # The isolation gate runs when this instance declares mounts; its lens tells
+    # the review who reads the target. target_label stays "this instance" unless
+    # the land goes into a mount.
+    local lens_file="" target_label="this instance"
+    if [[ -x "$SCRIPT_DIR/mount-isolation.py" && -f "$INSTANCE_ROOT/mounts.json" ]] && command -v python3 >/dev/null; then
+        local -a gate_args=(--worktree "$wt" --base "$base")
+        if [[ -n "$CONTEXT_NOTE" ]]; then
+            local cfile="$CONTEXT_FILE"; [[ "$cfile" = /* ]] || cfile="$wt/$cfile"
+            gate_args+=(--text "$cfile")
+        fi
+        log "mount-isolation.py"
+        local gate_out gate_rc=0
+        gate_out="$("$SCRIPT_DIR/mount-isolation.py" "${gate_args[@]}" 2>&1)" || gate_rc=$?
+        case "$gate_rc" in
+            0) [[ -z "$gate_out" ]] || echo "$gate_out" | sed 's/^/    /'
+               lens_file="$(mktemp)"
+               "$SCRIPT_DIR/mount-isolation.py" --worktree "$wt" --lens > "$lens_file" 2>/dev/null || { rm -f "$lens_file"; lens_file=""; }
+               if [[ -n "$lens_file" ]]; then
+                   target_label="$(sed -n 's/^Audience lens: this diff lands in \(.*\), readable by.*$/\1/p' "$lens_file" | head -1)"
+               fi
+               target_label="${target_label:-this instance}" ;;
+            3) warn "$wt is neither this instance nor one of its mounts — the isolation gate does not apply" ;;
+            *) echo "$gate_out" >&2
+               (( DRY_RUN )) || die "the isolation gate blocked this land — move or cut the material, amend, then re-run" ;;
+        esac
+    fi
     if [[ -x "$wt/scripts/validate-exobrain.sh" ]]; then
         log "validate-exobrain.sh"
         (( DRY_RUN )) || (cd "$wt" && scripts/validate-exobrain.sh) || die "validation failed — fix, then re-run"
+    elif [[ -x "$SCRIPT_DIR/validate-exobrain.sh" ]]; then
+        # A mount's worktree carries no scripts: this instance's validator runs on it.
+        log "validate-exobrain.sh --repo $wt"
+        (( DRY_RUN )) || "$SCRIPT_DIR/validate-exobrain.sh" --repo "$wt" || die "validation failed — fix, then re-run"
     fi
-    if [[ -x "$wt/scripts/authoring-review.sh" ]] && (( ! DRY_RUN )); then
-        log "authoring-review.sh"
+    local review_script=""
+    if [[ -x "$wt/scripts/authoring-review.sh" ]]; then review_script="$wt/scripts/authoring-review.sh"
+    elif [[ -x "$SCRIPT_DIR/authoring-review.sh" && "$target_label" != "this instance" ]]; then review_script="$SCRIPT_DIR/authoring-review.sh"
+    fi
+    if [[ -n "$review_script" ]] && (( ! DRY_RUN )); then
+        local -a review_args=()
+        [[ "$review_script" == "$wt/scripts/authoring-review.sh" ]] || review_args+=(--repo "$wt")
+        [[ -z "$lens_file" ]] || review_args+=(--lens "$lens_file")
+        log "authoring-review.sh${lens_file:+ (with the audience lens)}"
         local review_out review_rc=0
-        review_out="$(cd "$wt" && scripts/authoring-review.sh 2>&1)" || review_rc=$?
+        review_out="$(cd "$wt" && "$review_script" ${review_args[@]+"${review_args[@]}"} 2>&1)" || review_rc=$?
         [[ -z "$review_out" ]] || echo "$review_out"
         if (( review_rc != 0 )); then
-            if (( review_rc == 1 && UNATTENDED )); then
+            # A finding on a land into a mount blocks in every mode: what merges
+            # there is read by people outside this instance's audience.
+            if (( review_rc == 1 && UNATTENDED )) && [[ "$target_label" == "this instance" ]]; then
                 log "unattended land: the findings go into a review on the PR instead of blocking"
                 REVIEW_NOTE="$review_out"
             else
+                [[ -z "$lens_file" ]] || rm -f "$lens_file"
                 die "authoring review flagged violations — fix, amend, then re-run"
             fi
         fi
     fi
+    [[ -z "$lens_file" ]] || rm -f "$lens_file"
 
     # ---- no remote: fast-forward the local default branch -----------------
     if ! has_remote "$main"; then
@@ -643,7 +702,7 @@ main() {
     set -- ${passthrough[@]+"${passthrough[@]}"}
     while [[ $# -gt 0 ]]; do
         case "$1" in
-            -m|--message|--timeline|--author|--title|--context)
+            -m|--message|--timeline|--author|--title|--context|--repo)
                 [[ $# -ge 2 ]] || die "$1 needs a value" 2 ;;
         esac
         case "$1" in
@@ -652,6 +711,8 @@ main() {
             --author)       author="$2"; shift 2 ;;
             --title)        PR_TITLE="$2"; shift 2 ;;
             --context)      CONTEXT_FILE="$2"; shift 2 ;;
+            --repo)         [[ -d "$2" ]] || die "--repo needs a directory: $2" 2
+                            REPO_ARG="$(cd "$2" && pwd)"; shift 2 ;;
             --sweep)        mode=sweep; shift ;;
             --dry-run)      DRY_RUN=1; shift ;;
             "$MACHINERY_FLAG") MACHINERY_VERIFIED=1; shift ;;
@@ -664,7 +725,7 @@ main() {
     if (( do_detach )) && [[ "$mode" == land && "${PERSIST_DETACHED:-}" != "1" ]] && (( ! DRY_RUN )); then
         local wt main branch default logf
         command -v python3 >/dev/null || die "--detach needs python3"
-        wt="$(git rev-parse --show-toplevel 2>/dev/null)" || die "not a git checkout"
+        wt="$(cd "${REPO_ARG:-.}" && git rev-parse --show-toplevel 2>/dev/null)" || die "not a git checkout"
         main="$(main_root "$wt")" || die "cannot resolve the main checkout"
         branch="$(git -C "$wt" rev-parse --abbrev-ref HEAD)"
         default="$(default_branch "$main")" || die "cannot resolve the default branch"
@@ -678,12 +739,26 @@ main() {
         # Refuse at the gate here, where the caller still sees it.
         refuse_at_gate "$wt" "$(base_ref "$main" "$default")"
         logf="$main/.git/persist-logs/$branch.log"
+        if [[ -n "$REPO_ARG" ]]; then
+            # The detached process starts in the worktree, so it needs no --repo — and
+            # a relative one would resolve against the wrong directory there. The
+            # sweep covers this repository's worktrees only, never a mount's.
+            local -a kept=(); local skip=0
+            for a in ${passthrough[@]+"${passthrough[@]}"}; do
+                if (( skip )); then skip=0; continue; fi
+                if [[ "$a" == --repo ]]; then skip=1; continue; fi
+                kept+=("$a")
+            done
+            detach "$wt" "$logf" ${kept[@]+"${kept[@]}"}
+            log "land of $branch started in the background (log: $logf); the sweep does not retry a land into another repository — check the log"
+            exit 0
+        fi
         detach "$wt" "$logf" ${passthrough[@]+"${passthrough[@]}"}
         log "land of $branch started in the background (log: $logf); a failure is retried by the sweep"
         exit 0
     fi
     case "$mode" in
-        land)  land "$PWD" "$message" "$tl_summary" "$author" ;;
+        land)  land "${REPO_ARG:-$PWD}" "$message" "$tl_summary" "$author" ;;
         sweep) sweep ;;
     esac
 }

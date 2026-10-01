@@ -28,7 +28,8 @@ HARNESSES='connect-agent|test-connect-agent.sh|scripts/connect-agent.sh + script
 authoring-review|test-authoring-review.sh|scripts/authoring-review.sh
 compat-ledger|test-compat-ledger.sh|the compat-shim gates in validate-exobrain.sh + exobrain-healthcheck.sh
 openclaw-cron-sync|test-openclaw-cron-sync.sh|scripts/openclaw-cron-sync.py (crons.json validation + gateway reconciliation)
-mounts|test-mounts.sh|scripts/mounts.sh, the mounted knowledge index, and the mount checks in the healthcheck and validator
+mounts|test-mounts.sh|scripts/mounts.sh, the mounted knowledge index, the mount checks in the healthcheck and validator, and the isolation gate (scripts/mount-isolation.py) through persist
+portable-paths|test-portable-paths.sh|the machine-specific-path gate in validate-exobrain.sh (absolute home paths caught, relative paths through a home/ directory not)
 agent-attribution|test-agent-attribution.sh|scripts/strip-agent-attribution.sh (the commit-msg hook) and the agent-attribution check in validate-exobrain.sh
 raw-data|test-raw-data.sh|the raw-format gate in validate-exobrain.sh (raw data added under knowledge/ or workspaces/)
 script-syntax|test-script-syntax.sh|the syntax gates in validate-exobrain.sh (bash -n and python compile over changed scripts)

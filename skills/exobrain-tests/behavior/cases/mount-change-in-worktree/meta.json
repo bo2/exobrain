@@ -1,0 +1,9 @@
+{
+  "name": "mount-change-in-worktree",
+  "description": "A fact owned by a mounted repository is changed in a worktree of the mount's checkout — never in the checkout itself, and never by recording it in this instance.",
+  "runs": 3,
+  "permission_profile": "action",
+  "pass_threshold": "all",
+  "timeout_seconds": 360,
+  "tags": ["mounts", "git-workflow"]
+}

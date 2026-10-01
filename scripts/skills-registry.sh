@@ -83,7 +83,8 @@
 #   main_checkout_root <repo_dir>            — the main checkout a worktree was made from
 #   mounts_list <repo_dir>                   — declared mounts, \x1f-separated fields
 #   mount_name_ok / mount_dir / mount_enabled — one mount's name check, checkout, state
-#   mount_domains <mount_dir> <skip-csv>     — TSV <domain>\t<abs-readme> a mount exposes
+#   mount_domains <mount_dir> <holds-csv>    — TSV <domain>\t<abs-readme> a mount exposes
+#   mount_hold_description / mount_charter_drift / mount_has_framework — the charter against the checkout
 #   mount_fetched_age <mount_dir>            — seconds since its last successful fetch
 
 # sanitize_suffix <path> — filename-safe scope suffix. "/" → "__" (a separator
@@ -520,11 +521,13 @@ knowledge_resolve() {
 }
 
 # ---------------------------------------------------------------------------
-# Mounts — other exobrain instances whose knowledge domains this one reads.
-# mounts.json (tracked) declares each: name, repo, audience, optional
-# skip_domains. .exobrain.json (per machine) holds `mounts.<name>.enabled` and an
-# optional `mounts.<name>.path`; without a path the checkout is src/<name>/ in the
-# MAIN checkout, so every worktree resolves the same one. See
+# Mounts — shared knowledge repositories this instance reads from a local
+# checkout. mounts.json (tracked) declares each with its charter: name, repo,
+# audience (person ids), purpose, holds (the domains it carries, each with a
+# one-line description written here), and never (topics and terms that do not
+# belong there). .exobrain.json (per machine) holds `mounts.<name>.enabled` and
+# an optional `mounts.<name>.path`; without a path the checkout is src/<name>/ in
+# the MAIN checkout, so every worktree resolves the same one. See
 # knowledge/exobrain/mounts.md.
 # ---------------------------------------------------------------------------
 
@@ -548,15 +551,26 @@ mounts_config_file() {
     fi
 }
 
-# mounts_list <repo_dir> — one line per declared mount: name, repo, audience, and
-# skip_domains joined by commas, separated by \x1f. A non-whitespace separator,
-# because `IFS=$'\t' read` collapses an empty field. Empty when there's no (valid)
-# mounts.json.
+# mounts_list <repo_dir> — one line per declared mount: name, repo, audience
+# (ids joined by ", "), purpose, and the held domains joined by commas, separated
+# by \x1f. A non-whitespace separator, because `IFS=$'\t' read` collapses an empty
+# field. Empty when there's no (valid) mounts.json.
 mounts_list() {
     local f="$1/mounts.json"
     [[ -f "$f" ]] || return 0
-    jq -r '(.mounts // [])[] | [(.name // ""), (.repo // ""), (.audience // ""),
-            ((.skip_domains // []) | map(tostring) | join(","))] | join("\u001f")' "$f" 2>/dev/null || true
+    jq -r '(.mounts // [])[] | [(.name // "" | tostring), (.repo // "" | tostring),
+            ((.audience // []) | if type == "array" then map(tostring) | join(", ") else tostring end),
+            (.purpose // "" | tostring),
+            ((.holds // {}) | if type == "object" then keys_unsorted | join(",") else "" end)] | join("\u001f")' "$f" 2>/dev/null || true
+}
+
+# mount_hold_description <repo_dir> <name> <domain> — the one-line description the
+# charter gives a held domain; written by this instance's people, so it is the text
+# that may reach an auto-loaded surface. Empty when the domain is not held.
+mount_hold_description() {
+    local f="$1/mounts.json"
+    [[ -f "$f" ]] || return 0
+    jq -r --arg n "$2" --arg d "$3" '(.mounts // [])[] | select(.name == $n) | (.holds // {})[$d] // "" | tostring' "$f" 2>/dev/null || true
 }
 
 # mount_name_ok <name> — a mount name is a kebab-case segment; it becomes a path
@@ -589,22 +603,51 @@ mount_enabled() {
     [[ -f "$cfg" ]] && jq -e --arg n "$2" '(.mounts // {})[$n].enabled == true' "$cfg" >/dev/null 2>&1
 }
 
-# mount_domains <mount_dir> <skip-csv> — TSV <domain>\t<absolute-readme> for each
-# knowledge/<domain>/README.md in the mount, minus the skipped ones, sorted. The
+# mount_domains <mount_dir> <holds-csv> — TSV <domain>\t<absolute-readme> for each
+# held domain whose knowledge/<domain>/README.md exists in the mount, sorted. The
 # domain is its directory name — never the README's frontmatter, which is text
 # the mount's audience writes — and only kebab-case names are listed, so a
-# directory name can't smuggle markup into the index.
+# directory name can't smuggle markup into the index. A domain the checkout
+# carries but the charter does not hold is never listed: mount_charter_drift
+# reports it.
 mount_domains() {
-    local dir="$1" skip=",$2," d name
+    local dir="$1" holds=",$2," d name
     {
         for d in "$dir"/knowledge/*/; do
             [[ -f "${d}README.md" ]] || continue
             name="$(basename "$d")"
             [[ "$name" =~ ^[a-z0-9][a-z0-9._-]*$ ]] || continue
-            case "$skip" in *",$name,"*) continue ;; esac
+            case "$holds" in *",$name,"*) ;; *) continue ;; esac
             printf '%s\t%s\n' "$name" "${d}README.md"
         done
     } | sort
+}
+
+# mount_charter_drift <mount_dir> <holds-csv> — one line per disagreement between
+# the charter and the checkout: "unheld <domain>" for a domain the checkout carries
+# outside the charter, "missing <domain>" for a held domain the checkout lacks.
+# Only kebab-case directory names are reported, so no mounted name reaches a
+# surface unfiltered.
+mount_charter_drift() {
+    local dir="$1" holds="$2" d name h
+    for d in "$dir"/knowledge/*/; do
+        [[ -f "${d}README.md" ]] || continue
+        name="$(basename "$d")"
+        [[ "$name" =~ ^[a-z0-9][a-z0-9._-]*$ ]] || continue
+        case ",$holds," in *",$name,"*) ;; *) echo "unheld $name" ;; esac
+    done
+    local IFS=,
+    for h in $holds; do
+        [[ -n "$h" ]] || continue
+        [[ -f "$dir/knowledge/$h/README.md" ]] || echo "missing $h"
+    done
+}
+
+# mount_has_framework <mount_dir> — true when the checkout carries what a shared
+# knowledge repository never does: a scope flag or framework code.
+mount_has_framework() {
+    local dir="$1"
+    [[ -f "$dir/AGENTS.md" || -d "$dir/scripts" || -d "$dir/skills" || -d "$dir/people" || -d "$dir/tools" || -f "$dir/skills.json" || -f "$dir/scopes.json" ]]
 }
 
 # mount_fetched_age <mount_dir> — seconds since the mount last fetched its origin

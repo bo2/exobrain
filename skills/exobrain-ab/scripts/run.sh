@@ -90,7 +90,7 @@ build_template() { # <dir> <arm:control|treatment>
   if [ "$AGENT" = codex ]; then
     CODEX_HOME="$d/.codex" bash "$d/scripts/connect-agent.sh" codex --wire-sandbox >/dev/null 2>&1 \
       || { echo "ERROR: 'codex --wire-sandbox' failed in $d — does $BASE_REF carry the flag?" >&2; exit 1; }
-    ln -sf "$HOME/.codex/auth.json" "$d/.codex/auth.json"
+    mkdir -p "$d/.codex" && ln -sf "$HOME/.codex/auth.json" "$d/.codex/auth.json"
   else
     bash "$d/scripts/connect-agent.sh" claude --wire-sandbox >/dev/null 2>&1 \
       || { echo "ERROR: 'claude --wire-sandbox' failed in $d — does $BASE_REF carry the flag?" >&2; exit 1; }

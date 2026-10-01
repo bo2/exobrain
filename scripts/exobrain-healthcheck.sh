@@ -227,16 +227,29 @@ fi
 # refreshes what "current" means; nothing is pulled or reset — sync is
 # scripts/mounts.sh, and anything it would not touch is only reported. A mount
 # whose last successful fetch is over a day old is reported as possibly stale.
+# The checkout is also read against the mount's charter: a domain outside the
+# charter's holds, a held domain it lacks, and framework files (a mount is a
+# content-only repository) are each named.
 mount_notes=()
 if [[ -f "$here/mounts.json" && -f "$here/scripts/skills-registry.sh" ]] && command -v jq >/dev/null 2>&1; then
     source "$here/scripts/skills-registry.sh"
-    while IFS=$'\x1f' read -r m_name _; do
+    while IFS=$'\x1f' read -r m_name _ _ _ m_holds; do
         [[ -n "$m_name" ]] && mount_name_ok "$m_name" || continue
         mount_enabled "$here" "$m_name" || continue
         m_dir="$(mount_dir "$here" "$m_name")"
         if ! git -C "$m_dir" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
             mount_notes+=("$m_name: enabled, but no checkout at $m_dir — run: scripts/mounts.sh enable $m_name")
             continue
+        fi
+        while IFS=' ' read -r d_kind d_name; do
+            [[ -n "$d_kind" ]] || continue
+            case "$d_kind" in
+                unheld)  mount_notes+=("$m_name: knowledge/$d_name in the checkout is outside the charter's holds (mounts.json) — not indexed") ;;
+                missing) mount_notes+=("$m_name: held domain '$d_name' has no README in the checkout") ;;
+            esac
+        done < <(mount_charter_drift "$m_dir" "$m_holds")
+        if mount_has_framework "$m_dir"; then
+            mount_notes+=("$m_name: the checkout carries framework files (AGENTS.md, scripts/, skills/, people/, tools/) — a mount is a content-only repository")
         fi
         m_gd="$(git -C "$m_dir" rev-parse --absolute-git-dir 2>/dev/null)"
         bounded_fetch "$m_dir" "$m_gd" && m_fetched=true || m_fetched=false

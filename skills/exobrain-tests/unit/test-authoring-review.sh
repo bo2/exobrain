@@ -102,6 +102,40 @@ setup_skill_repo() {
     echo "$repo"
 }
 
+# make_prompt_engine — a fake `claude` on PATH that records the prompt it was given
+# to $FAKE_REC and answers AUTHORING-OK.
+make_prompt_engine() {
+    FAKE_BIN="$TEST_DIR/bin"; FAKE_REC="$TEST_DIR/prompt.txt"
+    mkdir -p "$FAKE_BIN"
+    cat > "$FAKE_BIN/claude" <<EOF
+#!/usr/bin/env bash
+cat > "$FAKE_REC"
+echo AUTHORING-OK
+EOF
+    chmod +x "$FAKE_BIN/claude"
+}
+
+test_repo_and_lens() {
+    local repo; repo="$(setup_repo)"
+    mkdir -p "$repo/workspaces/2026/01/01-w"
+    printf '# W\n\nA workspace line about Secretword.\n' > "$repo/workspaces/2026/01/01-w/README.md"
+    git -C "$repo" add -A; git -C "$repo" commit -q -m ws --no-gpg-sign
+    printf 'Audience lens: this diff lands in fx, readable by alice, bob.\n' > "$TEST_DIR/lens.txt"
+    make_prompt_engine
+    # From outside the repo, through the framework copy: --repo names the checkout.
+    (cd "$TEST_DIR" && PATH="$FAKE_BIN:$PATH" bash "$SCRIPTS_DIR/authoring-review.sh" base --repo "$repo" --lens "$TEST_DIR/lens.txt") || return 1
+    assert_file "$FAKE_REC" "engine invoked" || return 1
+    local prompt; prompt="$(cat "$FAKE_REC")"
+    assert_contains "$prompt" "Audience lens: this diff lands in fx" "lens text in the prompt" || return 1
+    assert_contains "$prompt" "An added line under review." "the domain diff follows" || return 1
+    assert_contains "$prompt" "A workspace line about Secretword." "workspaces reviewed under a lens" || return 1
+    [[ "${prompt%%Diff under review:*}" == *"Audience lens"* ]] || { echo "the lens must precede the diff marker"; return 1; }
+    rm -f "$FAKE_REC"
+    (cd "$TEST_DIR" && PATH="$FAKE_BIN:$PATH" bash "$SCRIPTS_DIR/authoring-review.sh" base --repo "$repo") || return 1
+    prompt="$(cat "$FAKE_REC")"
+    [[ "$prompt" != *"A workspace line about Secretword."* ]] || { echo "without a lens, workspaces are out of scope"; return 1; }
+}
+
 # make_fake_engine — install a fake `claude` on PATH that records any proxy env
 # it sees, drains the prompt, and prints $FAKE_OUT (the canned model verdict).
 make_fake_engine() {
@@ -216,6 +250,7 @@ run_test "reported violation exits non-zero"    test_violation_exits_nonzero
 run_test "renamed shared skill grandfathered"   test_renamed_shared_skill_grandfathered
 run_test "reworded rename grandfathered"        test_reworded_rename_grandfathered
 run_test "new unproven shared skill blocked"    test_new_shared_skill_still_blocked
+run_test "--repo and --lens: another checkout, the lens ahead of the diff, workspaces in scope" test_repo_and_lens
 
 echo ""; echo "─────────────────────────────────────────────"
 if [[ $TESTS_FAILED -eq 0 ]]; then

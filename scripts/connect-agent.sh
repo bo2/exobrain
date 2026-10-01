@@ -780,15 +780,16 @@ else
 fi
 
 # --------------------------------------------------------------------------
-# Mounts — other exobrain instances whose knowledge domains this one reads
-# --------------------------------------------------------------------------
-# mounts.json (tracked) declares each mount; .exobrain.json (per machine) enables
-# it and may point it at an existing checkout (skills-registry.sh § Mounts). Only
-# a mount's knowledge domains are indexed: its specs, hooks, skills, tools, scopes,
-# and its own mounts are never wired in. Mounted rows carry name, path, and
-# audience but no summary — text another audience writes never reaches an
-# auto-loaded surface. A mount that is declared but not usable here still gets a
-# section saying so, so its absence reads as absence rather than as no such
+# Mounts — shared knowledge repositories this instance reads from a local
+# checkout. mounts.json (tracked) declares each mount with its charter; .exobrain.json
+# (per machine) enables it and may point it at an existing checkout
+# (skills-registry.sh § Mounts). Only the domains the charter holds are indexed,
+# and each row's summary is the charter's own one-line description — written by
+# this instance's people — so no text the mount's audience writes reaches an
+# auto-loaded surface. A domain the checkout carries outside the charter, a held
+# domain the checkout lacks, and framework files in the checkout are reported here
+# and never indexed. A mount that is declared but not usable here still gets a
+# section, so the agent reads the gap as "not here" rather than as missing
 # knowledge. See knowledge/exobrain/mounts.md.
 echo ""; echo "Mounts:"
 MOUNTS_INDEX_FILE="$(mktemp)"
@@ -799,12 +800,13 @@ if [[ -f "$REPO_DIR/mounts.json" ]] && ! jq -e . "$REPO_DIR/mounts.json" >/dev/n
 else
     MOUNTS_ROWS="$(mounts_list "$REPO_DIR")"
     [[ -n "$MOUNTS_ROWS" ]] || echo "  (none declared)"
-    while IFS=$'\x1f' read -r m_name m_repo m_audience m_skip; do
+    while IFS=$'\x1f' read -r m_name m_repo m_audience m_purpose m_holds; do
         [[ -n "$m_name" ]] || continue
         if ! mount_name_ok "$m_name"; then
             echo "  ! '$m_name' is not a kebab-case mount name — skipped"; continue
         fi
         m_dir="$(mount_dir "$REPO_DIR" "$m_name")"
+        m_purpose="${m_purpose//|/\\|}"
         m_state=""
         if ! mount_enabled "$REPO_DIR" "$m_name"; then
             m_state="not enabled on this machine"
@@ -815,25 +817,38 @@ else
             echo "  - $m_name: ${m_state//\`/} — see scripts/mounts.sh status"
             {
                 printf '\n## Mounted: %s — not available here\n\n' "$m_name"
-                printf 'Readable by **%s** — `%s`. %s, so none of its knowledge domains are listed. ' \
-                    "$m_audience" "$m_repo" "$(tr '[:lower:]' '[:upper:]' <<< "${m_state:0:1}")${m_state:1}"
+                printf '%s. Readable by **%s** — `%s`. %s, so none of its knowledge domains are listed. ' \
+                    "${m_purpose:-A shared knowledge repository}" "$m_audience" "$m_repo" \
+                    "$(tr '[:lower:]' '[:upper:]' <<< "${m_state:0:1}")${m_state:1}"
                 printf 'If a task needs them, propose `scripts/mounts.sh enable %s` to the human.\n' "$m_name"
             } >> "$MOUNTS_INDEX_FILE"
             continue
         fi
         m_count=0
         {
-            printf '\n## Mounted: %s — readable by %s\n\n' "$m_name" "$m_audience"
-            printf 'A separate repository, `%s`, checked out at `%s`. Rules for reading and writing it: root `AGENTS.md` § Mounts.\n\n' \
-                "$m_repo" "$m_dir"
-            printf '| Knowledge domain | README |\n|------------------|--------|\n'
+            printf '\n## Mounted: %s — %s\n\n' "$m_name" "${m_purpose:-a shared knowledge repository}"
+            printf 'Readable by **%s**. A separate repository, `%s`, checked out at `%s`. Rules for reading and writing it: root `AGENTS.md` § Mounts. Cite a file there as `%s:<path>`.\n\n' \
+                "$m_audience" "$m_repo" "$m_dir" "$m_name"
+            printf '| Knowledge domain | README | Summary |\n|------------------|--------|---------|\n'
             while IFS=$'\t' read -r d_name d_readme; do
                 [[ -n "$d_name" ]] || continue
-                printf '| %s/%s | %s |\n' "$m_name" "$d_name" "$d_readme"
+                d_desc="$(mount_hold_description "$REPO_DIR" "$m_name" "$d_name")"
+                d_desc="${d_desc//|/\\|}"
+                printf '| %s/%s | %s | %s |\n' "$m_name" "$d_name" "$d_readme" "$d_desc"
                 MOUNT_DOMAIN_DIRS+=("$(dirname "$d_readme")"); m_count=$((m_count + 1))
-            done < <(mount_domains "$m_dir" "$m_skip")
+            done < <(mount_domains "$m_dir" "$m_holds")
         } >> "$MOUNTS_INDEX_FILE"
         echo "  ✓ $m_name: $m_count domain(s) from $m_dir"
+        while IFS=' ' read -r d_kind d_name; do
+            [[ -n "$d_kind" ]] || continue
+            case "$d_kind" in
+                unheld)  echo "  ! $m_name: knowledge/$d_name in the checkout is outside the charter's holds — not indexed" ;;
+                missing) echo "  ! $m_name: held domain '$d_name' has no knowledge/$d_name/README.md in the checkout" ;;
+            esac
+        done < <(mount_charter_drift "$m_dir" "$m_holds")
+        if mount_has_framework "$m_dir"; then
+            echo "  ! $m_name: the checkout carries framework files (AGENTS.md, scripts/, skills/, people/, tools/) — a mount is a content-only repository"
+        fi
     done <<< "$MOUNTS_ROWS"
 fi
 
