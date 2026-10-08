@@ -62,6 +62,11 @@ skills and tool docs, which is what most framework changes touch. A change to a 
 scope (person/host/group) needs that scope's connected leaf wired into the sandbox, which
 this harness doesn't set up — test those by hand or extend the harness.
 
+A sandboxed claude run gets **no MCP servers** (`--strict-mcp-config` with an empty
+config). Without that it loads the runner's own plugins and hosted connectors with live
+credentials, and under `bypassPermissions` an agent can write to real systems unseen by
+any stub. Codex is isolated by its own `CODEX_HOME` inside the sandbox.
+
 ## Procedure
 
 1. **Frame it.** Express the change as a diff vs trunk:
