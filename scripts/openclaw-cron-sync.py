@@ -18,6 +18,12 @@ Modes:
   --dry-run        print the add/edit/rm plan without executing it
   --check          validate the registries and exit — reads no gateway and
                    needs no openclaw binary (validate-exobrain.sh runs this)
+  --scopes <csv>   reconcile only the registries at the repo root and in these
+                   scope paths. The connector passes the connected chain when it
+                   syncs on a connect or relink, so a machine runs the jobs its
+                   own scopes declare; without it every registry in the repo counts.
+
+OPENCLAW_BIN overrides the runtime binary (the unit suite points it at a fake).
 
 crons.json shape:
   {"jobs": [{
@@ -70,14 +76,16 @@ def fail(errors):
     sys.exit(1)
 
 
-def discover_registries():
+def discover_registries(scopes=None):
     """crons.json at the repo root plus one in any scope directory — a dir
-    carrying an AGENTS.md, the repo's scope flag."""
+    carrying an AGENTS.md, the repo's scope flag. With `scopes` (repo-relative
+    scope paths), only the root's and those scopes' registries."""
     found = [REPO_ROOT / "crons.json"]
     for root, dirs, files in os.walk(REPO_ROOT):
         dirs[:] = sorted(d for d in dirs if d not in PRUNE_DIRS)
         if "AGENTS.md" in files and "crons.json" in files and Path(root) != REPO_ROOT:
-            found.append(Path(root) / "crons.json")
+            if scopes is None or Path(root).relative_to(REPO_ROOT).as_posix() in scopes:
+                found.append(Path(root) / "crons.json")
     return [p for p in found if p.exists()]
 
 
@@ -133,9 +141,9 @@ def validate_job(raw, source, errors):
             errors.append(f'{ctx}: failureAlert.cooldown must look like "30m"/"6h"')
 
 
-def load_jobs():
-    jobs, seen, errors = [], {}, []
-    for path in discover_registries():
+def load_jobs(scopes=None):
+    jobs, seen, produced, errors = [], {}, {}, []
+    for path in discover_registries(scopes):
         try:
             config = json.loads(path.read_text())
         except json.JSONDecodeError as e:
@@ -278,7 +286,7 @@ def edit_args(job):
 
 
 def openclaw(*args, capture=False):
-    result = subprocess.run(["openclaw", *args], text=True,
+    result = subprocess.run([os.environ.get("OPENCLAW_BIN") or "openclaw", *args], text=True,
                             capture_output=capture, check=False)
     if result.returncode != 0:
         detail = (result.stderr or "").strip() if capture else f"exit {result.returncode}"
@@ -355,9 +363,14 @@ def main():
                         help="validate the registries and exit; no gateway access")
     parser.add_argument("--dry-run", action="store_true",
                         help="print the reconciliation plan without executing it")
+    parser.add_argument("--scopes", metavar="CSV",
+                        help="only the registries at the repo root and in these scope paths")
     args = parser.parse_args()
 
-    jobs = load_jobs()
+    scopes = None
+    if args.scopes is not None:
+        scopes = {s.strip().strip("/") for s in args.scopes.split(",") if s.strip()}
+    jobs = load_jobs(scopes)
     if args.check:
         registries = sorted({j['source'] for j in jobs})
         print(f"crons: {len(jobs)} job(s) valid across "

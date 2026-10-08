@@ -1,0 +1,1 @@
+Use the exobrain-mounts skill to declare a new mount named `jotter` for the repository https://example.invalid/jotter.git. It's just a place where my brother and I throw whatever we're thinking about — I can't say what domains it'll end up holding or what should stay out of it, it's everything and anything. Just add it to mounts.json so I can enable it.

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # exobrain-healthcheck.sh — read-only check that this checkout is wired and
-# current for the running agent. It detects five issues and SUGGESTS the fix;
+# current for the running agent. It detects these issues and SUGGESTS the fix;
 # it never writes, never runs connect-agent.sh, and never pulls (see AGENTS.md →
 # "Setup and relink safety" — relink and pull are human-driven):
 #
@@ -11,6 +11,9 @@
 #     → suggest: scripts/mounts.sh enable|sync <name>, or name what sync won't touch
 #   - compat shim past its removal date → name it; the fix is a change, not a command
 #     (the ledger: knowledge/exobrain/compat.md)
+#   - security findings needing a person → list them (scripts/security-findings.py)
+#   - scratch (tmp/ entries, _cache/ dirs) untouched for 30 days → name it; a working
+#     copy is deleted with the work that needed it
 #
 # Connection markers and trunk freshness come from the main checkout. Codex
 # surfaces and skills are checked in the active checkout, including a worktree.
@@ -93,6 +96,52 @@ compat_due_report() {
     echo "  Remove the marked code, the tests covering it, and the ledger row (knowledge/exobrain/compat.md)."
 }
 
+# Security findings that need a person (scripts/security-findings.py summary: a high
+# finding left open, an accepted risk past its review date, a review overdue). Reads
+# this checkout — the ledger is tracked content. Silent when nothing needs anyone, when
+# the ledger is absent, and when the summary itself cannot run.
+security_report() {
+    local script="$here/scripts/security-findings.py" out rc=0
+    [[ -x "$script" ]] && command -v python3 >/dev/null || return 0
+    out="$("$script" summary 2>/dev/null)" || rc=$?
+    [[ $rc -eq 2 && -n "$out" ]] || return 0
+    echo "⚠ $(head -1 <<<"$out") — needs attention:"
+    sed '1d; s/^  /  - /' <<<"$out"
+    echo "  Details: scripts/security-findings.py list"
+}
+
+# Scratch past its session (AGENTS.md § Synthesized knowledge: a working copy — a
+# database dump, an identity document — is deleted with the work that needed it).
+# Reads the MAIN checkout's gitignored tmp/ entries and every _cache/ under
+# knowledge/ and workspaces/, naming each with no file touched in
+# EXOBRAIN_SCRATCH_DAYS days (30). Advisory: the healthcheck deletes nothing.
+scratch_report() {
+    local days="${EXOBRAIN_SCRATCH_DAYS:-30}" entry rel newest age size
+    local stale=()
+    while IFS= read -r entry; do
+        [[ -n "$entry" && -e "$entry" ]] || continue
+        # Anything touched inside the window clears the entry; the walk stops at the first.
+        [[ -z "$(find "$entry" -type f -mtime "-$days" -print -quit 2>/dev/null)" ]] || continue
+        newest="$(find "$entry" -type f -print0 2>/dev/null | xargs -0 stat -f %m 2>/dev/null | sort -n | tail -1)"
+        [[ -n "$newest" ]] || continue   # no files at all: an empty directory holds nothing
+        age=$(( ( $(date +%s) - newest ) / 86400 ))
+        size="$(du -sh "$entry" 2>/dev/null | cut -f1)"
+        rel="${entry#"$MAIN"/}"
+        stale+=("$rel — ${age}d untouched, ${size:-?}")
+    done < <(
+        [[ -d "$MAIN/tmp" ]] && find "$MAIN/tmp" -mindepth 1 -maxdepth 1 2>/dev/null
+        find "$MAIN/knowledge" "$MAIN/workspaces" -type d -name _cache -not -path '*/src/*' 2>/dev/null
+    )
+    [[ ${#stale[@]} -eq 0 ]] && return 0
+    echo "⚠ ${#stale[@]} scratch entr$([[ ${#stale[@]} -eq 1 ]] && echo y || echo ies) untouched for $days+ days:"
+    local shown=0
+    for entry in ${stale[@]+"${stale[@]}"}; do
+        (( shown < 10 )) || { echo "  … and $(( ${#stale[@]} - shown )) more"; break; }
+        echo "  - $entry"; shown=$((shown + 1))
+    done
+    echo "  Delete what its work no longer needs; what must stay goes to its own system or the file store a connected scope names (AGENTS.md § Synthesized knowledge)."
+}
+
 problems=()
 
 check_codex_surface() {
@@ -145,6 +194,8 @@ if [[ ! -f "$MAIN/.exobrain.json" ]]; then
     echo "⚠ exobrain isn't set up in this checkout (no .exobrain.json)."
     echo "  Run: scripts/connect-agent.sh <claude|codex|openclaw>"
     compat_due_report
+    security_report
+    scratch_report
     exit 0
 fi
 
@@ -162,6 +213,8 @@ if [[ ${#agents[@]} -eq 0 ]]; then
     echo "⚠ exobrain is configured but no agent is connected here."
     echo "  Run: scripts/connect-agent.sh <claude|codex|openclaw>"
     compat_due_report
+    security_report
+    scratch_report
     exit 0
 fi
 
@@ -285,9 +338,12 @@ if [[ -f "$here/mounts.json" && -f "$here/scripts/skills-registry.sh" ]] && comm
     done < <(mounts_list "$here")
 fi
 
-# Output — connection problems, the freshness advisory, mount notes, and due compat
-# shims are independent; print whichever fired, else (verbose) the all-clear.
+# Output — connection problems, the freshness advisory, mount notes, due compat shims,
+# security findings and stale scratch are independent; print whichever fired, else
+# (verbose) the all-clear.
 compat="$(compat_due_report)"
+security="$(security_report)"
+scratch="$(scratch_report)"
 
 if [[ ${#problems[@]} -gt 0 ]]; then
     echo "⚠ exobrain connection needs attention:"
@@ -301,8 +357,10 @@ if [[ ${#mount_notes[@]} -gt 0 ]]; then
     for p in ${mount_notes[@]+"${mount_notes[@]}"}; do echo "  - $p"; done
 fi
 [[ -n "$compat" ]] && echo "$compat"
+[[ -n "$security" ]] && echo "$security"
+[[ -n "$scratch" ]] && echo "$scratch"
 
-if [[ ${#problems[@]} -eq 0 && -z "$fresh" && ${#mount_notes[@]} -eq 0 && -z "$compat" ]]; then
+if [[ ${#problems[@]} -eq 0 && -z "$fresh" && ${#mount_notes[@]} -eq 0 && -z "$compat" && -z "$security" && -z "$scratch" ]]; then
     $VERBOSE && echo "✓ exobrain: ${agents[*]} connected and linked ($here), trunk current ($MAIN)."
 fi
 exit 0

@@ -239,6 +239,30 @@ JSON
     assert_not_contains "$calls" "rm j10"
 }
 
+# --scopes: a machine reconciles the jobs its own scopes declare — another scope's
+# registry is neither added nor kept.
+test_scopes_limit_the_registries() {
+    local repo; repo=$(setup_repo); write_registry "$repo"; install_fake_openclaw
+    mkdir -p "$repo/people/sam"; printf '# sam\n' > "$repo/people/sam/AGENTS.md"
+    sed 's/daily-thing/other-thing/' "$repo/people/pat/crons.json" > "$repo/people/sam/crons.json"
+    local out; out=$(sync_cmd "$repo" --dry-run 2>&1) || { echo "$out"; return 1; }
+    assert_contains "$out" "exobrain.daily-thing" || return 1
+    assert_contains "$out" "exobrain.other-thing" "without --scopes every registry counts" || return 1
+    out=$(sync_cmd "$repo" --dry-run --scopes "people/pat" 2>&1) || { echo "$out"; return 1; }
+    assert_contains "$out" "add  exobrain.daily-thing" || return 1
+    assert_not_contains "$out" "other-thing" "a scope outside the list is not reconciled" || return 1
+    echo '{"jobs": [{"id": "j1", "declarationKey": "exobrain.other-thing", "name": "o"}]}' > "$TEST_DIR/gateway.json"
+    out=$(sync_cmd "$repo" --dry-run --scopes "people/pat" 2>&1) || { echo "$out"; return 1; }
+    assert_contains "$out" "rm   exobrain.other-thing" "a job only another scope declares does not run here"
+}
+
+test_openclaw_bin_overrides_the_binary() {
+    local repo; repo=$(setup_repo); write_registry "$repo"; install_fake_openclaw
+    mv "$TEST_DIR/bin/openclaw" "$TEST_DIR/bin/oc-elsewhere"
+    local out; out=$(OPENCLAW_BIN="$TEST_DIR/bin/oc-elsewhere" "$repo/scripts/openclaw-cron-sync.py" --dry-run 2>&1) || { echo "$out"; return 1; }
+    assert_contains "$out" "add  exobrain.daily-thing"
+}
+
 test_sync_command_job_uses_argv() {
     local repo; repo=$(setup_repo); install_fake_openclaw
     cat > "$repo/crons.json" <<'JSON'
@@ -272,6 +296,8 @@ run_test "sync: no-op when gateway matches"             test_sync_noop_when_gate
 run_test "sync: patches drifted field"                  test_sync_patches_drifted_field
 run_test "sync: removes stale, spares foreign jobs"     test_sync_removes_stale_and_spares_foreign
 run_test "sync: command job uses argv"                  test_sync_command_job_uses_argv
+run_test "scopes: limit the registries"                 test_scopes_limit_the_registries
+run_test "OPENCLAW_BIN overrides the binary"            test_openclaw_bin_overrides_the_binary
 
 echo
 if [[ $TESTS_FAILED -eq 0 ]]; then

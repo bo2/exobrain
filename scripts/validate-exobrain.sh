@@ -34,12 +34,16 @@
 #     in changed files only, under this machine's python3.
 #   - Skills registry integrity (delegated to skills-validate.sh).
 #   - Cron registry shape — every per-scope crons.json (delegated to
-#     openclaw-cron-sync.py --check; no gateway access, no openclaw binary).
+#     openclaw-cron-sync.py --check; no gateway access).
+#   - Security findings registry shape — every per-scope security.json (delegated
+#     to security-findings.py --check).
 #   - Duplicate feed-card IDs (canonical seed only) — the NNNN filename prefix is
 #     a never-reused provenance key; concurrent PRs can collide on one.
 #   - Compatibility-shim ledger: every `COMPAT <id>` marker in the tree has a row in
 #     knowledge/exobrain/compat.md, every row's files carry its marker, and the marker
 #     and row agree on the removal date. The date itself never fails the gate.
+#   - Secrets in outgoing commits — gitleaks over the commits added against the
+#     default branch, when installed; a redacted violation per hit.
 #   - Agent attribution in outgoing commit messages (CLAUDE.md § Git history
 #     hygiene): "Co-Authored-By: Claude" trailers, "Generated with" footers.
 #   - Machine-specific absolute paths in changed files outside host scope, which
@@ -64,8 +68,8 @@
 #                                                # worktree, which has no scripts of its own
 #
 # With --repo the content checks run against that checkout and the checks that
-# need this instance's registries or scripts (skills, crons, scope hooks, the
-# compat ledger) self-skip when the checkout lacks them.
+# need this instance's registries or scripts (skills, crons, security findings, scope
+# hooks, the compat ledger) self-skip when the checkout lacks them.
 
 set -uo pipefail
 
@@ -439,6 +443,21 @@ if [[ -z "$default_ref" ]]; then
     done
 fi
 
+# changed_files [--added] — the paths the branch's commits change against the default
+# branch, one per line, through scripts/changed-paths.sh so a non-ASCII name arrives
+# verbatim: git's quoted form ("\320\272…") names no file in the tree, and every
+# diff-scoped check below would skip it. The helper missing is a violation, not a
+# skip — without it those checks would pass vacuously.
+changed_files() {
+    local p
+    while IFS= read -r -d '' p; do printf '%s\n' "$p"; done \
+        < <(bash "$INSTANCE_DIR/scripts/changed-paths.sh" --committed "$@" "$REPO_DIR" "$default_ref")
+}
+if [[ -n "$default_ref" && ! -f "$INSTANCE_DIR/scripts/changed-paths.sh" ]]; then
+    record "missing scripts/changed-paths.sh — the diff-scoped checks read the changed paths through it"
+    default_ref=""
+fi
+
 # ---------------------------------------------------------------------------
 # Portability — machine-specific absolute paths outside host scope. Files at
 # global, group, and person scope are shared across machines, so a /Users/<someone>/
@@ -465,7 +484,7 @@ if [[ -n "$default_ref" ]]; then
             [[ -z "$hit" ]] && continue
             record "machine-specific path outside host scope — use a relative path, an env var, or host scope (AGENTS.md § Conventions): $f:${hit%%:*}"
         done < <(grep -InE '(^|[^A-Za-z0-9._/~-])/(Users|home)/[A-Za-z0-9._-]+/' "$REPO_DIR/$f" 2>/dev/null | head -5)
-    done < <(git -C "$REPO_DIR" diff --name-only "$default_ref...HEAD" 2>/dev/null)
+    done < <(changed_files)
 fi
 
 # ---------------------------------------------------------------------------
@@ -494,7 +513,7 @@ if [[ -n "$default_ref" ]]; then
         first="$(printf '%s\n' "$err" | head -n 1)"
         line="$(sed -nE 's/^.*: line ([0-9]+): .*$/\1/p' <<<"$first")"
         record "shell syntax error in $f:${line:-?} — ${first#*: line *: }"
-    done < <(git -C "$REPO_DIR" diff --name-only "$default_ref...HEAD" 2>/dev/null)
+    done < <(changed_files)
 fi
 
 # ---------------------------------------------------------------------------
@@ -531,7 +550,7 @@ if [[ -n "$default_ref" ]] && command -v python3 >/dev/null 2>&1; then
             [[ "$(head -n 1 "$REPO_DIR/$f" 2>/dev/null)" =~ $_py_shebang ]] || continue
         fi
         _py_changed+=("$f")
-    done < <(git -C "$REPO_DIR" diff --name-only "$default_ref...HEAD" 2>/dev/null)
+    done < <(changed_files)
     if [[ ${#_py_changed[@]} -gt 0 ]]; then
         while IFS= read -r hit; do
             [[ -n "$hit" ]] && record "python syntax error in $hit"
@@ -577,7 +596,7 @@ if [[ -n "$default_ref" ]]; then
                 record "relative link escapes the repository — link inside it, or name the other repository (knowledge/exobrain/mounts.md): $f:${hit%%:*}"
             fi
         done < <(grep -noE '\]\([^)[:space:]]+' "$REPO_DIR/$f" 2>/dev/null)
-    done < <(git -C "$REPO_DIR" diff --name-only "$default_ref...HEAD" 2>/dev/null)
+    done < <(changed_files)
 fi
 
 # ---------------------------------------------------------------------------
@@ -593,7 +612,7 @@ if [[ -n "$default_ref" && -f "$REPO_DIR/mounts.json" && -f "$INSTANCE_DIR/scrip
     # shellcheck source=skills-registry.sh
     source "$INSTANCE_DIR/scripts/skills-registry.sh"
     _cite_unchecked=0
-    _changed_md="$(git -C "$REPO_DIR" diff --name-only "$default_ref...HEAD" 2>/dev/null | grep -E '\.md$' | grep -vE '(^|/)_raw/|^tmp/' || true)"
+    _changed_md="$(changed_files | grep -E '\.md$' | grep -vE '(^|/)_raw/|^tmp/' || true)"
     while IFS=$'\x1f' read -r m_name _; do
         [[ -n "$m_name" ]] && mount_name_ok "$m_name" || continue
         m_dir=""
@@ -636,7 +655,48 @@ if [[ -n "$default_ref" ]]; then
         if grep -qiE "$RAW_FORMAT_RE" <<< "$f"; then
             record "raw-format file added — keep raw data in its own system or the person's file store, and link it (AGENTS.md § Synthesized knowledge, not raw data): $f"
         fi
-    done < <(git -C "$REPO_DIR" diff --name-only --diff-filter=A "$default_ref...HEAD" 2>/dev/null)
+    done < <(changed_files --added)
+fi
+
+# ---------------------------------------------------------------------------
+# Secrets — gitleaks over the commits the branch adds against the default branch
+# (AGENTS.md § Security: never commit secrets), with the checkout's .gitleaks.toml,
+# else this instance's (a mount's worktree has none). Diff-scoped like the checks
+# above, so the history is grandfathered; a line that is secret-shaped by design
+# carries an inline `gitleaks:allow`. A violation names the rule, file, line and
+# commit — never the match. Not installed → a note, no violation (`brew install
+# gitleaks`); installed but failing → a violation, since a scan that silently did
+# not happen is the gap this check closes.
+# ---------------------------------------------------------------------------
+
+if [[ -n "$default_ref" ]]; then
+    if ! command -v gitleaks >/dev/null 2>&1; then
+        $QUIET || echo "note: gitleaks not installed — commits not scanned for secrets (brew install gitleaks)"
+    else
+        _gl_cfg="$REPO_DIR/.gitleaks.toml"; [[ -f "$_gl_cfg" ]] || _gl_cfg="$INSTANCE_DIR/.gitleaks.toml"
+        _gl_cfg_args=(); [[ -f "$_gl_cfg" ]] && _gl_cfg_args=(--config "$_gl_cfg")
+        _gl_report="$(mktemp)"
+        gitleaks git ${_gl_cfg_args[@]+"${_gl_cfg_args[@]}"} --log-opts="$default_ref..HEAD" --redact --no-banner \
+            --report-format json --report-path "$_gl_report" "$REPO_DIR" >/dev/null 2>&1
+        _gl_rc=$?
+        if (( _gl_rc == 0 )); then
+            :
+        elif (( _gl_rc == 1 )) && [[ -s "$_gl_report" ]] && command -v python3 >/dev/null 2>&1; then
+            while IFS= read -r hit; do
+                [[ -n "$hit" ]] && record "possible secret in an outgoing commit — rotate it and rewrite the unpushed commit, or mark a value that is secret-shaped by design with an inline gitleaks:allow (AGENTS.md § Security): $hit"
+            done < <(python3 - "$_gl_report" <<'PY'
+import json, sys
+for f in json.load(open(sys.argv[1])):
+    print(f"{f.get('File')}:{f.get('StartLine')} — {f.get('Description') or f.get('RuleID')} ({f.get('RuleID')}), commit {str(f.get('Commit'))[:8]}")
+PY
+)
+        elif (( _gl_rc == 1 )); then
+            record "possible secret in an outgoing commit — run: gitleaks git --log-opts=\"$default_ref..HEAD\" --redact"
+        else
+            record "gitleaks could not scan the outgoing commits (exit $_gl_rc) — fix the install, or run it by hand: gitleaks git --log-opts=\"$default_ref..HEAD\" --redact"
+        fi
+        rm -f "$_gl_report"
+    fi
 fi
 
 # ---------------------------------------------------------------------------
@@ -737,6 +797,21 @@ if [[ -x "$REPO_DIR/scripts/openclaw-cron-sync.py" ]] && command -v python3 >/de
         while IFS= read -r line; do
             record "  $line"
         done <<<"$crons_output"
+    fi
+fi
+
+# ---------------------------------------------------------------------------
+# Security findings registries — delegate to security-findings.py --check
+# ---------------------------------------------------------------------------
+
+if [[ -x "$REPO_DIR/scripts/security-findings.py" ]] && command -v python3 >/dev/null 2>&1; then
+    security_output="$("$REPO_DIR/scripts/security-findings.py" --check 2>&1)"
+    security_status=$?
+    if [[ $security_status -ne 0 ]]; then
+        record "security-findings.py --check failed:"
+        while IFS= read -r line; do
+            record "  $line"
+        done <<<"$security_output"
     fi
 fi
 

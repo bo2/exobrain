@@ -102,6 +102,8 @@ log()  { echo "persist: $*"; }
 warn() { echo "persist: $*" >&2; }
 die()  { echo "persist: $1" >&2; exit "${2:-1}"; }
 
+[[ -f "$SCRIPT_DIR/changed-paths.sh" ]] || die "missing $SCRIPT_DIR/changed-paths.sh — every path-scoped gate reads it"
+
 usage() { grep '^#' "$0" | sed -n '2,75p' | sed 's/^# \{0,1\}//'; }
 
 # ---------------------------------------------------------------------------
@@ -196,20 +198,34 @@ author_id() {
 # Codex sidecar, and SKILL.md.
 SPEC_RE='(^|/)((AGENTS|CLAUDE|CODEX)(\.[^/]*)?|SKILL)\.md$'
 # The rest of the machinery that shapes agents, verified on the author's word: root
-# scripts, root skills' code, the registries, and OpenClaw sidecars at any scope (no
-# behavioral harness runs OpenClaw).
-MACHINERY_RE='^(scripts/|skills/|skills\.json$|scopes\.json$|skills\.schema\.json$)|(^|/)OPENCLAW(\.[^/]*)?\.md$'
+# scripts, root skills' code, the registries at any scope (skills, scopes, mount
+# charters, scheduled jobs), Claude's committed settings, and OpenClaw sidecars at any
+# scope (no behavioral harness runs OpenClaw).
+MACHINERY_RE='^(scripts/|skills/|scopes\.json$|skills\.schema\.json$|mounts(\.schema)?\.json$|\.claude/settings\.json$)|(^|/)(skills|crons)\.json$|(^|/)OPENCLAW(\.[^/]*)?\.md$'
 
-# changed_paths <worktree> <base> — paths changed on the branch, committed or not.
+# changed_paths <worktree> <base> [-- <pathspec>...] — paths changed on the branch,
+# committed or not, one per line, read through the shared helper so a non-ASCII name
+# arrives verbatim rather than quoted.
 changed_paths() {
-    {
-        git -C "$1" diff --name-only "$2"...HEAD 2>/dev/null
-        git -C "$1" status --porcelain --untracked-files=all | cut -c4- | sed 's/^.* -> //'
-    } | sort -u
+    local p
+    while IFS= read -r -d '' p; do printf '%s\n' "$p"; done < <(bash "$SCRIPT_DIR/changed-paths.sh" "$@")
 }
 
-spec_paths()      { changed_paths "$1" "$2" | grep -E "$SPEC_RE" || true; }
-machinery_paths() { changed_paths "$1" "$2" | grep -E "$MACHINERY_RE" | grep -vE "$SPEC_RE" || true; }
+# proof_paths <worktree> <base> — the changed paths the verification gate judges. In
+# a worktree of another repository (a mount), a path the land removes is left out: no
+# run can cover a spec that is gone, and this instance never loaded it.
+proof_paths() {
+    local p
+    if [[ "$(main_root "$1" 2>/dev/null)" == "$(main_root "$INSTANCE_ROOT" 2>/dev/null)" ]]; then
+        changed_paths "$1" "$2"; return
+    fi
+    changed_paths "$1" "$2" | while IFS= read -r p; do
+        if [[ -e "$1/$p" || -L "$1/$p" ]]; then echo "$p"; fi
+    done
+}
+
+spec_paths()      { proof_paths "$1" "$2" | grep -E "$SPEC_RE" || true; }
+machinery_paths() { proof_paths "$1" "$2" | grep -E "$MACHINERY_RE" | grep -vE "$SPEC_RE" || true; }
 
 # worktree_tree <worktree> — the tree the worktree's current state commits as,
 # uncommitted changes included, built in a copy of its index so the real staging
@@ -333,9 +349,7 @@ timeline_rows() {
         [[ -n "$readme" ]] || continue
         dir="$(dirname "$readme")"
         local changed
-        changed="$({ git -C "$wt" diff --name-only "$base"...HEAD -- "$dir" 2>/dev/null
-                     git -C "$wt" status --porcelain --untracked-files=all -- "$dir" | cut -c4-; } \
-                   | grep -v "^$dir/TIMELINE.md$" | head -1)"
+        changed="$(changed_paths "$wt" "$base" -- "$dir" | grep -v "^$dir/TIMELINE.md$" | head -1)"
         [[ -n "$changed" ]] || continue
         tl="$wt/$dir/TIMELINE.md"
         if [[ -f "$tl" ]] && grep -qF -- "$row" "$tl"; then continue; fi
@@ -344,27 +358,28 @@ timeline_rows() {
         if [[ ! -f "$tl" ]]; then
             printf '# Timeline\n\n| Date | Author | Summary |\n|------|--------|---------|\n' > "$tl"
         fi
-        # Keep the table well-formed when the file's last line lacks a newline.
+        # Keep the table well-formed: a file whose last line isn't a newline-terminated row.
         [[ -z "$(tail -c1 "$tl")" ]] || echo >> "$tl"
         echo "$row" >> "$tl"
     done < <(cd "$wt" && grep -rl --include=README.md -E '^timeline:[[:space:]]*true' knowledge workspaces 2>/dev/null || true)
 }
 
-# pr_state <worktree> <branch> — "<number> <STATE>" for this change's PR, or empty.
-# A branch name gets reused, so a merged or closed PR counts only when the commits
-# it carried are in this branch's history; an open one is this change's by definition.
+# pr_state <worktree> <branch> — "<number> <STATE>" for the PR carrying the branch's
+# work, or empty: the branch's open PR, else the PR whose head is the branch's HEAD
+# commit. A PR left by an earlier branch of the same name is neither.
 pr_state() {
-    local wt="$1" branch="$2" n state oid
-    while read -r n state oid; do
-        [[ -n "$n" ]] || continue
-        if [[ "$state" == OPEN ]] || { [[ -n "$oid" ]] && git -C "$wt" merge-base --is-ancestor "$oid" HEAD 2>/dev/null; }; then
-            echo "$n $state"; return 0
-        fi
-    done < <(cd "$wt" && gh pr list --head "$branch" --state all --json number,state,headRefOid \
-                 --jq '.[] | "\(.number) \(.state) \(.headRefOid)"' 2>/dev/null)
+    local wt="$1" branch="$2" head number state oid match=""
+    head="$(git -C "$wt" rev-parse HEAD 2>/dev/null)"
+    while read -r number state oid; do
+        [[ -n "$number" ]] || continue
+        if [[ "$state" == "OPEN" ]]; then echo "$number $state"; return 0; fi
+        [[ -z "$match" && -n "$head" && "$oid" == "$head" ]] && match="$number $state"
+    done < <(cd "$wt" && gh pr list --head "$branch" --state all --json number,state,headRefOid --jq '.[] | "\(.number) \(.state) \(.headRefOid)"' 2>/dev/null || true)
+    [[ -z "$match" ]] || echo "$match"
     return 0
 }
 
+# land <worktree path> [message] [timeline summary] [author]
 # post_findings_review <worktree> <number> — post REVIEW_NOTE's findings as a
 # comment review on PR <number>, unless an earlier run of this land already did.
 post_findings_review() {
@@ -456,26 +471,24 @@ land() {
     fi
 
     # ---- gates -----------------------------------------------------------
-    # The isolation gate runs when this instance declares mounts; its lens tells
-    # the review who reads the target. target_label stays "this instance" unless
-    # the land goes into a mount.
     local lens_file="" target_label="this instance"
     if [[ -x "$SCRIPT_DIR/mount-isolation.py" && -f "$INSTANCE_ROOT/mounts.json" ]] && command -v python3 >/dev/null; then
         local -a gate_args=(--worktree "$wt" --base "$base")
-        if [[ -n "$CONTEXT_NOTE" ]]; then
-            local cfile="$CONTEXT_FILE"; [[ "$cfile" = /* ]] || cfile="$wt/$cfile"
-            gate_args+=(--text "$cfile")
+        # The same path the PR body reads (relative paths resolve against the worktree),
+        # so what the gate scans is what lands.
+        if [[ -n "$CONTEXT_FILE" ]]; then
+            local gate_ctx="$CONTEXT_FILE"; [[ "$gate_ctx" = /* ]] || gate_ctx="$wt/$gate_ctx"
+            [[ -s "$gate_ctx" ]] && gate_args+=(--text "$gate_ctx")
         fi
+        [[ -n "$PR_TITLE" ]] && gate_args+=(--title "$PR_TITLE")
         log "mount-isolation.py"
         local gate_out gate_rc=0
-        gate_out="$("$SCRIPT_DIR/mount-isolation.py" "${gate_args[@]}" 2>&1)" || gate_rc=$?
+        gate_out="$("$SCRIPT_DIR/mount-isolation.py" ${gate_args[@]+"${gate_args[@]}"} 2>&1)" || gate_rc=$?
         case "$gate_rc" in
-            0) [[ -z "$gate_out" ]] || echo "$gate_out" | sed 's/^/    /'
+            0) echo "$gate_out" | sed 's/^/    /'
                lens_file="$(mktemp)"
                "$SCRIPT_DIR/mount-isolation.py" --worktree "$wt" --lens > "$lens_file" 2>/dev/null || { rm -f "$lens_file"; lens_file=""; }
-               if [[ -n "$lens_file" ]]; then
-                   target_label="$(sed -n 's/^Audience lens: this diff lands in \(.*\), readable by.*$/\1/p' "$lens_file" | head -1)"
-               fi
+               target_label="$(sed -n 's/^Audience lens: this diff lands in \(.*\), readable by.*$/\1/p' "$lens_file" 2>/dev/null | head -1)"
                target_label="${target_label:-this instance}" ;;
             3) warn "$wt is neither this instance nor one of its mounts — the isolation gate does not apply" ;;
             *) echo "$gate_out" >&2
@@ -497,24 +510,25 @@ land() {
     if [[ -n "$review_script" ]] && (( ! DRY_RUN )); then
         local -a review_args=()
         [[ "$review_script" == "$wt/scripts/authoring-review.sh" ]] || review_args+=(--repo "$wt")
-        [[ -z "$lens_file" ]] || review_args+=(--lens "$lens_file")
+        [[ -n "$lens_file" ]] && review_args+=(--lens "$lens_file")
         log "authoring-review.sh${lens_file:+ (with the audience lens)}"
         local review_out review_rc=0
         review_out="$(cd "$wt" && "$review_script" ${review_args[@]+"${review_args[@]}"} 2>&1)" || review_rc=$?
-        [[ -z "$review_out" ]] || echo "$review_out"
         if (( review_rc != 0 )); then
-            # A finding on a land into a mount blocks in every mode: what merges
-            # there is read by people outside this instance's audience.
+            echo "$review_out"
             if (( review_rc == 1 && UNATTENDED )) && [[ "$target_label" == "this instance" ]]; then
                 log "unattended land: the findings go into a review on the PR instead of blocking"
                 REVIEW_NOTE="$review_out"
+            elif (( review_rc == 3 )); then
+                rm -f "$lens_file"
+                die "the authoring review did not run, and a land into $target_label needs its never-topics judged — re-run when the engine answers"
             else
-                [[ -z "$lens_file" ]] || rm -f "$lens_file"
+                rm -f "$lens_file"
                 die "authoring review flagged violations — fix, amend, then re-run"
             fi
         fi
     fi
-    [[ -z "$lens_file" ]] || rm -f "$lens_file"
+    rm -f "$lens_file"
 
     # ---- no remote: fast-forward the local default branch -----------------
     if ! has_remote "$main"; then
@@ -594,7 +608,7 @@ dirty_age_days() {
         [[ -n "$f" && -e "$wt/$f" ]] || continue
         m="$(stat -f %m "$wt/$f" 2>/dev/null || stat -c %Y "$wt/$f" 2>/dev/null || echo 0)"
         (( m > newest )) && newest=$m
-    done < <(git -C "$wt" status --porcelain --untracked-files=all | cut -c4- | sed 's/^.* -> //')
+    done < <(changed_paths "$wt")
     (( newest > 0 )) || { echo 0; return; }
     echo $(( ( $(date +%s) - newest ) / 86400 ))
 }

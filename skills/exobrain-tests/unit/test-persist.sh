@@ -61,7 +61,7 @@ setup_repo() {
     local no_remote=0; [[ "${1:-}" == "--no-remote" ]] && no_remote=1
     local seed="$TEST_DIR/seed"
     mkdir -p "$seed/scripts" "$seed/skills/exobrain-tests/unit" "$seed/knowledge/tracked" "$seed/knowledge/plain" "$seed/people/p"
-    cp "$SCRIPTS_DIR/persist.sh" "$seed/scripts/"
+    cp "$SCRIPTS_DIR/persist.sh" "$SCRIPTS_DIR/changed-paths.sh" "$seed/scripts/"
     REC="$TEST_DIR/calls"; : > "$REC"
     cat > "$seed/scripts/validate-exobrain.sh" <<EOF
 #!/usr/bin/env bash

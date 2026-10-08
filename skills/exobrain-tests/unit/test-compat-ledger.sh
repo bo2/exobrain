@@ -53,7 +53,7 @@ FUTURE_DATE="2999-12-31"
 setup_repo() {
     local repo="$TEST_DIR/exobrain"
     mkdir -p "$repo/scripts" "$repo/knowledge/exobrain"
-    cp "$SCRIPTS_DIR/validate-exobrain.sh" "$SCRIPTS_DIR/exobrain-healthcheck.sh" "$repo/scripts/"
+    cp "$SCRIPTS_DIR/validate-exobrain.sh" "$SCRIPTS_DIR/changed-paths.sh" "$SCRIPTS_DIR/exobrain-healthcheck.sh" "$repo/scripts/"
     chmod +x "$repo/scripts/"*.sh
     printf '# Exobrain\n\nFake.\n' > "$repo/AGENTS.md"
     echo "$repo"

@@ -53,7 +53,7 @@ FAKE_BIN=""; FAKE_REC=""
 setup_repo() {
     local repo="$TEST_DIR/exobrain"
     mkdir -p "$repo/scripts" "$repo/knowledge/sample"
-    cp "$SCRIPTS_DIR/authoring-review.sh" "$repo/scripts/"
+    cp "$SCRIPTS_DIR/authoring-review.sh" "$SCRIPTS_DIR/changed-paths.sh" "$repo/scripts/"
     chmod +x "$repo/scripts/authoring-review.sh"
     git -C "$repo" init -q
     git -C "$repo" config user.email t@t.test; git -C "$repo" config user.name tester
@@ -91,7 +91,7 @@ write_skill() {
 setup_skill_repo() {
     local repo="$TEST_DIR/skillrepo"
     mkdir -p "$repo/scripts"
-    cp "$SCRIPTS_DIR/authoring-review.sh" "$repo/scripts/"
+    cp "$SCRIPTS_DIR/authoring-review.sh" "$SCRIPTS_DIR/changed-paths.sh" "$repo/scripts/"
     chmod +x "$repo/scripts/authoring-review.sh"
     git -C "$repo" init -q
     git -C "$repo" config user.email t@t.test; git -C "$repo" config user.name tester
@@ -136,6 +136,82 @@ test_repo_and_lens() {
     [[ "$prompt" != *"A workspace line about Secretword."* ]] || { echo "without a lens, workspaces are out of scope"; return 1; }
 }
 
+# lens_review <repo> <lens target> [env=val]... — run authoring-review with a lens whose
+# target is <lens target>, the fake engine on PATH, and any extra environment.
+lens_review() {
+    local repo="$1" target="$2"; shift 2
+    printf 'Audience lens: this diff lands in %s, readable by alice, bob.\n' "$target" > "$TEST_DIR/lens.txt"
+    ( cd "$repo" && PATH="$FAKE_BIN:$PATH" env "$@" bash scripts/authoring-review.sh base --lens "$TEST_DIR/lens.txt" )
+}
+
+# A lens whose target is a mount fails closed: the review is the only judge of the
+# never-topics there, so no engine, an engine error, or an empty answer exits 3 and
+# says so. The same under a lens targeting the instance, or no lens, stays open.
+test_mount_lens_fails_closed() {
+    local r o rc; r="$(setup_repo)"; make_fake_engine
+    # No engine: an empty PATH dir stands in for a machine without one.
+    printf 'Audience lens: this diff lands in fx, readable by alice, bob.\n' > "$TEST_DIR/lens.txt"
+    o="$(cd "$r" && PATH="/usr/bin:/bin" bash scripts/authoring-review.sh base --lens "$TEST_DIR/lens.txt" 2>&1)" && rc=0 || rc=$?
+    assert_eq 3 "$rc" "no engine under a mount lens exits 3" || return 1
+    assert_contains "$o" "no claude/codex engine on PATH" "and names the cause" || return 1
+    assert_contains "$o" "the land goes into fx" "and the target" || return 1
+    # An empty answer.
+    o="$(lens_review "$r" fx FAKE_OUT="" 2>&1)" && rc=0 || rc=$?
+    assert_eq 3 "$rc" "an empty answer under a mount lens exits 3" || return 1
+    assert_contains "$o" "empty result" || return 1
+    # An engine that errors.
+    printf '#!/usr/bin/env bash\ncat >/dev/null; exit 7\n' > "$FAKE_BIN/claude"
+    o="$(lens_review "$r" fx 2>&1)" && rc=0 || rc=$?
+    assert_eq 3 "$rc" "an engine error under a mount lens exits 3" || return 1
+    assert_contains "$o" "engine errored or timed out (rc=7)" || return 1
+    # The deliberate opt-out still skips, and says what it leaves unjudged.
+    make_fake_engine
+    o="$(lens_review "$r" fx EXOBRAIN_SKIP_AUTHORING_REVIEW=1 FAKE_OUT="knowledge/sample/profile.md: horizon -- cut it." 2>&1)" && rc=0 || rc=$?
+    assert_eq 0 "$rc" "the opt-out is a choice, not a failure" || return 1
+    assert_contains "$o" "EXOBRAIN_SKIP_AUTHORING_REVIEW=1 — skipping the model review (a land into fx: its never-topics go unjudged)" || return 1
+    # The instance as target, and no lens: open as before, each skip said aloud.
+    o="$(lens_review "$r" "this instance" FAKE_OUT="" 2>&1)" && rc=0 || rc=$?
+    assert_eq 0 "$rc" "an empty answer under the instance lens stays open" || return 1
+    assert_contains "$o" "empty result — skipping" || return 1
+    o="$(run_review "$r" "" 2>&1)" && rc=0 || rc=$?
+    assert_eq 0 "$rc" "an empty answer with no lens stays open" || return 1
+    assert_contains "$o" "empty result — skipping" || return 1
+}
+
+# AUTHORING-OK counts only as a whole line: a finding that quotes the token is a
+# finding, and a finding-shaped line beside the token still blocks.
+test_ok_token_is_a_whole_line() {
+    local r o rc; r="$(setup_repo)"; make_fake_engine
+    o="$(run_review "$r" "knowledge/sample/profile.md: not AUTHORING-OK material -- cut it." 2>&1)" && rc=0 || rc=$?
+    assert_eq 1 "$rc" "a finding quoting the token is a finding" || return 1
+    o="$(run_review "$r" $'Here is the review:\nAUTHORING-OK' 2>&1)" && rc=0 || rc=$?
+    assert_eq 0 "$rc" "preamble around the token is still a pass" || return 1
+    o="$(run_review "$r" $'AUTHORING-OK\nknowledge/sample/profile.md: horizon -- cut it.' 2>&1)" && rc=0 || rc=$?
+    assert_eq 1 "$rc" "a finding beside the token blocks" || return 1
+    assert_contains "$o" "knowledge/sample/profile.md: horizon" || return 1
+}
+
+# Under a lens, every changed text file in a content tree is reviewed, not only
+# markdown; _raw/ is not.
+test_lens_reviews_non_markdown() {
+    local r prompt; r="$(setup_repo)"
+    mkdir -p "$r/workspaces/2026/01/01-w/_raw"
+    printf 'id,note\n1,a row about Secretword\n' > "$r/workspaces/2026/01/01-w/rows.csv"
+    printf '{"note": "json about Secretword"}\n' > "$r/knowledge/sample/facts.json"
+    printf 'raw dump line\n' > "$r/workspaces/2026/01/01-w/_raw/dump.txt"
+    git -C "$r" add -A; git -C "$r" commit -q -m files --no-gpg-sign
+    make_prompt_engine
+    lens_review "$r" fx >/dev/null 2>&1 || return 1
+    prompt="$(cat "$FAKE_REC")"
+    assert_contains "$prompt" "a row about Secretword" "a CSV is reviewed under a lens" || return 1
+    assert_contains "$prompt" "json about Secretword" "a JSON is reviewed under a lens" || return 1
+    [[ "$prompt" != *"raw dump line"* ]] || { echo "_raw/ stays out of the review"; return 1; }
+    rm -f "$FAKE_REC"
+    (cd "$r" && PATH="$FAKE_BIN:$PATH" bash scripts/authoring-review.sh base) || return 1
+    prompt="$(cat "$FAKE_REC")"
+    [[ "$prompt" != *"a row about Secretword"* ]] || { echo "without a lens, only markdown is reviewed"; return 1; }
+}
+
 # make_fake_engine — install a fake `claude` on PATH that records any proxy env
 # it sees, drains the prompt, and prints $FAKE_OUT (the canned model verdict).
 make_fake_engine() {
@@ -145,7 +221,7 @@ make_fake_engine() {
 #!/usr/bin/env bash
 env | grep -iE '^(all_proxy|https?_proxy)=' > "$FAKE_REC" 2>/dev/null || true
 cat >/dev/null 2>&1 || true
-printf '%s\n' "\${FAKE_OUT:-AUTHORING-OK}"
+printf '%s\n' "\${FAKE_OUT-AUTHORING-OK}"
 EOF
     chmod +x "$FAKE_BIN/claude"
 }
@@ -239,6 +315,20 @@ test_new_shared_skill_still_blocked() {
     assert_contains "$o" "demo-gamma" "the blocking skill is named"
 }
 
+test_opt_out_skips_only_the_model() {
+    local r; r="$(setup_skill_repo)"; make_fake_engine
+    write_skill "$r" demo-gamma
+    declare_skills "$r" demo-alpha demo-gamma
+    git -C "$r" add -A; git -C "$r" commit -q -m add --no-gpg-sign
+    local o rc
+    o="$(EXOBRAIN_SKIP_AUTHORING_REVIEW=1 run_review "$r" "AUTHORING-OK" 2>&1)" && rc=0 || rc=$?
+    assert_eq 2 "$rc" "the opt-out never waives the deterministic proof gate" || return 1
+    assert_contains "$o" "demo-gamma" "the blocking skill is named" || return 1
+    r="$(setup_repo)"
+    o="$(EXOBRAIN_SKIP_AUTHORING_REVIEW=1 run_review "$r" "knowledge/sample/profile.md: a finding." 2>&1)" && rc=0 || rc=$?
+    assert_eq 0 "$rc" "the opt-out still skips the model review"
+}
+
 # ---------------------------------------------------------------------------
 # Run
 # ---------------------------------------------------------------------------
@@ -251,6 +341,10 @@ run_test "renamed shared skill grandfathered"   test_renamed_shared_skill_grandf
 run_test "reworded rename grandfathered"        test_reworded_rename_grandfathered
 run_test "new unproven shared skill blocked"    test_new_shared_skill_still_blocked
 run_test "--repo and --lens: another checkout, the lens ahead of the diff, workspaces in scope" test_repo_and_lens
+run_test "a mount lens fails closed; the instance and no lens stay open" test_mount_lens_fails_closed
+run_test "AUTHORING-OK counts only as a whole line" test_ok_token_is_a_whole_line
+run_test "a lens reviews non-markdown text files too" test_lens_reviews_non_markdown
+run_test "opt-out skips only the model review"      test_opt_out_skips_only_the_model
 
 echo ""; echo "─────────────────────────────────────────────"
 if [[ $TESTS_FAILED -eq 0 ]]; then

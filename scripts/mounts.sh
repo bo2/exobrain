@@ -9,6 +9,7 @@
 #   mounts.sh disable <name>                  # stop indexing it and relink; the checkout stays where it is
 #   mounts.sh sync [<name>]                   # fetch, then fast-forward a clean checkout on its default branch
 #   mounts.sh worktree <name> <branch>        # a worktree of the mount's checkout for a change to it; prints its path
+#   mounts.sh audience <name>                 # the repository's collaborators and visibility (gh) beside the charter's audience
 #
 # A pull of this instance runs sync from the post-merge and post-rewrite hooks
 # connect-agent.sh installs. enable, disable, and a sync that changes the domain
@@ -33,7 +34,7 @@ REPO_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 # shellcheck source=skills-registry.sh
 source "$SCRIPT_DIR/skills-registry.sh"
 
-usage() { sed -n '2,22s/^# \{0,1\}//p' "$0"; }
+usage() { sed -n '2,23s/^# \{0,1\}//p' "$0"; }
 die_usage() { echo "mounts.sh: $1" >&2; echo "Run: scripts/mounts.sh --help" >&2; exit 2; }
 
 command -v jq >/dev/null 2>&1 || { echo "mounts.sh: jq is required" >&2; exit 2; }
@@ -268,6 +269,29 @@ cmd_worktree() {
     echo "$wt"
 }
 
+# cmd_audience <name> — who can actually read the repository, from the forge,
+# beside who the charter says can: a collaborator the charter does not name is a
+# reader the gate does not know about, and a public repository makes a land into it
+# a public publish. Needs gh and a github.com repository; says so otherwise.
+cmd_audience() {
+    local name="${1:-}" repo slug audience vis collabs
+    [[ -n "$name" ]] || die_usage "audience needs a mount name"
+    require_declared "$name"
+    repo="$(declared_field "$name" 2)"; audience="$(declared_field "$name" 3)"
+    echo "$name — charter audience: $audience"
+    command -v gh >/dev/null 2>&1 || { echo "  (gh is not installed — cannot read the repository's collaborators)"; return 1; }
+    slug="$(url_key "$repo")"
+    case "$slug" in github.com/*) slug="${slug#github.com/}" ;; *) echo "  ($repo is not on github.com — gh cannot read it)"; return 1 ;; esac
+    vis="$(gh api "repos/$slug" --jq '.visibility // (if .private then "private" else "public" end)' 2>/dev/null)" \
+        || { echo "  (gh could not read $slug — not logged in, or no access)"; return 1; }
+    echo "  repository: $slug ($vis)"
+    [[ "$vis" == "private" || "$vis" == "internal" ]] || echo "  ! $slug is $vis — every land into it is a public publish"
+    collabs="$(gh api "repos/$slug/collaborators" --paginate --jq '.[].login' 2>/dev/null | sort | tr '\n' ' ')"
+    echo "  collaborators: ${collabs:-(none readable)}"
+    echo "  Compare the two: a collaborator the charter does not name reads what the gate does not expect."
+    return 0
+}
+
 # domain_set <dir> — the mount's domain dirs, one line, to tell whether a sync
 # changed what the knowledge index lists.
 domain_set() { (cd "$1" && ls -d knowledge/*/README.md 2>/dev/null | tr '\n' ' '); }
@@ -336,6 +360,7 @@ case "${1:-}" in
     disable)        shift; cmd_disable "$@" ;;
     sync)           shift; cmd_sync "$@" ;;
     worktree)       shift; cmd_worktree "$@" ;;
+    audience)       shift; cmd_audience "$@" ;;
     -h|--help|help) usage ;;
     "")             usage >&2; exit 2 ;;
     *)              die_usage "unknown command '$1'" ;;

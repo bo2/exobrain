@@ -56,6 +56,8 @@ setup_gh() {
 set -uo pipefail
 DATA="$TEST_DIR/prs.json"
 [[ "\$1 \$2" == "pr list" ]] || { echo "fake gh: unsupported: \$*" >&2; exit 2; }
+printf '%s\n' "\$@" > "$TEST_DIR/list-args"
+[[ "\${GH_FAIL:-}" == 1 ]] && { echo "fake gh: HTTP 401" >&2; exit 1; }
 filter="."
 while [[ \$# -gt 0 ]]; do case "\$1" in --jq) filter="\$2"; shift 2;; *) shift;; esac; done
 jq -r "sort_by(.number) | reverse | \$filter" "\$DATA"
@@ -138,6 +140,22 @@ test_unknown_argument_is_a_usage_error() {
 
 # ---------------------------------------------------------------------------
 
+test_query_is_scoped_to_merged_unrepaired_prs() {
+    setup_gh; add_pr 10 "x"; add_review 10 "$(findings)"
+    pending >/dev/null || return 1
+    local args; args="$(cat "$TEST_DIR/list-args")"
+    assert_contains "$args" "merged" "merged PRs only" || return 1
+    assert_contains "$args" "-label:$LABEL" "repaired PRs excluded in the query" || return 1
+    assert_contains "$args" "reviews" "reviews are what it reads"
+}
+
+test_a_failed_listing_fails() {
+    setup_gh; add_pr 10 "x"; add_review 10 "$(findings)"
+    local out; out="$(GH_FAIL=1 pending 2>&1)"; local rc=$?
+    assert_eq 1 "$rc" "a failed listing is not 'nothing pending'" || return 1
+    assert_contains "$out" "listing merged PRs failed"
+}
+
 run_test lists_only_prs_carrying_the_heading  test_lists_only_prs_carrying_the_heading
 run_test repaired_label_excludes_a_pr         test_repaired_label_excludes_a_pr
 run_test other_labels_do_not_exclude          test_other_labels_do_not_exclude
@@ -145,6 +163,8 @@ run_test oldest_first                         test_oldest_first
 run_test nothing_pending_is_empty_and_ok      test_nothing_pending_is_empty_and_ok
 run_test heading_matches_the_one_persist_writes test_heading_matches_the_one_persist_writes
 run_test unknown_argument_is_a_usage_error    test_unknown_argument_is_a_usage_error
+run_test query_is_scoped_to_merged_unrepaired_prs test_query_is_scoped_to_merged_unrepaired_prs
+run_test a_failed_listing_fails               test_a_failed_listing_fails
 
 echo ""
 if [[ $TESTS_FAILED -gt 0 ]]; then

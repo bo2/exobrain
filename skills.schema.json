@@ -49,7 +49,7 @@
             "properties": {
               "repo": { "type": "string", "format": "uri", "description": "GitHub HTTPS URL of the source repository." },
               "path": { "type": "string", "description": "Path within the repo to the skill directory." },
-              "ref":  { "type": "string", "description": "Pinned git ref — commit SHA, tag, or branch." }
+              "ref":  { "type": "string", "description": "Git ref. A commit SHA or tag pins the skill; a branch is followed, re-fetched on relink whenever it has moved." }
             }
           },
           "agent": {

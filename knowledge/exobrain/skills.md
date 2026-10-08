@@ -94,7 +94,7 @@ Because a non-forced declaration is invisible to non-owners, list every declared
 ## Linker and fetcher
 
 - **Linker** (`connect-agent.sh`): for each `always` in-tree row, symlink `<agent>/skills/<name>.<home-scope>/` → the source dir. The suffix lets two scopes supply same-named skills without collision. `optional` / `unlisted` / `off` aren't symlinked.
-- **Fetcher** ([`/scripts/fetch-external-skills.sh`](../../scripts/fetch-external-skills.sh)): for resolved `external` rows, sparse-clone `source.repo@ref` into `skills/` (always) or `skills-optional/` (optional); `off` removes it. Each install records its ref so reruns are idempotent.
+- **Fetcher** ([`/scripts/fetch-external-skills.sh`](../../scripts/fetch-external-skills.sh)): for resolved `external` rows, sparse-clone `source.repo@ref` into `skills/` (always) or `skills-optional/` (optional); `off` removes it. Each install records its ref and commit: a tag or SHA is fetched once, a branch is re-fetched on a rerun only when the remote branch has moved, and an unreachable remote keeps the installed copy.
 
 ## Agent filtering
 

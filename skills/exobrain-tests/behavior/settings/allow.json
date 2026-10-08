@@ -39,12 +39,20 @@
       "Bash(scripts/skills-validate.sh:*)",
       "Bash(scripts/skills-promote.sh:*)",
       "Bash(scripts/create-worktree.sh:*)",
-      "Bash(scripts/mounts.sh:*)",
       "Bash(scripts/exobrain-healthcheck.sh:*)",
       "Bash(./scripts/connect-agent.sh:*)",
       "Bash(./scripts/validate-exobrain.sh:*)",
       "Bash(./scripts/create-worktree.sh:*)",
-      "Bash(./scripts/mounts.sh:*)"
+      "Bash(scripts/mounts.sh:*)",
+      "Bash(./scripts/mounts.sh:*)",
+      "Bash(scripts/persist.sh:*)",
+      "Bash(./scripts/persist.sh:*)",
+      "Bash(scripts/mount-isolation.py:*)",
+      "Bash(./scripts/mount-isolation.py:*)",
+      "Bash(python3 scripts/mount-isolation.py:*)",
+      "Bash(scripts/security-findings.py:*)",
+      "Bash(./scripts/security-findings.py:*)",
+      "Bash(python3 scripts/security-findings.py:*)"
     ],
     "deny": [
       "Bash(gh:*)",

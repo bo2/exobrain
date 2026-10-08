@@ -461,21 +461,23 @@ tools_resolve() {
     # deepest scope's — awk keeps it; the final sort restores name order.
 }
 
-# tools_extract_summary <tool_md> — the tool doc's one-line purpose: the first
-# non-blank, non-heading content line (skipping any leading YAML frontmatter).
-# Mirrors skills_extract_description, but tool docs open with prose rather than a
-# frontmatter field, so it reads the first content line instead.
+# tools_extract_summary <tool_md> — the tool doc's one-line purpose: its first
+# non-heading paragraph (skipping any leading YAML frontmatter), hard-wrapped lines
+# joined with single spaces. Mirrors skills_extract_description, but tool docs open
+# with prose rather than a frontmatter field, so it reads the opening paragraph.
 tools_extract_summary() {
     local file="$1"
     [[ -f "$file" ]] || { echo ""; return 0; }
     awk '
-        BEGIN { in_fm = 0 }
+        BEGIN { in_fm = 0; out = "" }
         NR == 1 && /^---[[:space:]]*$/ { in_fm = 1; next }
         in_fm && /^---[[:space:]]*$/  { in_fm = 0; next }
         in_fm { next }
-        /^[[:space:]]*$/ { next }   # skip blank lines
-        /^#/ { next }               # skip headings
-        { print; exit }
+        /^[[:space:]]*$/ { if (out != "") exit; next }   # blank: skip before, end after
+        /^#/ { if (out != "") exit; next }               # heading: skip before, end after
+        { line = $0; gsub(/^[[:space:]]+|[[:space:]]+$/, "", line)
+          out = (out == "") ? line : out " " line }
+        END { if (out != "") print out }
     ' "$file"
 }
 

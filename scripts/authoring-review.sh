@@ -25,12 +25,19 @@
 # the model reports clear violations, and 2 when the deterministic new-shared-skill
 # gate below blocks (that one needs no model).
 #
-# Opt out:  EXOBRAIN_SKIP_AUTHORING_REVIEW=1
+# The exception is a lens whose target is a mount: there the review is the only
+# judge of the charter's never-topics, so a review that did not happen — no engine,
+# an error or timeout, an empty answer — exits 3 and the land waits for one that does.
+# Under such a lens every changed text file under knowledge/ and workspaces/ is
+# reviewed, not only markdown; _raw/ stays with the deterministic gate.
+#
+# Opt out:  EXOBRAIN_SKIP_AUTHORING_REVIEW=1 skips the model review (§1–4), saying so;
+#           the deterministic proof gate (§0) runs regardless.
 
 set -uo pipefail
-[[ "${EXOBRAIN_SKIP_AUTHORING_REVIEW:-}" == "1" ]] && exit 0
 
-REPO_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+INSTANCE_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+REPO_DIR="$INSTANCE_DIR"
 BASE=""; LENS_FILE=""
 while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -44,21 +51,50 @@ while [[ $# -gt 0 ]]; do
     shift
 done
 
-# Default base: the reviewed repository's default branch on origin, resolved the
-# same way validate-exobrain.sh and create-worktree.sh resolve it. A repository
-# whose trunk isn't named "main" would otherwise be reviewed against a ref that
-# doesn't exist.
+# Default base: the reviewed repository's default branch on origin, resolved the same way
+# validate-exobrain.sh and create-worktree.sh resolve it — origin/HEAD, else
+# trunk/main/master. A gate that degrades open cannot afford a base ref that
+# doesn't exist: an empty diff range reads exactly like a clean review.
 if [[ -z "$BASE" ]]; then
-    BASE="$(git -C "$REPO_DIR" symbolic-ref --quiet --short refs/remotes/origin/HEAD 2>/dev/null || true)"
-    if [[ -z "$BASE" ]]; then
-        for cand in origin/main origin/trunk origin/master; do
-            if git -C "$REPO_DIR" rev-parse --verify --quiet "$cand" >/dev/null 2>&1; then
-                BASE="$cand"; break
-            fi
+    if ref="$(git -C "$REPO_DIR" symbolic-ref --quiet refs/remotes/origin/HEAD 2>/dev/null)"; then
+        BASE="origin/${ref##*/}"
+    else
+        for cand in main trunk master; do
+            git -C "$REPO_DIR" rev-parse --verify "origin/$cand" >/dev/null 2>&1 && { BASE="origin/$cand"; break; }
         done
     fi
     BASE="${BASE:-origin/main}"
 fi
+
+# The lens's first line names its target (mount-isolation.py --lens). A mount target
+# fails closed: the review is the only judge of the never-topics on a land there.
+LENS_TARGET=""
+if [[ -n "$LENS_FILE" ]]; then
+    LENS_TARGET="$(sed -n 's/^Audience lens: this diff lands in \(.*\), readable by.*$/\1/p' "$LENS_FILE" | head -1)"
+fi
+FAIL_CLOSED=0
+[[ -n "$LENS_TARGET" && "$LENS_TARGET" != "this instance" ]] && FAIL_CLOSED=1
+
+# did_not_review <why> — the model pass did not happen: open by default, closed under
+# a mount lens.
+did_not_review() {
+    if (( FAIL_CLOSED )); then
+        echo "authoring-review: $1 — the land goes into $LENS_TARGET, whose never-topics only this review judges; it waits for a review that answers." >&2
+        exit 3
+    fi
+    echo "authoring-review: $1 — skipping." >&2
+    exit 0
+}
+
+# changed_files [--added] — the paths the branch's commits change against BASE, one per
+# line, through scripts/changed-paths.sh so a non-ASCII name arrives verbatim rather
+# than in git's quoted form, which names no file and would drop the doc from the review.
+[[ -f "$INSTANCE_DIR/scripts/changed-paths.sh" ]] || { echo "authoring-review: missing $INSTANCE_DIR/scripts/changed-paths.sh" >&2; exit 2; }
+changed_files() {
+    local p
+    while IFS= read -r -d '' p; do printf '%s\n' "$p"; done \
+        < <(bash "$INSTANCE_DIR/scripts/changed-paths.sh" --committed "$@" "$REPO_DIR" "$BASE")
+}
 
 # ---------------------------------------------------------------------------
 # 0. New-shared-skill proof gate — deterministic, runs before the model pass.
@@ -203,8 +239,7 @@ if git -C "$REPO_DIR" rev-parse --verify --quiet "$BASE" >/dev/null 2>&1; then
                 renamed_from_declared "$sd/skills.json" "$nm" && continue
                 check_new_skill "$nm" "$sd" "$REPO_DIR/$sd/skills/$nm" ;;
         esac
-    done < <(git -C "$REPO_DIR" diff --name-only --find-renames --diff-filter=A "$BASE...HEAD" 2>/dev/null \
-             | grep 'SKILL\.md$')
+    done < <(changed_files --added | grep 'SKILL\.md$')
 fi
 
 if [[ ${#unproven[@]} -gt 0 ]]; then
@@ -224,6 +259,12 @@ if [[ ${#unproven[@]} -gt 0 ]]; then
     exit 2
 fi
 
+if [[ "${EXOBRAIN_SKIP_AUTHORING_REVIEW:-}" == "1" ]]; then
+    unjudged=""; (( FAIL_CLOSED )) && unjudged=" (a land into $LENS_TARGET: its never-topics go unjudged)"
+    echo "authoring-review: EXOBRAIN_SKIP_AUTHORING_REVIEW=1 — skipping the model review$unjudged." >&2
+    exit 0
+fi
+
 # ---------------------------------------------------------------------------
 # 1. In-scope files changed on this branch. Skip fast if none.
 # ---------------------------------------------------------------------------
@@ -236,14 +277,16 @@ while IFS= read -r f; do
         */_raw/*) continue ;;
         knowledge/*.md|AGENTS.md|*/AGENTS.md|*/AGENTS.*.md|CLAUDE.md|*/CLAUDE.md|CODEX.md|*/CODEX.md|OPENCLAW.md|*/OPENCLAW.md|*/SKILL.md)
             [[ -f "$REPO_DIR/$f" ]] && files+=("$f") ;;
-        workspaces/*.md)
+        knowledge/*|workspaces/*)
+            # Under a lens, every text file in a content tree: a boundary is crossed in a
+            # CSV or a JSON as readily as in prose. Git marks a binary one "differ" below.
             [[ -n "$LENS_FILE" && -f "$REPO_DIR/$f" ]] && files+=("$f") ;;
     esac
-done < <(git -C "$REPO_DIR" diff --name-only "$BASE...HEAD" -- '*.md' 2>/dev/null)
-[[ ${#files[@]} -eq 0 ]] && exit 0
+done < <(changed_files)
+[[ ${#files[@]} -eq 0 ]] && { echo "authoring-review: no file in scope changed — nothing to review." >&2; exit 0; }
 
 diff_text="$(git -C "$REPO_DIR" diff "$BASE...HEAD" -- ${files[@]+"${files[@]}"} 2>/dev/null)"
-[[ -z "$diff_text" ]] && exit 0
+[[ -z "$diff_text" ]] && { echo "authoring-review: the files in scope show no diff — nothing to review." >&2; exit 0; }
 # Bound the prompt size; very large diffs get truncated (the deterministic hook
 # still covers the whole change).
 if [[ ${#diff_text} -gt 120000 ]]; then
@@ -359,24 +402,25 @@ run_review() {
     fi
 }
 
-# Degrade open either way, but distinguish the causes: rc=3 means no engine on
-# PATH; any other non-zero means the engine errored or timed out.
+# A review that did not happen (rc=3: no engine on PATH; any other non-zero: the
+# engine errored or timed out; or nothing came back) is open or closed per did_not_review.
 output="$(run_review)"; rc=$?
 if [[ $rc -eq 3 ]]; then
-    echo "authoring-review: no claude/codex engine on PATH — skipping." >&2
-    exit 0
+    did_not_review "no claude/codex engine on PATH"
 elif [[ $rc -ne 0 ]]; then
-    echo "authoring-review: engine errored or timed out (rc=$rc) — skipping." >&2
-    exit 0
+    did_not_review "engine errored or timed out (rc=$rc)"
 fi
 output="$(printf '%s\n' "$output" | sed '/^[[:space:]]*$/d')"
-[[ -z "$output" ]] && { echo "authoring-review: empty result — skipping." >&2; exit 0; }
+[[ -z "$output" ]] && did_not_review "empty result"
 
 # ---------------------------------------------------------------------------
-# 4. Verdict.
+# 4. Verdict. The token counts only as a whole line — a finding that happens to
+# quote it is still a finding — and a finding-shaped line beside it still blocks.
 # ---------------------------------------------------------------------------
-if grep -q 'AUTHORING-OK' <<<"$output"; then
-    exit 0
+if grep -qE '^[[:space:]]*AUTHORING-OK[[:space:]]*$' <<<"$output"; then
+    findings="$(grep -vE '^[[:space:]]*AUTHORING-OK[[:space:]]*$' <<<"$output" | grep -E '^[^[:space:]]+: .* -- ' || true)"
+    [[ -z "$findings" ]] && exit 0
+    output="$findings"
 fi
 
 echo "" >&2
