@@ -30,8 +30,12 @@ run_agent() { # cwd=$RUN, PATH already has $STUBS, STUB_LOG set
       --skip-git-repo-check -c shell_environment_policy.inherit=all \
       -m "${MODEL:-gpt-5.5}" "$TASK_PROMPT" </dev/null >"$OUTF" 2>/dev/null
   else
+    # No MCP servers: without --strict-mcp-config the run loads the runner's own MCP
+    # servers (plugins, hosted connectors) with live credentials, and under
+    # bypassPermissions an agent can act on real systems that no PATH stub sees.
     ${TMO[@]+"${TMO[@]}"} claude -p "$TASK_PROMPT" --model "${MODEL:-opus}" \
-      --max-turns "${MAX_TURNS:-14}" --permission-mode bypassPermissions >"$OUTF" 2>/dev/null
+      --max-turns "${MAX_TURNS:-14}" --permission-mode bypassPermissions \
+      --strict-mcp-config --mcp-config '{"mcpServers":{}}' >"$OUTF" 2>/dev/null
   fi
 }
 
