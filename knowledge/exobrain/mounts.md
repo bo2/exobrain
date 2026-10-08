@@ -54,13 +54,14 @@ Information from a root belongs to that root's audience, and landing it in anoth
 
 `scripts/mount-isolation.py --worktree <dir> --plan` says which roots gate a given land and why.
 
-**The gate** is `scripts/mount-isolation.py`, deterministic, run by persist on every land before the validator. It scans what the land adds — the added lines of every changed file, committed or not, `_raw/` included, the branch's commit messages, and the `--context` handover that goes into the PR body — and blocks, attended or unattended, on:
+**The gate** is `scripts/mount-isolation.py`, deterministic, run by persist on every land before the validator. It scans what the land adds — the added lines of every changed file, committed or not, `_raw/` included, each changed file's name, the branch's name and commit messages, the PR title, and the `--context` handover that goes into the PR body — and blocks, attended or unattended, on:
 
-- **Out of charter.** Into a mount: a file under a `knowledge/<domain>/` the charter does not hold, or a framework file.
+- **Text the gate cannot read.** A changed text file that is not UTF-8 (UTF-16 and UTF-32 are decoded and scanned); recode it. A binary file passes on its name alone.
+- **Out of charter.** Into a mount: a file under a `knowledge/<domain>/` the charter does not hold, or a framework file, added or edited. A land that removes one passes.
 - **Never terms and patterns** of every gated source, plus card numbers and IBANs (checksum-validated, so an arbitrary digit run is not a hit). National identifiers, emails, and phone numbers are not built in; a charter lists the shapes that must stay out under `patterns`.
 - **References into a gated source:** its repository, its checkout path, a mount's name as a `<mount>:<path>` citation — and, into a mount, any `<name>:<path>` citation at all.
 
-**The topics** are judged by the authoring review, which persist runs with the gate's audience lens (`--lens`): who reads the target, its purpose and held domains, and each gated source's never-topics. Under the lens, changed workspace files are reviewed too. A lens finding on a land into a mount blocks in every mode; a finding on a land into this instance blocks an attended land and is posted as a review on the PR of an unattended one, like any authoring finding.
+**The topics** are judged by the authoring review, which persist runs with the gate's audience lens (`--lens`): who reads the target, its purpose and held domains, and each gated source's never-topics. Under the lens, every changed text file under `knowledge/` and `workspaces/` is reviewed, not only markdown. A lens finding on a land into a mount blocks in every mode, and so does a review that did not answer (no engine, an error, a timeout, an empty result) — the land waits for one that does; a finding on a land into this instance blocks an attended land and is posted as a review on the PR of an unattended one, like any authoring finding, and a review that did not answer there degrades open.
 
 **Drift, not a leak.** A local file that restates a fact whose home is a shared mount, instead of citing it as `<mount>:<path>`, exposes nothing; the lens asks the review to name it as drift.
 
@@ -84,6 +85,10 @@ A mount is read as of its last sync. Pulling this instance syncs its mounts: the
 - `exobrain-healthcheck.sh` runs the same throttled, time-boxed fetch it uses for trunk. It reports an enabled mount that is missing, behind, dirty, off its default branch, or ahead of its origin, one whose last successful fetch is more than a day old, and charter drift: a domain outside the charter, a held domain missing, framework files in the checkout. The time of the last successful fetch is kept in `.git/exobrain-last-fetch` inside the mount's checkout.
 - Offline, the last checkout is what is read, and the healthcheck says how old it is.
 
+## The `exobrain-mounts` skill
+
+The judgment layer over these scripts is the `exobrain-mounts` skill (`skills/exobrain-mounts/SKILL.md`). Its behavior cases in the `exobrain-tests` suite are the `mount-*` cases, seeded by `behavior/lib/seed-mount.sh`.
+
 ## `mounts.sh`
 
 | Command | Does |
@@ -93,5 +98,6 @@ A mount is read as of its last sync. Pulling this instance syncs its mounts: the
 | `disable <name>` | Stops indexing the mount and relinks. The checkout stays where it is. |
 | `sync [<name>]` | Described under § Freshness. Exits 1 when any mount needs attention. |
 | `worktree <name> <branch>` | A worktree of the mount's checkout for a change to it; prints its path. |
+| `audience <name>` | The repository's collaborators and visibility through `gh`, beside the charter's audience. |
 
 The connector, healthcheck, validator, and `mounts.sh` share the resolution helpers in `scripts/skills-registry.sh` § Mounts. Tests: `skills/exobrain-tests/unit/test-mounts.sh`.

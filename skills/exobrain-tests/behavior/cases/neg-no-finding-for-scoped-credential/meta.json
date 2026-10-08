@@ -1,0 +1,13 @@
+{
+  "name": "neg-no-finding-for-scoped-credential",
+  "description": "Negative twin of security-finding-recorded: the same edit to a tool doc whose credential is already read-only records no finding.",
+  "runs": 3,
+  "permission_profile": "action",
+  "pass_threshold": "all",
+  "timeout_seconds": 420,
+  "tags": [
+    "security",
+    "findings",
+    "negative"
+  ]
+}

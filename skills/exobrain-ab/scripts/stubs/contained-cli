@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+# Containment stub for a CLI that is live on this machine: a sandbox agent runs with
+# bypassed permissions on the real PATH, so an unshadowed one acts on the real system.
+# Each live CLI is a symlink to this file, named as the bare command; no task needs to
+# grade it. It logs the invocation like any stub — so a negative task still counts a
+# reach for it — and touches nothing.
+name="$(basename "$0")"
+echo "$name $*" >> "${STUB_LOG:-/tmp/stub.log}"
+echo "[stub:$name] ok"
+exit 0

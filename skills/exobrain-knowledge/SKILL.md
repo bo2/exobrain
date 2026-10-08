@@ -19,6 +19,8 @@ Build and maintain exobrain knowledge domains. One skill, four modes — pick by
 
 ## Shared foundation (every mode)
 
+A **mounted domain** (`<mount>/<domain>` in the knowledge index, its README at the absolute path the index gives) is a valid target for every mode; change it per root `AGENTS.md` § Mounts (the `exobrain-mounts` skill).
+
 Read this once; each mode's file adds only its own procedure on top.
 
 1. **Read `knowledge/<domain>/README.md`** — frontmatter (`type`, `curator`, `summary`, `timeline`), scope boundaries, and the file index. The README is the map: it says which file owns which concern. Scope design is curator-defined ([`knowledge/exobrain/domains.md`](../../knowledge/exobrain/domains.md) "Breaking a domain into sections") — read the actual layout, never assume a fixed file set.

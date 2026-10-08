@@ -97,7 +97,7 @@ make_host() {
     git -C "$h" init -q -b main
     for s in connect-agent.sh skills-registry.sh fetch-external-skills.sh skills-validate.sh \
              create-worktree.sh link-worktree-context.sh exobrain-healthcheck.sh mounts.sh validate-exobrain.sh persist.sh \
-             mount-isolation.py authoring-review.sh; do
+             mount-isolation.py authoring-review.sh changed-paths.sh; do
         cp "$SCRIPTS_DIR/$s" "$h/scripts/"
     done
     chmod +x "$h/scripts/mount-isolation.py"
@@ -171,6 +171,7 @@ test_enable_clones_and_indexes() {
     assert_contains "$d" "## Mounted: fx — Fixture projects" "per-mount heading carries the purpose" || return 1
     assert_contains "$d" "Readable by **alice, bob**" "and the audience" || return 1
     assert_contains "$d" 'Cite a file there as `fx:<path>`' "and the citation form" || return 1
+    assert_contains "$d" 'change it in a worktree (`scripts/mounts.sh worktree fx <branch>`)' "and the worktree rule beside the path" || return 1
     assert_contains "$d" "| fx/projects | $h/src/fx/knowledge/projects/README.md | The fixture projects. |" "namespaced row with the checkout path and the charter's description" || return 1
     assert_not_contains "$d" "fx/notes" "a domain outside the charter is not indexed" || return 1
     local before; before="$d"
@@ -580,6 +581,42 @@ test_worktree_and_persist_repo() {
     assert_eq "" "$(git -C "$h/src/fx" status --porcelain)" "the checkout itself holds no edits"
 }
 
+# A detached land into a mount: the background process starts in the worktree, so a
+# relative --repo must not reach it, and the caller is told the sweep won't retry it.
+test_persist_repo_detached_with_a_relative_path() {
+    make_remote >/dev/null; local h wt out i; h="$(make_host)"
+    mounts "$h" enable fx >/dev/null || return 1
+    detach_origin "$h/src/fx"
+    wt="$(mounts "$h" worktree fx bg-fact 2>/dev/null)" || return 1
+    printf 'A fact.\n' > "$wt/knowledge/projects/bg.md"
+    out="$(persist "$h" --detach --repo "src/fx--bg-fact" -m "Add a background fact")" || { echo "$out"; return 1; }
+    assert_contains "$out" "the sweep does not retry a land into another repository" || return 1
+    local logf="$h/src/fx/.git/persist-logs/bg-fact.log"
+    for i in $(seq 1 120); do
+        grep -qE 'landed bg-fact|persist: .*(failed|blocked|needs)' "$logf" 2>/dev/null && break; sleep 0.5
+    done
+    assert_contains "$(cat "$logf" 2>/dev/null)" "landed bg-fact onto dev (local)" "the detached land finished" || return 1
+    assert_eq "Add a background fact" "$(git -C "$h/src/fx" log -1 --format=%s dev)"
+}
+
+test_persist_repo_lands_a_framework_removal() {
+    make_remote >/dev/null; local h wt out; h="$(make_host)"
+    mounts "$h" enable fx >/dev/null || return 1
+    detach_origin "$h/src/fx"
+    wt="$(mounts "$h" worktree fx seed-framework 2>/dev/null)" || return 1
+    mkdir -p "$wt/scripts" "$wt/skills/s"
+    printf 'echo\n' > "$wt/scripts/x.sh"; printf 'spec\n' > "$wt/AGENTS.md"; printf 'skill\n' > "$wt/skills/s/SKILL.md"
+    git -C "$wt" add -A && git -C "$wt" commit -qm "framework in a mount"
+    git -C "$h/src/fx" merge -q --ff-only seed-framework || return 1
+    git -C "$h/src/fx" worktree remove --force "$wt" >/dev/null 2>&1
+    wt="$(mounts "$h" worktree fx strip 2>/dev/null)" || return 1
+    git -C "$wt" rm -rq scripts skills AGENTS.md
+    out="$(persist "$h" --repo "$wt" -m "Strip the framework")" || { echo "$out"; return 1; }
+    assert_contains "$out" "landed strip onto dev (local)" "removed specs and scripts need no proof" || return 1
+    assert_no_file "$h/src/fx/AGENTS.md" || return 1
+    assert_no_file "$h/src/fx/scripts/x.sh" || return 1
+}
+
 test_persist_repo_blocks_on_validation() {
     make_remote >/dev/null; local h wt out; h="$(make_host)"
     mounts "$h" enable fx >/dev/null || return 1
@@ -591,6 +628,32 @@ test_persist_repo_blocks_on_validation() {
     assert_contains "$out" "validation failed" || return 1
     assert_eq "base" "$(git -C "$h/src/fx" log -1 --format=%s dev)" "nothing landed" || return 1
     assert_file "$wt/knowledge/projects/bad.md" "the worktree keeps the work for the fix"
+}
+
+# ---------------------------------------------------------------------------
+# Tests — audience, through a fake gh
+# ---------------------------------------------------------------------------
+
+test_audience() {
+    local h out; h="$(make_host)"
+    jq '.mounts[0].repo = "git@github.com:Org/Fx.git"' "$h/mounts.json" > "$h/m.t" && mv "$h/m.t" "$h/mounts.json"
+    mkdir -p "$TEST_DIR/bin"
+    cat > "$TEST_DIR/bin/gh" <<'G'
+#!/usr/bin/env bash
+case "$*" in
+  *"repos/org/fx --jq"*)               echo "public" ;;
+  *"repos/org/fx/collaborators"*)      printf 'alice\ncarol\n' ;;
+  *) exit 1 ;;
+esac
+G
+    chmod +x "$TEST_DIR/bin/gh"
+    out="$(cd "$h" && env "PATH=$TEST_DIR/bin:$PATH" bash scripts/mounts.sh audience fx)" || { echo "$out"; return 1; }
+    assert_contains "$out" "fx — charter audience: alice, bob" || return 1
+    assert_contains "$out" "repository: org/fx (public)" "slug from any URL spelling" || return 1
+    assert_contains "$out" "! org/fx is public — every land into it is a public publish" || return 1
+    assert_contains "$out" "collaborators: alice carol" || return 1
+    out="$(cd "$h" && env "PATH=$TEST_DIR/empty:/usr/bin:/bin" bash scripts/mounts.sh audience fx)" && { echo "should exit 1 without gh: $out"; return 1; }
+    assert_contains "$out" "gh is not installed"
 }
 
 # ---------------------------------------------------------------------------
@@ -637,9 +700,17 @@ test_gate_blocks_leak_classes() {
     mkdir -p "$wt/scripts"; printf 'echo\n' > "$wt/scripts/x.sh"
     printf "see fx:knowledge/projects/README.md and other:workspaces/x/ and $h/knowledge/x.md and $TEST_DIR/remotes/fx.git\n" > "$wt/knowledge/projects/r.md"
     printf 'Baseline line.\n' > "$wt/README.md"   # an edit to a tracked file: only its added lines count
+    # Non-ASCII names: git quotes them ("\320\267…") unless core.quotePath is off, and the
+    # quoted form names no file — a gate reading it skips the file.
+    printf 'Has Secretword too.\n' > "$wt/knowledge/projects/заметка.md"
+    printf 'x\n' > "$wt/knowledge/notes/тетрадь.md"
     git -C "$wt" add -A && git -C "$wt" commit -qm "add things"
     printf 'Tracked before.\nHas Secretword now.\n' > "$wt/README.md"
+    printf 'Uncommitted Secretword.\n' > "$wt/knowledge/projects/черновик.md"
     out="$(gate "$h" --worktree "$wt" --base dev)" && { echo "should fail: $out"; return 1; }
+    assert_contains "$out" "knowledge/projects/заметка.md:1 — never term: 'Secretword'" "a committed file with a Cyrillic name is scanned" || return 1
+    assert_contains "$out" "knowledge/projects/черновик.md:1 — never term: 'Secretword'" "an uncommitted file with a Cyrillic name is scanned" || return 1
+    assert_contains "$out" "knowledge/notes/тетрадь.md — outside the charter" "the path check sees a Cyrillic name" || return 1
     assert_contains "$out" "knowledge/projects/a.md:2 — never term: 'Secretword' (source: this instance)" "case-insensitive whole-word term" || return 1
     assert_not_contains "$out" "knowledge/projects/a.md:1" "a clean line is not reported" || return 1
     assert_contains "$out" "_raw/dump.txt:1 — never pattern: 'ACCT-[0-9]+'" "_raw is scanned" || return 1
@@ -655,6 +726,29 @@ test_gate_blocks_leak_classes() {
     assert_contains "$out" "README.md:2 — never term: 'Secretword'" "uncommitted edit scanned, by its line in the file" || return 1
     assert_not_contains "$out" "README.md:1" "the unchanged tracked line is not" || return 1
     assert_contains "$out" "Move the material to the root whose audience may read it" || return 1
+    git -C "$h/src/fx" worktree remove --force "$wt" >/dev/null 2>&1
+}
+
+test_gate_passes_removals() {
+    make_remote >/dev/null; local h wt out; h="$(make_host)"
+    mounts "$h" enable fx >/dev/null || return 1
+    detach_origin "$h/src/fx"
+    wt="$(mounts "$h" worktree fx seed-framework 2>/dev/null)" || return 1
+    mkdir -p "$wt/scripts" "$wt/knowledge/notes"
+    printf 'echo\n' > "$wt/scripts/x.sh"; printf 'spec\n' > "$wt/AGENTS.md"; printf 'x\n' > "$wt/knowledge/notes/d.md"
+    git -C "$wt" add -A && git -C "$wt" commit -qm "framework in a mount"
+    git -C "$h/src/fx" merge -q --ff-only seed-framework || return 1
+    git -C "$h/src/fx" worktree remove --force "$wt" >/dev/null 2>&1
+    wt="$(mounts "$h" worktree fx strip 2>/dev/null)" || return 1
+    git -C "$wt" rm -rq scripts AGENTS.md
+    out="$(gate "$h" --worktree "$wt" --base dev)" || { echo "an uncommitted removal should pass: $out"; return 1; }
+    git -C "$wt" rm -rq knowledge/notes && git -C "$wt" commit -qm "strip the framework"
+    out="$(gate "$h" --worktree "$wt" --base dev)" || { echo "a committed removal should pass: $out"; return 1; }
+    assert_contains "$out" "mount-isolation: clean" || return 1
+    mkdir -p "$wt/scripts"; printf 'echo\n' > "$wt/scripts/y.sh"
+    out="$(gate "$h" --worktree "$wt" --base dev)" && { echo "should fail: $out"; return 1; }
+    assert_contains "$out" "scripts/y.sh — framework file" "an added framework file still blocks" || return 1
+    assert_not_contains "$out" "scripts/x.sh" "the removed one is not reported" || return 1
     git -C "$h/src/fx" worktree remove --force "$wt" >/dev/null 2>&1
 }
 
@@ -678,6 +772,36 @@ test_gate_text_and_overlay() {
     out="$(gate "$h" --worktree "$wt" --base dev)" && { echo "should fail: $out"; return 1; }
     assert_contains "$out" "never term: 'Overlayword' (source: this instance)" "the local overlay's terms apply" || return 1
     assert_contains "$(gate "$h" --target fx --plan)" "2 term(s)" "overlay merged over the tracked charter" || return 1
+    git -C "$h/src/fx" worktree remove --force "$wt" >/dev/null 2>&1
+}
+
+test_gate_unscannable_and_names() {
+    # What the gate must not skip: an added line that itself begins with "++" (a "+++"
+    # prefix test drops it), a text file in another encoding (a finding, not a skip), a
+    # UTF-16 file (decoded and scanned, though git calls it binary), a never term in a
+    # filename, in the branch name, and in the PR title. A binary file passes.
+    make_remote >/dev/null; local h wt out; h="$(make_host)"
+    mounts "$h" enable fx >/dev/null || return 1
+    detach_origin "$h/src/fx"
+    wt="$(mounts "$h" worktree fx secretword-notes 2>/dev/null)" || return 1
+    printf 'Baseline.\n' > "$wt/knowledge/projects/plus.md"
+    printf 'Baseline.\n' | iconv -f UTF-8 -t UTF-16LE > "$wt/knowledge/projects/wide.md"
+    git -C "$wt" add -A && git -C "$wt" commit -qm "baseline files"
+    git -C "$h/src/fx" merge -q --ff-only secretword-notes || return 1
+    printf 'Baseline.\n++ Secretword after two pluses\n' > "$wt/knowledge/projects/plus.md"
+    printf 'Baseline.\nSecretword in UTF-16\n' | iconv -f UTF-8 -t UTF-16LE > "$wt/knowledge/projects/wide.md"
+    printf 'Secretword in cp1251 with \xe4\xe0\n' > "$wt/knowledge/projects/legacy.md"
+    printf 'PNG\x00\x01\x02\xff\xfe binary Secretword\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00' > "$wt/knowledge/projects/img.png"
+    printf 'nothing here\n' > "$wt/knowledge/projects/secretword-list.md"
+    git -C "$wt" add -A && git -C "$wt" commit -qm "add things"
+    out="$(gate "$h" --worktree "$wt" --base dev --title "Record ACCT-77 payments")" && { echo "should fail: $out"; return 1; }
+    assert_contains "$out" "knowledge/projects/plus.md:2 — never term: 'Secretword'" "an added line beginning with ++ is scanned" || return 1
+    assert_contains "$out" "knowledge/projects/wide.md:2 — never term: 'Secretword'" "a UTF-16 file is decoded and scanned" || return 1
+    assert_contains "$out" "knowledge/projects/legacy.md — unscannable: not UTF-8 text" "a file in another encoding is a finding" || return 1
+    assert_not_contains "$out" "img.png" "a binary file passes" || return 1
+    assert_contains "$out" "knowledge/projects/secretword-list.md (name) — never term: 'Secretword'" "a term in a filename" || return 1
+    assert_contains "$out" "branch name — never term: 'Secretword'" "a term in the branch name" || return 1
+    assert_contains "$out" "PR title — never pattern: 'ACCT-[0-9]+'" "a pattern in the PR title" || return 1
     git -C "$h/src/fx" worktree remove --force "$wt" >/dev/null 2>&1
 }
 
@@ -724,6 +848,12 @@ test_persist_runs_gate() {
     printf 'Handover naming Secretword\n' > "$TEST_DIR/ctx.md"
     out="$(persist "$h" --repo "$wt" -m "Clean it" --context "$TEST_DIR/ctx.md")" && { echo "should fail on the handover: $out"; return 1; }
     assert_contains "$out" "text ctx.md:1 — never term" "the --context handover is gated: it lands in the PR body" || return 1
+    # A handover named relative to the worktree, as the persist skill says to write it.
+    mkdir -p "$wt/tmp"; cp "$TEST_DIR/ctx.md" "$wt/tmp/ctx.md"
+    echo "tmp/" >> "$(git -C "$wt" rev-parse --git-common-dir)/info/exclude"
+    out="$(persist "$h" --repo "$wt" -m "Clean it" --context tmp/ctx.md)" && { echo "should fail on the relative handover: $out"; return 1; }
+    assert_contains "$out" "text ctx.md:1 — never term" "a relative --context path is gated too" || return 1
+    rm -rf "$wt/tmp"
     out="$(persist "$h" --repo "$wt" -m "Clean it")" || { echo "$out"; return 1; }
     assert_contains "$out" "landed leak onto dev (local)" || return 1
     # A land into the instance with a private mount declared: the gate runs the other way.
@@ -742,7 +872,7 @@ lens_engine() {
     cat > "$TEST_DIR/bin/claude" <<EOF
 #!/usr/bin/env bash
 cat > "$TEST_DIR/prompt.txt"
-printf '%s\n' "\${FAKE_OUT:-AUTHORING-OK}"
+printf '%s\n' "\${FAKE_OUT-AUTHORING-OK}"
 EOF
     chmod +x "$TEST_DIR/bin/claude"
 }
@@ -773,6 +903,12 @@ test_persist_review_lens() {
         && { echo "should block: $out"; return 1; }
     assert_contains "$out" "audience boundary -- move it home" || return 1
     assert_contains "$out" "authoring review flagged violations" || return 1
+    assert_eq "Lensed" "$(git -C "$h/src/fx" log -1 --format=%s dev)" "nothing landed" || return 1
+    # A review that did not happen blocks a mount land too: the topics went unjudged.
+    out="$(cd "$h" && env "HOME=$TEST_DIR/home" "PATH=$TEST_DIR/bin:$PATH" FAKE_OUT="" bash scripts/persist.sh --repo "$wt" -m "Lensed 2" 2>&1)" \
+        && { echo "should block: $out"; return 1; }
+    assert_contains "$out" "empty result — the land goes into fx" "the review says why" || return 1
+    assert_contains "$out" "the authoring review did not run, and a land into fx needs its never-topics judged" || return 1
     assert_eq "Lensed" "$(git -C "$h/src/fx" log -1 --format=%s dev)" "nothing landed" || return 1
     git -C "$h/src/fx" worktree remove --force "$wt" >/dev/null 2>&1
 }
@@ -808,6 +944,11 @@ run_test "gate: commit message, handover text, overlay" test_gate_text_and_overl
 run_test "gate: private mount gates the instance"       test_gate_private_mount_reverse
 run_test "persist runs the gate and blocks"             test_persist_runs_gate
 run_test "review lens: passed on a mount land, blocks unattended" test_persist_review_lens
+run_test "persist --repo: detached, relative path"      test_persist_repo_detached_with_a_relative_path
+run_test "persist --repo lands a framework removal"     test_persist_repo_lands_a_framework_removal
+run_test "audience: collaborators and visibility beside the charter" test_audience
+run_test "gate passes a land that removes framework"    test_gate_passes_removals
+run_test "gate: unscannable text, ++ lines, names, branch, title" test_gate_unscannable_and_names
 
 echo ""
 printf "Ran %d  ${GREEN}passed %d${RESET}  ${RED}failed %d${RESET}\n" "$TESTS_RUN" "$TESTS_PASSED" "$TESTS_FAILED"

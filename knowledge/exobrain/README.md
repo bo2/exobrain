@@ -11,7 +11,7 @@ summary: How this exobrain is structured and how its mechanisms (scopes, skills,
 
 ## TL;DR
 
-An exobrain is a knowledge base plus an agent connector. It holds two kinds of content — **knowledge domains** (current truth, kept current) and **workspaces** (time-bound efforts that outdate by design) — and connects coding agents (Claude Code, OpenClaw, Codex) to them via `scripts/connect-agent.sh`. Context is organized in scopes that overlay innermost-wins: `global < [group] < person < host`. A person needs no group; groups appear only when more than one person shares context. Skills are the unit of agent capability — directories declared in a scope's `skills.json` and surfaced per tier (`always` / `optional` / `off`).
+An exobrain is a knowledge base plus an agent connector. It holds two kinds of content — **knowledge domains** (current truth, kept current) and **workspaces** (time-bound efforts that outdate by design) — and connects coding agents (Claude Code, OpenClaw, Codex) to them via `scripts/connect-agent.sh`. Context is organized in scopes that overlay innermost-wins: `global < [group] < person < host`. A person needs no group; groups appear only when more than one person shares context. Skills are the unit of agent capability — directories declared in a scope's `skills.json` and surfaced per tier (`always` / `optional` / `unlisted` / `off`).
 
 Crucially, an exobrain is **one implementation of a shared concept, not a fork of shared code.** New capabilities propagate as *patterns an agent re-synthesizes locally*, never as merged code. See [`propagation.md`](propagation.md).
 
@@ -28,8 +28,9 @@ Crucially, an exobrain is **one implementation of a shared concept, not a fork o
 | [`authoring.md`](authoring.md) | How to write well-formed knowledge domains — horizon, current-state, synthesis, citations |
 | [`grill.md`](grill.md) | The interview discipline — distilling and curating knowledge through adversarial, one-question-at-a-time interrogation |
 | [`propagation.md`](propagation.md) | How exobrains share improvements — the read-target/feed model, the borrow workflow, invariants |
-| [`mounts.md`](mounts.md) | Mounts — shared knowledge repositories read from a local checkout: the charter, what is exposed, the isolation gate, changing a mount, freshness |
+| [`mounts.md`](mounts.md) | Mounts — shared, content-only knowledge repositories read from a local checkout, each with a charter (audience, purpose, held domains, what never goes there): the index, routing, the isolation gate, freshness |
 | [`landing.md`](landing.md) | How a change reaches the default branch — attended and detached lands, the sweep, who repairs authoring findings, and how to check on a land |
+| [`security.md`](security.md) | The security posture and the findings ledger — per-scope `security.json` registries, recording and accepting a finding, how the ledger reaches a person, the review |
 | [`compat.md`](compat.md) | The compatibility-shim ledger — how transitional code is marked, dated, and retired |
 | [`machinery.md`](machinery.md) | Index of the concrete machinery — every script, git/session hook, registry, and quality gate, with the verify-a-connector-change flow |
 

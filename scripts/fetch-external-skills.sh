@@ -9,16 +9,19 @@
 # Usage:
 #   fetch-external-skills.sh <skills-dir> --agent <name> --leaves <csv> [--force]
 #       <csv> — comma-separated connected scope paths (from .exobrain.json
-#               `connected`); empty for guest.
+#               `connected_scopes`); empty for guest.
 #
 # Behavior per resolved external entry:
-#   tier=always — fetch into <skills-dir>/<name>.<suffix>/ at the pinned ref.
+#   tier=always — fetch into <skills-dir>/<name>.<suffix>/ at the declared ref.
 #   tier=optional — fetch into <skills-dir>/../skills-optional/<name>.<suffix>/
 #                   (agent does NOT auto-load; referenced by the optional-skills index).
 #   tier=unlisted — same install as optional (into skills-optional/), but the index
 #                   builder omits it: present on disk and invocable, just unadvertised.
 #   tier=off    — remove from both locations.
 #   skipAgents / agent — applied at resolve time; filtered entries never appear here.
+# A tag or commit ref is fetched once. A branch ref is re-fetched whenever the
+# branch has moved past the commit recorded in .source-commit; when the remote
+# can't be reached, the installed copy stays.
 # <suffix> = sanitize_suffix(owner) (the external author), matching the link
 # suffix connect-agent.sh uses.
 
@@ -95,8 +98,13 @@ for i in $(seq 0 $((count - 1))); do
     fi
 
     ref_file="$skill_dir/.source-ref"
+    commit_file="$skill_dir/.source-commit"
     if [[ -f "$ref_file" ]] && ! $FORCE && [[ "$(cat "$ref_file")" == "$ref" ]]; then
-        echo "  ✓ $install_name (already at ${ref:0:12})"; continue
+        # A branch ref follows the branch: compare its head with the installed commit.
+        head="$(git ls-remote "$repo" "refs/heads/$ref" 2>/dev/null | cut -f1)"
+        if [[ -z "$head" || ( -f "$commit_file" && "$(cat "$commit_file")" == "$head" ) ]]; then
+            echo "  ✓ $install_name (already at ${ref:0:12})"; continue
+        fi
     fi
 
     echo "  ⏳ $install_name (fetching from ${ref:0:12})..."
@@ -107,7 +115,9 @@ for i in $(seq 0 $((count - 1))); do
             echo "  ✗ $install_name (failed to fetch ref '$ref' from $repo)"; rm -rf "$tmpdir"; errors=$((errors + 1)); continue
         fi
         git -C "$tmpdir/repo" checkout FETCH_HEAD -- "$spath" 2>/dev/null || true
+        commit="$(git -C "$tmpdir/repo" rev-parse FETCH_HEAD 2>/dev/null || true)"
     else
+        commit="$(git -C "$tmpdir/repo" rev-parse HEAD 2>/dev/null || true)"
         git -C "$tmpdir/repo" checkout HEAD -- "$spath" 2>/dev/null || true
     fi
 
@@ -118,8 +128,10 @@ for i in $(seq 0 $((count - 1))); do
         echo "  ✗ $install_name (no SKILL.md at $spath — not a valid skill)"; rm -rf "$tmpdir"; errors=$((errors + 1)); continue
     fi
 
-    rm -rf "$skill_dir"; cp -R "$tmpdir/repo/$spath" "$skill_dir"; echo "$ref" > "$ref_file"; rm -rf "$tmpdir"
-    echo "  ✓ $install_name (installed at ${ref:0:12})"
+    rm -rf "$skill_dir"; cp -R "$tmpdir/repo/$spath" "$skill_dir"; echo "$ref" > "$ref_file"
+    [[ -n "$commit" ]] && echo "$commit" > "$commit_file"
+    rm -rf "$tmpdir"
+    echo "  ✓ $install_name (installed at ${ref:0:12}${commit:+ @ ${commit:0:7}})"
 done
 
 # Cleanup: remove any <name>.<suffix>/ with a .source-ref no longer declared.

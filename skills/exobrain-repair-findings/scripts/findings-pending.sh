@@ -12,15 +12,18 @@
 # A PR qualifies when one of its reviews opens with the findings heading and it
 # does not yet carry the REPAIRED_LABEL. Forge search does not match review text,
 # so the script reads the reviews of the <limit> most recently merged PRs that
-# lack the label (default 100) — a repair pass that runs daily stays well inside it.
+# lack the label (default 200) — a repair pass that misses several days of lands
+# still finds what they recorded.
 #
-# Needs `gh` authenticated against the repo's origin. GH_REPO overrides the repo.
+# Needs `gh` authenticated against the repo's origin — the repo this script lives in,
+# whatever the caller's working directory. GH_REPO overrides the repo. A failed
+# listing exits 1, so a scheduled caller never mistakes it for "nothing pending".
 
 set -uo pipefail
 
 FINDINGS_HEADING="## Authoring review (unattended land, not blocking)"
 REPAIRED_LABEL="findings-repaired"
-LIMIT=100
+LIMIT=200
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -40,11 +43,17 @@ command -v gh >/dev/null || { echo "findings-pending: gh not found" >&2; exit 2;
 REPO_ARGS=()
 if [[ -n "${GH_REPO:-}" ]]; then REPO_ARGS=(--repo "$GH_REPO"); fi
 
+# `gh pr list` resolves the repo from the working directory's origin.
+cd "$(dirname "$0")/../../.." || exit 2
+
 # gh lists newest first; the repair order is oldest first. The heading is a plain
 # literal (no quote or backslash), so it embeds in the jq filter as a string.
-gh pr list "${REPO_ARGS[@]+"${REPO_ARGS[@]}"}" --state merged \
+rows="$(gh pr list "${REPO_ARGS[@]+"${REPO_ARGS[@]}"}" --state merged \
     --search "-label:$REPAIRED_LABEL" --limit "$LIMIT" \
     --json number,title,labels,reviews \
     --jq ".[] | select(any(.reviews[]?; .body | startswith(\"$FINDINGS_HEADING\")))
               | select(any(.labels[]?; .name == \"$REPAIRED_LABEL\") | not)
-              | \"\\(.number)\\t\\(.title)\"" | sort -n
+              | \"\\(.number)\\t\\(.title)\"")" \
+    || { echo "findings-pending: listing merged PRs failed" >&2; exit 1; }
+[[ -n "$rows" ]] || exit 0
+sort -n <<< "$rows"

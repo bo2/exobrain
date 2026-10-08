@@ -29,7 +29,11 @@ authoring-review|test-authoring-review.sh|scripts/authoring-review.sh
 compat-ledger|test-compat-ledger.sh|the compat-shim gates in validate-exobrain.sh + exobrain-healthcheck.sh
 openclaw-cron-sync|test-openclaw-cron-sync.sh|scripts/openclaw-cron-sync.py (crons.json validation + gateway reconciliation)
 mounts|test-mounts.sh|scripts/mounts.sh, the mounted knowledge index, the mount checks in the healthcheck and validator, and the isolation gate (scripts/mount-isolation.py) through persist
-portable-paths|test-portable-paths.sh|the machine-specific-path gate in validate-exobrain.sh (absolute home paths caught, relative paths through a home/ directory not)
+portable-paths|test-portable-paths.sh|the machine-specific-path gate in validate-exobrain.sh (absolute home paths caught, relative paths through a home/ directory not, non-ASCII names reached through changed-paths.sh)
+secret-scan|test-secret-scan.sh|the secret scan in validate-exobrain.sh (gitleaks over the commits added against the default branch; self-skips without gitleaks)
+scratch-retention|test-scratch-retention.sh|the scratch report in exobrain-healthcheck.sh (tmp/ entries and _cache/ dirs untouched past the window)
+security-findings|test-security-findings.sh|scripts/security-findings.py (the security findings ledger: recording and settling a finding, what the summary flags, every registry error) and the validator and healthcheck gates that read it
+envfile|test-envfile.sh|scripts/envfile.py (the atomic, locked .env reader/writer tool clients share)
 agent-attribution|test-agent-attribution.sh|scripts/strip-agent-attribution.sh (the commit-msg hook) and the agent-attribution check in validate-exobrain.sh
 raw-data|test-raw-data.sh|the raw-format gate in validate-exobrain.sh (raw data added under knowledge/ or workspaces/)
 script-syntax|test-script-syntax.sh|the syntax gates in validate-exobrain.sh (bash -n and python compile over changed scripts)
@@ -37,7 +41,7 @@ validator-scan|test-validator-scan.sh|find_repo pruning in validate-exobrain.sh 
 validator-checks|test-validator-checks.sh|the whole-tree checks in validate-exobrain.sh (UPPERCASE names, bash 4 constructs, empty-array expansions, COMPAT markers)
 skills-validate|test-skills-validate.sh|scripts/skills-validate.sh (every registry error, undeclared dirs as info, exit codes, the dirs it never walks)
 skills-status|test-skills-status.sh|scripts/skills-status.sh --all (columns under their headings whatever a declaration omits, and a walk that finds every scope wherever the checkout sits)
-behavior-runner|test-behavior-runner.sh|skills/exobrain-tests/behavior/run.sh (the record of what a run tested, which the persist gate reads, and --scope wiring)
+behavior-runner|test-behavior-runner.sh|skills/exobrain-tests/behavior/run.sh (the record of what a run tested, which the persist gate reads, --scope wiring, per-case env.sh and permission mode, and the stub PATH under codex)
 persist|test-persist.sh|scripts/persist.sh (the one-command land from a worktree, its gates and resume paths, --detach, and --sweep)
 findings-pending|../../exobrain-repair-findings/tests/test-findings-pending.sh|skills/exobrain-repair-findings/scripts/findings-pending.sh (merged PRs carrying unrepaired authoring findings)'
 

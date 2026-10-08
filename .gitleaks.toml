@@ -1,11 +1,16 @@
 title = "Gitleaks configuration for exobrain"
 
+# Run by scripts/validate-exobrain.sh over the commits a branch adds against the
+# default branch — the pre-push hook and every persist land — so what the history
+# already holds is grandfathered. A line that is secret-shaped by design (a planted
+# test canary, a public client identifier) carries an inline `gitleaks:allow`.
+
 [extend]
 useDefault = true
 
 [[allowlists]]
-description = "Raw research notes, snapshots, and time-bound workspace content"
-paths = [
-  '''^knowledge/.*/_raw/.*''',
-  '''^workspaces/.*''',
+description = "Shapes the generic rules match that are not secrets"
+regexes = [
+  '''ghcr\.io/[\w./-]+:[0-9a-f]{40}''',   # a container image pinned to a commit
+  '''sk-CANARY-''',                         # the behavior suite's planted canary values
 ]

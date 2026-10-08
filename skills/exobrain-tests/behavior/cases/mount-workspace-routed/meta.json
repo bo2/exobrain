@@ -1,0 +1,9 @@
+{
+  "name": "mount-workspace-routed",
+  "description": "A workspace about a mounted project is created in the mount's worktree, carries no household-private material, and this instance's workspaces/ stays untouched.",
+  "runs": 3,
+  "permission_profile": "action",
+  "pass_threshold": "all",
+  "timeout_seconds": 600,
+  "tags": ["mounts", "routing"]
+}

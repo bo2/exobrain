@@ -73,7 +73,8 @@ this harness doesn't set up — test those by hand or extend the harness.
    on the agent's stdout (`output` modes), or "no stub fired" for negatives.
 3. **Add stubs** for every tool a task measures: a one-line shadow in `scripts/stubs/`
    (copy `scripts/stubs/example-tool`) that appends its invocation to `$STUB_LOG`. The
-   stub's name must be the bare command the agent would type.
+   stub's name must be the bare command the agent would type. Every other CLI that is
+   live on this machine gets a symlink to `scripts/stubs/contained-cli`, graded or not.
 4. **Run** the harness — it builds the sandboxes and runs the matrix:
    ```bash
    AGENT=claude skills/exobrain-ab/scripts/run.sh tmp/change.diff <tasks.sh> [N=12] [parallel=2] [model] [dev|holdout|all|<id>]
@@ -91,9 +92,10 @@ this harness doesn't set up — test those by hand or extend the harness.
   `--wire-sandbox`, runs the task matrix, prints the summary.
 - `scripts/run_one.sh` — one graded run; grades the stublog (tool choice) or the agent's
   stdout (`output` modes) into a verdict, spawned in parallel by `run.sh`.
-- `scripts/stubs/` — PATH-shadow tool stubs (ship `example-tool`; add one per measured tool).
+- `scripts/stubs/` — PATH-shadow tool stubs: `example-tool` (the template; add one per measured tool) and `contained-cli`, which every live CLI on this machine symlinks to.
 - `scripts/tasks.example.sh` — the `TASKS=()` format and discriminator constraint.
 
-All sandboxes and results land under the repo's gitignored `tmp/`, with the codex arm's
-`CODEX_HOME` pointed inside the sandbox. The wiring mode's own write envelope is
-`knowledge/exobrain/agents.md` § `connect-agent.sh` end-to-end.
+All sandboxes and results land under the repo's gitignored `tmp/`, with
+`CODEX_HOME` / `OPENCLAW_WORKSPACE` pointed inside the sandbox; the wiring
+mode's write envelope is `knowledge/exobrain/agents.md` § `connect-agent.sh`
+end-to-end.

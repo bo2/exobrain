@@ -48,7 +48,7 @@ make_repo() {
     git config user.email t@example.com
     git config user.name t
     mkdir -p scripts
-    cp "$SCRIPTS_DIR/validate-exobrain.sh" scripts/
+    cp "$SCRIPTS_DIR/validate-exobrain.sh" "$SCRIPTS_DIR/changed-paths.sh" scripts/
     printf '# Exobrain\n' > AGENTS.md
     printf '{"collections":{"hosts":{"kind":"host"}}}\n' > scopes.json
     printf '{"skills":[]}\n' > skills.json

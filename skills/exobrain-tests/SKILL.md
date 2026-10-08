@@ -65,7 +65,11 @@ Exit: `0` all passed · `1` some failed · `2` harness error (including an unkno
 - **`test-connect-agent.sh`** — `connect-agent.sh` + `skills-registry.sh`: scope-chain
   resolution, opt-in skill tiers, flag-driven identity, the per-agent surfaces, the
   generated indexes, validator/fetcher plumbing, and the OpenClaw runtime-config
-  reconcile (against a fake `openclaw` CLI). Codex regressions cover personal-home
+  reconcile (against a fake `openclaw` CLI), the cron sync on an OpenClaw connect and
+  relink (the chain's registries, never from a sandbox, a failure that does not fail
+  the connect), the root `AGENTS.md` inlined ahead of OpenClaw's deeper scopes, the
+  fetcher following a branch ref and keeping a tag pinned, and a hard-wrapped tool-doc
+  purpose joined whole in the tools index. Codex regressions cover personal-home
   isolation, worktree skill discovery and context rewiring, missing-surface
   healthchecks, and multiline skill descriptions in the generated index.
 - **`test-mounts.sh`** — mounts: `mounts.sh` enable/disable/sync/status/worktree
@@ -75,7 +79,12 @@ Exit: `0` all passed · `1` some failed · `2` harness error (including an unkno
   dirty/off-branch/diverged checkouts untouched, offline staleness, the charter and
   citation checks in the validator, a mount worktree landed with `persist.sh --repo`,
   and the isolation gate: its plan in both directions, every leak class, the local
-  overlay, and the review lens blocking an unattended land into a mount.
+  overlay, a non-ASCII filename reached verbatim, what the gate must not skip (a file in
+  another encoding as a finding, UTF-16 decoded, an added `++` line, a term in a filename,
+  the branch name, the PR title), a land that removes framework files passing the gate
+  and the proof gate, a relative `--context` handover, `audience` through a fake `gh`,
+  and the review lens blocking an unattended land into a mount — as does a review that
+  did not answer.
 - **`test-agent-attribution.sh`** — `strip-agent-attribution.sh`, which the
   `commit-msg` hook runs: agent trailers and footers go in any case, a human
   co-author and prose about the rule stay, a clean message is left untouched; its
@@ -88,7 +97,8 @@ Exit: `0` all passed · `1` some failed · `2` harness error (including an unkno
 - **`test-portable-paths.sh`** — `validate-exobrain.sh`'s machine-specific-path gate:
   an absolute `/Users/…` or `/home/…` path in a changed file is caught, while a
   relative path through a directory named `home` or `Users`, a `<name>` placeholder,
-  and host scope pass.
+  and host scope pass; a file with a Cyrillic name is checked (the changed paths come
+  through `changed-paths.sh`, verbatim), and the helper's absence is a violation.
 - **`test-script-syntax.sh`** — `validate-exobrain.sh`'s syntax gates: a changed shell
   script that does not parse or changed Python that does not compile is caught, by
   extension or shebang; unchanged files and other shells are left alone.
@@ -106,9 +116,28 @@ Exit: `0` all passed · `1` some failed · `2` harness error (including an unkno
   — the repair skill's detector against a fake `gh`: only merged PRs with a review opening
   with the findings heading qualify, the repaired label excludes one, the list comes out
   oldest first, and the heading matches the one `persist.sh` writes.
-- **`test-authoring-review.sh`** — `authoring-review.sh`'s engine call: inherited proxy
-  env is stripped (else a proxied push silently skips the review), and a reported
-  violation exits non-zero.
+- **`test-authoring-review.sh`** — `authoring-review.sh`: inherited proxy env is
+  stripped from the engine call (else a proxied push silently skips the review), a
+  reported violation exits non-zero, `AUTHORING-OK` counts only as a whole line, the
+  new-shared-skill proof gate and its rename grandfathering, the opt-out skipping only
+  the model review, `--repo` and `--lens` (workspaces and every text file in scope under
+  a lens), and a mount lens failing closed when no engine answers while the instance
+  lens and no lens stay open.
+- **`test-secret-scan.sh`** — `validate-exobrain.sh`'s secret scan: a key planted in an
+  outgoing commit is caught with its value redacted, a key already on the default branch
+  is grandfathered, an inline `gitleaks:allow` passes, and without gitleaks the check is
+  a note, not a violation. Cases needing gitleaks self-skip without it.
+- **`test-scratch-retention.sh`** — `exobrain-healthcheck.sh`'s scratch report: a `tmp/`
+  entry or `_cache/` directory with no file touched in the window is named with its age
+  and size, one fresh file clears a directory, the window is `EXOBRAIN_SCRATCH_DAYS`,
+  the listing caps at ten, and the check stays advisory.
+- **`test-security-findings.sh`** — `security-findings.py`: recording, accepting,
+  reopening, closing and reviewing a finding across per-scope registries, what
+  `summary` flags and its exit code, every registry error `--check` raises, and the
+  validator and healthcheck gates that read it.
+- **`test-envfile.sh`** — `envfile.py`: a key replaced or appended with the rest of the
+  file kept, the replace atomic, concurrent writers losing nothing under the lock, and a
+  symlinked `.env` followed to the real file.
 - **`test-compat-ledger.sh`** — the compatibility-shim gates: `validate-exobrain.sh`
   holding `COMPAT` markers and `compat.md` rows to each other (both directions, dates
   included) while never failing on the calendar, and `exobrain-healthcheck.sh` naming
@@ -117,7 +146,8 @@ Exit: `0` all passed · `1` some failed · `2` harness error (including an unkno
   (`--check`: duplicate names, model pins, cron without tz, announce without a target),
   the `--dry-run` plan, and a real sync's add / patch / remove calls against a fake
   `openclaw` binary that answers `cron list --json` from a fixture — foreign jobs
-  spared, `{ROOT}` expanded, the linked-worktree refusal.
+  spared, `{ROOT}` expanded, the linked-worktree refusal, `--scopes` limiting the
+  registries, `OPENCLAW_BIN` naming the binary.
 - **`test-persist.sh`** — `persist.sh`: the full land against a bare origin and a fake
   `gh` (commit, gates, push, PR, squash-merge, main fast-forward, cleanup), the
   verification gate (which run records cover a spec change — tested tree, wired scope,
@@ -129,8 +159,10 @@ Exit: `0` all passed · `1` some failed · `2` harness error (including an unkno
   `--sweep`'s claimed / quiet / dirty / unverified / stale rules.
 - **`test-behavior-runner.sh`** — `behavior/run.sh` against a fake instance and a fake
   `claude`: the run record `persist.sh` reads (tested tree for HEAD and working-tree
-  snapshots, agents, scopes, case profiles, harness errors) and `--scope` (every run copy
-  wired, the chain's own cases added, innermost wins).
+  snapshots, agents, scopes, case profiles, harness errors), `--scope` (every run copy
+  wired, the chain's own cases added, innermost wins), and a case's `env.sh` and
+  `permission_mode` (each reaching its own case only, the mode refused outside a
+  security profile, codex pinned to a non-login shell under a security profile).
 
 ### Add a unit harness
 
@@ -239,6 +271,19 @@ portable to any instance; `$1` = instance dir), `check.sh` (`$1` instance, `$2`
 transcript, `$3` engine exit; exit `0`/`1`/`2`; source `"$HARNESS_LIB/check-helpers.sh"`
 for assertions), and optional `rubric.md` (PASS CRITERIA for the LLM judge via
 `judge_case`). Keep fixtures self-seeded — never assume seed-specific structure.
+
+Two optional parts let a case run a job that calls real tools:
+
+- **`env.sh`** — sourced in the engine's subshell before the agent starts, after the
+  security profiles' stub `PATH`, with `CASE_DIR`, `INSTANCE_DIR` and `RUN_DIR` exported.
+  A case prepends its own fakes to `PATH` here (a fake of a mail or chat CLI that serves
+  fixtures and logs to `$EGRESS_LOG`) and points scripts at the run dir. Under codex the
+  agent's shell inherits it only in the security profiles.
+- **`permission_mode`** in `meta.json` — claude's permission mode for the case, in place of
+  `acceptEdits`. Honored only under a security profile, where the stubs and the MCP
+  lockdown hold; elsewhere it is a harness error. `bypassPermissions` lets a job run the
+  scripts its skill names by any path — use it only when the case's fakes shadow every
+  real tool that job can reach and every fixture value is a canary.
 
 A case that tests a scope's own rule lives with that scope instead, at
 `<scope>/tests/behavior/<name>/`, in the same layout. It runs only when `--scope` wires a

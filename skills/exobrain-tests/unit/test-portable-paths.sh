@@ -52,23 +52,25 @@ make_repo() {
     git config user.email t@example.com
     git config user.name t
     mkdir -p scripts workspaces/2026/09/x
-    cp "$SCRIPTS_DIR/validate-exobrain.sh" scripts/
+    cp "$SCRIPTS_DIR/validate-exobrain.sh" "$SCRIPTS_DIR/changed-paths.sh" scripts/
     printf '# Exobrain\n' > AGENTS.md
     printf '{"collections":{"hosts":{"kind":"host"}}}\n' > scopes.json
     printf '{"skills":[]}\n' > skills.json
     git add -A && git commit -qm base
-    # The check is scoped to files changed against the default branch, which the
-    # validator resolves from origin. Without this ref the whole block is skipped
-    # and every negative assertion below is vacuous; the two positive tests guard
-    # against that.
+    # The check is scoped to files changed against the DEFAULT branch, which the
+    # validator resolves as origin/{main,trunk,master}. Without this ref the whole
+    # block is skipped and every assertion below is vacuous — which is how this
+    # harness was first written, and the two positive tests are what caught it.
     git update-ref refs/remotes/origin/main HEAD
 }
 
 # `record` prints one line per violation; the check names the file and line.
 check() { bash scripts/validate-exobrain.sh 2>&1; }
 
-# The fixtures are assembled rather than spelled out: a file that spells a
-# machine-specific path is one, and this harness would fail the gate it tests.
+# The fixtures are ASSEMBLED rather than spelled out, because a file that spells
+# a machine-specific path is a machine-specific path — this harness would fail
+# the very gate it tests. Constructing them keeps the validator's exemption list
+# from growing a "except the test for it" entry.
 U=Users
 H=home
 

@@ -48,7 +48,7 @@ make_repo() {
     git config user.name t
     git config commit.gpgsign false
     mkdir -p scripts knowledge/health/_raw workspaces/2026/09/x
-    cp "$SCRIPTS_DIR/validate-exobrain.sh" scripts/
+    cp "$SCRIPTS_DIR/validate-exobrain.sh" "$SCRIPTS_DIR/changed-paths.sh" scripts/
     printf '# Exobrain\n' > AGENTS.md
     printf '{"scopes":[]}\n' > scopes.json
     printf '{"skills":[]}\n' > skills.json

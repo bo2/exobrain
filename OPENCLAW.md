@@ -30,7 +30,7 @@ Keep this repo's history agent-neutral — omit OpenClaw's default attribution f
 
 ## Auto-loading
 
-OpenClaw has no `@`-import primitive and auto-loads the root `AGENTS.md` but not the root sidecar, so `scripts/connect-agent.sh openclaw` delivers the rest of the composition into its private `~/.openclaw/workspace/USER.md`, between `<!-- BEGIN exobrain -->` … `<!-- END exobrain -->` markers: this file (`OPENCLAW.md`) if present, then the shared deeper-scope content — every connected scope's `AGENTS.md` (shallow→deep), the OpenClaw-filtered optional-skills index, the tools index, and the knowledge index. The same run reconciles OpenClaw's config — so the linked skills load (§ Skills are exobrain files), the bootstrap budget holds the whole injected block, and semantic recall indexes the knowledge domains — and keeps the runtime's raw memory capture out of the workspace's git history (§ Exobrain versus OpenClaw memory).
+`scripts/connect-agent.sh openclaw` delivers the whole composition into its private `~/.openclaw/workspace/USER.md`, between `<!-- BEGIN exobrain -->` … `<!-- END exobrain -->` markers: the root `AGENTS.md` first, then this file (`OPENCLAW.md`) if present, then the shared deeper-scope content — every connected scope's `AGENTS.md` (shallow→deep), the OpenClaw-filtered optional-skills index, the tools index, and the knowledge index. The same run reconciles OpenClaw's config — so the linked skills load (§ Skills are exobrain files), the bootstrap budget holds the whole injected block, and semantic recall indexes the knowledge domains — and keeps the runtime's raw memory capture out of the workspace's git history (§ Exobrain versus OpenClaw memory).
 
 ## MCP servers
 

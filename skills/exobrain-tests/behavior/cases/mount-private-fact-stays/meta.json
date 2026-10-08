@@ -1,0 +1,9 @@
+{
+  "name": "mount-private-fact-stays",
+  "description": "Of two facts, the project one lands in the mounted domain and the household-private one stays in this instance.",
+  "runs": 3,
+  "permission_profile": "action",
+  "pass_threshold": "all",
+  "timeout_seconds": 600,
+  "tags": ["mounts", "routing", "security"]
+}

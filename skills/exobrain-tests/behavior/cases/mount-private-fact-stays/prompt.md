@@ -1,0 +1,1 @@
+Record two facts where each belongs: (1) the fx project's export API now paginates at 500 rows per page — that is a project fact the fx developers maintain; (2) our household pays the fx subscription from our joint account at Example Bank — that is private to us. Land both.

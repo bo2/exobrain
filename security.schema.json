@@ -1,0 +1,71 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://exobrain.local/schemas/security.json",
+  "title": "Security findings registry",
+  "description": "Per-scope ledger of security findings. A security.json lives at the repo root or in a scope directory (any dir with an AGENTS.md; the gitignored local/ scope for findings that must not be tracked). It holds what is open or knowingly accepted — a fixed finding is removed. Written through scripts/security-findings.py; never holds a secret value.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["findings"],
+  "properties": {
+    "$schema": {
+      "type": "string",
+      "format": "uri-reference",
+      "description": "Path or URL to this schema, for editor autocomplete and validation."
+    },
+    "reviewed": {
+      "type": "string",
+      "format": "date",
+      "description": "Date of the last full review of what this registry covers."
+    },
+    "findings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "title", "severity", "status", "found", "surface", "impact", "fix", "fixer"],
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9-]*$",
+            "description": "Kebab-case, unique across every registry in the instance."
+          },
+          "title": { "type": "string", "minLength": 1, "description": "One line." },
+          "severity": {
+            "enum": ["high", "medium", "low"],
+            "description": "high: exploitable as things stand — private data read, a person impersonated, data destroyed. medium: needs another failure first, or the damage is bounded. low: hygiene, no direct path to harm."
+          },
+          "status": {
+            "enum": ["open", "accepted"],
+            "description": "open: waiting for a fix. accepted: a risk knowingly kept, with a reason and a review date."
+          },
+          "found": { "type": "string", "format": "date" },
+          "surface": { "type": "string", "minLength": 1, "description": "Where: a host, a service, a file, a credential's name." },
+          "impact": { "type": "string", "minLength": 1, "description": "What someone could do with it." },
+          "fix": { "type": "string", "minLength": 1, "description": "The proposed remedy." },
+          "fixer": {
+            "enum": ["agent", "person"],
+            "description": "Who can carry the fix out: an agent in this repo, or a person acting on a system the agent does not hold."
+          },
+          "source": { "type": "string", "description": "How it was found." },
+          "notes": { "type": "string" },
+          "accepted": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["reason", "review_by"],
+            "properties": {
+              "reason": { "type": "string", "minLength": 1 },
+              "review_by": { "type": "string", "format": "date" }
+            }
+          }
+        },
+        "allOf": [
+          {
+            "if": { "properties": { "status": { "const": "accepted" } } },
+            "then": { "required": ["accepted"] },
+            "else": { "not": { "required": ["accepted"] } }
+          }
+        ]
+      }
+    }
+  }
+}

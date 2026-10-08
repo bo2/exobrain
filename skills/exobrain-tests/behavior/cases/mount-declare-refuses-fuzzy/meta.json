@@ -1,0 +1,9 @@
+{
+  "name": "mount-declare-refuses-fuzzy",
+  "description": "Asked to declare a mount whose boundary cannot be stated, the agent writes no mounts.json entry and asks for the charter instead (a rule stated only in the exobrain-mounts skill).",
+  "runs": 3,
+  "permission_profile": "action",
+  "pass_threshold": "all",
+  "timeout_seconds": 300,
+  "tags": ["mounts", "skill"]
+}

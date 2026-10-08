@@ -732,6 +732,9 @@ test_openclaw_indexes_inlined_not_in_home() {
     write_config "$r" people/alice/hosts/h1 openclaw
     wire_sandbox "$r" openclaw >/dev/null 2>&1 || return 1
     local u; u="$(cat "$TEST_DIR/ocw/USER.md")"
+    assert_contains "$u" "<!-- scope: root -->" "root AGENTS.md inlined" || return 1
+    [[ "$u" == *"<!-- scope: root -->"*"<!-- scope: people/alice -->"* ]] \
+        || { echo "root AGENTS.md must come before the deeper scopes"; return 1; }
     assert_contains "$u" "<!-- optional-skills index -->" "optional-skills index inlined" || return 1
     assert_contains "$u" "<!-- tools index -->" "tools index inlined" || return 1
     assert_contains "$u" "<!-- knowledge index -->" "knowledge index inlined" || return 1
@@ -762,6 +765,18 @@ test_tools_index_claude() {
     assert_contains "$t" "Read and act on GitHub via the gh CLI." "first-line summary extracted" || return 1
     local c; c="$(cat "$r/.claude/CLAUDE.md")"
     assert_contains "$c" "@tools-index.md" "CLAUDE.md imports the tools index"
+}
+
+# A purpose paragraph hard-wrapped across lines lands in the index whole, and ends at
+# the first blank line — the next paragraph is not part of the summary.
+test_tools_index_joins_wrapped_purpose() {
+    local r; r="$(setup_fake_exobrain)"; add_person "$r" people/alice
+    add_tool "$r" global mail "$(printf 'Read and send the family mail through the\n  mail CLI, as the personal account.\n\n## Setup\n\nNot part of it.')"
+    write_config "$r" people/alice/hosts/h1
+    wire_sandbox "$r" claude >/dev/null 2>&1 || return 1
+    local t; t="$(claude_tools "$r")"
+    assert_contains "$t" "Read and send the family mail through the mail CLI, as the personal account." "wrapped lines joined" || return 1
+    assert_not_contains "$t" "Not part of it" "the summary stops at the paragraph's end"
 }
 
 test_tools_index_empty_skip() {
@@ -951,7 +966,7 @@ test_commit_msg_hook_strips_agent_attribution() {
 # discusses them stays writable.
 test_validate_flags_bash4_constructs() {
     local r; r="$(setup_fake_exobrain)"; add_person "$r" people/alice
-    cp "$SCRIPTS_DIR/validate-exobrain.sh" "$r/scripts/"
+    cp "$SCRIPTS_DIR/validate-exobrain.sh" "$SCRIPTS_DIR/changed-paths.sh" "$r/scripts/"
     printf '#!/usr/bin/env bash\ndeclare -A m=()\n# a comment naming mapfile and declare -A\n' \
         > "$r/scripts/probe.sh"
     local o; o="$(cd "$r" && bash scripts/validate-exobrain.sh 2>&1)"
@@ -964,7 +979,7 @@ test_validate_flags_bash4_constructs() {
 # behavioral harness die before the agent started.
 test_validate_flags_unguarded_array_expansion() {
     local r; r="$(setup_fake_exobrain)"; add_person "$r" people/alice
-    cp "$SCRIPTS_DIR/validate-exobrain.sh" "$r/scripts/"
+    cp "$SCRIPTS_DIR/validate-exobrain.sh" "$SCRIPTS_DIR/changed-paths.sh" "$r/scripts/"
     printf '#!/usr/bin/env bash\nSINK=()\n' > "$r/scripts/lib.sh"
     printf '#!/usr/bin/env bash\nfoo "${SINK[@]}"\n# prose naming "${SINK[@]}"\n' > "$r/scripts/probe.sh"
     local o; o="$(cd "$r" && bash scripts/validate-exobrain.sh 2>&1)"
@@ -974,7 +989,7 @@ test_validate_flags_unguarded_array_expansion() {
 
 test_validate_guarded_array_expansion_passes() {
     local r; r="$(setup_fake_exobrain)"; add_person "$r" people/alice
-    cp "$SCRIPTS_DIR/validate-exobrain.sh" "$r/scripts/"
+    cp "$SCRIPTS_DIR/validate-exobrain.sh" "$SCRIPTS_DIR/changed-paths.sh" "$r/scripts/"
     printf '#!/usr/bin/env bash\nSINK=()\nfoo ${SINK[@]+"${SINK[@]}"}\n' > "$r/scripts/probe.sh"
     local o; o="$(cd "$r" && bash scripts/validate-exobrain.sh 2>&1)"
     assert_not_contains "$o" "unguarded array expansion" "the guarded form is not flagged as its own substring"
@@ -982,7 +997,7 @@ test_validate_guarded_array_expansion_passes() {
 
 test_validate_ignores_never_empty_array() {
     local r; r="$(setup_fake_exobrain)"; add_person "$r" people/alice
-    cp "$SCRIPTS_DIR/validate-exobrain.sh" "$r/scripts/"
+    cp "$SCRIPTS_DIR/validate-exobrain.sh" "$SCRIPTS_DIR/changed-paths.sh" "$r/scripts/"
     printf '#!/usr/bin/env bash\nfixed=(one two)\nrun "${fixed[@]}"\n' > "$r/scripts/probe.sh"
     local o; o="$(cd "$r" && bash scripts/validate-exobrain.sh 2>&1)"
     assert_not_contains "$o" "unguarded array expansion" "a never-empty array is not flagged"
@@ -990,7 +1005,7 @@ test_validate_ignores_never_empty_array() {
 
 test_validate_bash4_optout_honored() {
     local r; r="$(setup_fake_exobrain)"; add_person "$r" people/alice
-    cp "$SCRIPTS_DIR/validate-exobrain.sh" "$r/scripts/"
+    cp "$SCRIPTS_DIR/validate-exobrain.sh" "$SCRIPTS_DIR/changed-paths.sh" "$r/scripts/"
     printf '#!/usr/bin/env bash\n# exobrain-allow-bash4 — deliberately bash 4 only\nmapfile -t a < <(echo hi)\n' \
         > "$r/scripts/probe.sh"
     local o; o="$(cd "$r" && bash scripts/validate-exobrain.sh 2>&1)"
@@ -1035,6 +1050,49 @@ test_external_resolve_plan() {
         "$r/people/alice/skills.json" > "$r/people/alice/skills.json.t" && mv "$r/people/alice/skills.json.t" "$r/people/alice/skills.json"
     plan="$(skills_resolve_external_json "$r" "" people/alice/hosts/h1)"
     assert_eq "off" "$(jq -r '.[0].tier' <<< "$plan")" "external override off wins"
+}
+
+# A local git repo stands in for the skill's remote.
+make_skill_source() {
+    local src="$TEST_DIR/skill-src-$RANDOM"
+    git init -q -b main "$src"; mkdir -p "$src/skills/ext"
+    echo "v1" > "$src/skills/ext/SKILL.md"
+    git -C "$src" add -A; git -C "$src" -c user.email=t@t -c user.name=t commit -qm v1
+    git -C "$src" tag v1
+    echo "$src"
+}
+
+declare_external() {   # <repo> <src> <ref>
+    jq --arg u "file://$2" --arg ref "$3" \
+        '.skills += [{name:"ext",owner:"acme",tier:"optional","force":true,source:{repo:$u,path:"skills/ext",ref:$ref}}]' \
+        "$1/skills.json" > "$1/skills.json.t" && mv "$1/skills.json.t" "$1/skills.json"
+}
+
+test_fetcher_branch_ref_follows_branch() {
+    local r; r="$(setup_fake_exobrain)"; add_person "$r" people/alice
+    local src; src="$(make_skill_source)"; declare_external "$r" "$src" main
+    local fetch=(bash scripts/fetch-external-skills.sh "$TEST_DIR/sk" --agent claude --leaves people/alice/hosts/h1)
+    local skill="$TEST_DIR/skills-optional/ext.acme/SKILL.md"
+    (cd "$r" && "${fetch[@]}" >/dev/null 2>&1)
+    assert_eq "v1" "$(cat "$skill")" "branch ref installs" || return 1
+    local o; o="$(cd "$r" && "${fetch[@]}" 2>&1)"
+    assert_contains "$o" "already at main" "unchanged branch is not re-fetched" || return 1
+    echo "v2" > "$src/skills/ext/SKILL.md"
+    git -C "$src" -c user.email=t@t -c user.name=t commit -qam v2
+    (cd "$r" && "${fetch[@]}" >/dev/null 2>&1)
+    assert_eq "v2" "$(cat "$skill")" "moved branch is re-fetched"
+}
+
+test_fetcher_tag_ref_stays_pinned() {
+    local r; r="$(setup_fake_exobrain)"; add_person "$r" people/alice
+    local src; src="$(make_skill_source)"; declare_external "$r" "$src" v1
+    local fetch=(bash scripts/fetch-external-skills.sh "$TEST_DIR/sk" --agent claude --leaves people/alice/hosts/h1)
+    (cd "$r" && "${fetch[@]}" >/dev/null 2>&1)
+    echo "v2" > "$src/skills/ext/SKILL.md"
+    git -C "$src" -c user.email=t@t -c user.name=t commit -qam v2
+    local o; o="$(cd "$r" && "${fetch[@]}" 2>&1)"
+    assert_contains "$o" "already at v1" "tag ref is not re-fetched" || return 1
+    assert_eq "v1" "$(cat "$TEST_DIR/skills-optional/ext.acme/SKILL.md")" "tag ref keeps its content"
 }
 
 # ---------------------------------------------------------------------------
@@ -1124,15 +1182,15 @@ test_openclaw_runtime_config_reconciled() {
     declare_skill "$r" people/alice a-skill always force
     write_config "$r" people/alice/hosts/h1 openclaw
     fake_openclaw
-    echo '{"skills":{"load":{"allowSymlinkTargets":["/kept/root"]}},"tools":{"deny":["browser"]},"agents":{"defaults":{"bootstrapTotalMaxChars":150000}}}' > "$TEST_DIR/oc-config.json"
+    echo '{"skills":{"load":{"allowSymlinkTargets":["/kept/root"]}},"tools":{"deny":["browser"]},"agents":{"defaults":{"bootstrapTotalMaxChars":200000}}}' > "$TEST_DIR/oc-config.json"
     connect_flags "$r" openclaw >/dev/null 2>&1 || return 1
     local real; real="$(cd "$r" && pwd -P)"
     assert_eq "$(jq -nc --arg a "$real/skills" --arg b "$real/people/alice/skills" '[$a, $b, "/kept/root"] | sort')" \
               "$(oc_config '.skills.load.allowSymlinkTargets | sort')" "linked roots unioned with the kept one" || return 1
     assert_eq '["browser","skill_workshop"]' "$(oc_config '.tools.deny | sort')" "skill_workshop denied beside the kept entry" || return 1
     assert_eq '"off"' "$(oc_config '.skills.workshop.autonomous.mode')" "Workshop autonomy off" || return 1
-    assert_eq '60000' "$(oc_config '.agents.defaults.bootstrapMaxChars')" "per-file bootstrap budget raised to its floor" || return 1
-    assert_eq '150000' "$(oc_config '.agents.defaults.bootstrapTotalMaxChars')" "a larger human-set total budget stays"
+    assert_eq '80000' "$(oc_config '.agents.defaults.bootstrapMaxChars')" "per-file bootstrap budget raised to its floor" || return 1
+    assert_eq '200000' "$(oc_config '.agents.defaults.bootstrapTotalMaxChars')" "a larger human-set total budget stays"
 }
 
 test_openclaw_indexes_knowledge_domains() {
@@ -1198,6 +1256,67 @@ test_openclaw_runtime_config_degrades_without_cli() {
 }
 
 # A sandbox wiring promises no out-of-dir writes: the runtime config is untouched.
+# stub_cron_sync <repo> [exit] — a cron sync in the fake repo that records its argv to
+# cron-sync.txt; the real script has its own suite, so these tests cover only when and
+# how the connector calls it.
+stub_cron_sync() {
+    cat > "$1/scripts/openclaw-cron-sync.py" <<EOF
+#!/usr/bin/env bash
+echo "\$*" >> "$TEST_DIR/cron-sync.txt"
+echo "add  exobrain.some-job  (people/alice/crons.json)"
+exit ${2:-0}
+EOF
+    chmod +x "$1/scripts/openclaw-cron-sync.py"
+}
+
+# A registry change that arrives with a pull reaches the scheduler through the relink
+# the pull hook runs — no separate command.
+test_openclaw_connect_syncs_the_chains_crons() {
+    local r; r="$(setup_fake_exobrain)"; add_person "$r" people/alice
+    write_config "$r" people/alice/hosts/h1 openclaw
+    echo '{"jobs": []}' > "$r/people/alice/crons.json"
+    stub_cron_sync "$r"
+    local out; out="$(connect_flags "$r" openclaw 2>&1)" || { echo "$out"; return 1; }
+    assert_contains "$out" "Scheduled jobs:" || return 1
+    assert_contains "$out" "✓ add  exobrain.some-job" "the sync's actions are shown" || return 1
+    assert_eq "--scopes people/alice,people/alice/hosts/h1" "$(cat "$TEST_DIR/cron-sync.txt")" "called once, with the connected chain" || return 1
+    : > "$TEST_DIR/cron-sync.txt"
+    connect_flags "$r" openclaw --relink >/dev/null 2>&1 || return 1
+    assert_eq 1 "$(wc -l < "$TEST_DIR/cron-sync.txt" | tr -d ' ')" "a relink syncs too"
+}
+
+# No registry in the chain: the scheduler is left alone, so a relink that resolved no
+# scopes can never empty it.
+test_openclaw_connect_without_a_registry_leaves_the_scheduler() {
+    local r; r="$(setup_fake_exobrain)"; add_person "$r" people/alice; add_person "$r" people/bob
+    write_config "$r" people/alice/hosts/h1 openclaw
+    echo '{"jobs": []}' > "$r/people/bob/crons.json"
+    stub_cron_sync "$r"
+    local out; out="$(connect_flags "$r" openclaw 2>&1)" || { echo "$out"; return 1; }
+    assert_not_contains "$out" "Scheduled jobs:" || return 1
+    assert_no_file "$TEST_DIR/cron-sync.txt" "another scope's registry does not trigger a sync"
+}
+
+test_cron_sync_only_for_openclaw_and_never_in_a_sandbox() {
+    local r; r="$(setup_fake_exobrain)"; add_person "$r" people/alice
+    write_config "$r" people/alice/hosts/h1 openclaw
+    echo '{"jobs": []}' > "$r/people/alice/crons.json"
+    stub_cron_sync "$r"
+    wire_sandbox "$r" openclaw >/dev/null 2>&1 || return 1
+    assert_no_file "$TEST_DIR/cron-sync.txt" "a sandbox wiring never touches the scheduler" || return 1
+    connect_flags "$r" claude >/dev/null 2>&1 || return 1
+    assert_no_file "$TEST_DIR/cron-sync.txt" "another agent's connect does not sync"
+}
+
+test_cron_sync_failure_does_not_fail_the_connect() {
+    local r; r="$(setup_fake_exobrain)"; add_person "$r" people/alice
+    write_config "$r" people/alice/hosts/h1 openclaw
+    echo '{"jobs": []}' > "$r/people/alice/crons.json"
+    stub_cron_sync "$r" 1
+    local out; out="$(connect_flags "$r" openclaw 2>&1)" || { echo "connect failed: $out"; return 1; }
+    assert_contains "$out" "cron sync failed — connect continues"
+}
+
 test_openclaw_runtime_config_skipped_on_wire_sandbox() {
     local r; r="$(setup_fake_exobrain)"; add_person "$r" people/alice
     declare_skill "$r" people/alice a-skill always force
@@ -1438,6 +1557,7 @@ run_test "codex indexes inlined, not in home"  test_codex_indexes_inlined_not_in
 run_test "openclaw indexes inlined, not home"  test_openclaw_indexes_inlined_not_in_home
 run_test "tools index (claude)"                test_tools_index_claude
 run_test "tools index empty -> skip"           test_tools_index_empty_skip
+run_test "tools index joins a wrapped purpose"  test_tools_index_joins_wrapped_purpose
 run_test "knowledge index (claude)"              test_knowledge_index_claude
 run_test "knowledge index empty -> skip"         test_knowledge_index_empty_skip
 run_test "stale claude index cleared"          test_claude_index_removed_when_source_goes
@@ -1463,6 +1583,8 @@ run_test "description block boundaries"       test_description_block_stops_at_bo
 run_test "description absent"                 test_description_absent_or_body_only
 run_test "index carries folded description"   test_optional_index_carries_folded_description
 run_test "external resolve plan"               test_external_resolve_plan
+run_test "fetcher follows a branch ref"        test_fetcher_branch_ref_follows_branch
+run_test "fetcher keeps a tag ref pinned"      test_fetcher_tag_ref_stays_pinned
 run_test "flags connect existing host"         test_flags_connect_existing_host
 run_test "flags person-only when host missing" test_flags_person_only_when_host_missing
 run_test "flags never scaffold"                test_flags_no_scaffold_unknown_handle
@@ -1471,6 +1593,10 @@ run_test "flags extra --scope"                 test_flags_extra_scope
 run_test "flags name-match nested"             test_flags_name_match_nested
 run_test "wire openclaw refuses without workspace" test_wire_openclaw_refuses_without_workspace
 run_test "openclaw runtime config reconciled"   test_openclaw_runtime_config_reconciled
+run_test "openclaw connect syncs the chain's crons" test_openclaw_connect_syncs_the_chains_crons
+run_test "no registry in the chain: scheduler untouched" test_openclaw_connect_without_a_registry_leaves_the_scheduler
+run_test "cron sync: openclaw only, never in a sandbox" test_cron_sync_only_for_openclaw_and_never_in_a_sandbox
+run_test "cron sync failure does not fail the connect" test_cron_sync_failure_does_not_fail_the_connect
 run_test "openclaw indexes knowledge domains" test_openclaw_indexes_knowledge_domains
 run_test "openclaw no knowledge no extrapaths" test_openclaw_no_knowledge_no_extra_paths
 run_test "openclaw knowledge paths idempotent" test_openclaw_knowledge_paths_idempotent

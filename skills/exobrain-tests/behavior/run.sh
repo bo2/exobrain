@@ -229,6 +229,16 @@ for agent in ${AGENTS[@]+"${AGENTS[@]}"}; do
     [[ -n "$RUNS_OVERRIDE" ]] && N="$RUNS_OVERRIDE"
     [[ "$prof" == "static" || "$SMOKE" -eq 1 ]] && N=1
 
+    # A case's own run environment and permission mode, read by invoke.sh. The mode
+    # override is honored only under a security profile: there the egress stubs and
+    # the MCP lockdown hold whatever the agent is allowed to run.
+    CASE_DIR="$cdir"
+    CASE_ENV=""; [[ -f "$cdir/env.sh" ]] && CASE_ENV="$cdir/env.sh"
+    CASE_PERMISSION_MODE="$(meta_field "$meta" permission_mode '')"
+    if [[ -n "$CASE_PERMISSION_MODE" && "$prof" != security* ]]; then
+        err "$case: permission_mode needs a security profile (got '$prof')"; overall_setup_error=1; continue
+    fi
+
     log "=== $agent/$case  (profile=$prof, runs=$N, threshold=$thr) ==="
     passes=0; errors=0
 
@@ -243,7 +253,7 @@ for agent in ${AGENTS[@]+"${AGENTS[@]}"}; do
             continue
         fi
 
-        [[ -f "$cdir/setup.sh" ]] && { BASE_COMMIT_COUNT="$BASE_COMMITS" HARNESS_LIB="$TESTS_DIR/lib" \
+        [[ -f "$cdir/setup.sh" ]] && { CASE_DIR="$cdir" BASE_COMMIT_COUNT="$BASE_COMMITS" HARNESS_LIB="$TESTS_DIR/lib" \
             bash "$cdir/setup.sh" "$inst" >"$rdir/setup.log" 2>&1 || log "  run $i: setup.sh returned non-zero (continuing)"; }
 
         # Pin a stable base ref (post-setup, pre-agent HEAD) so a check can diff the

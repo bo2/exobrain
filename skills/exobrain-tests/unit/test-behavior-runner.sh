@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # test-behavior-runner.sh — tests for the behavior suite's runner
 # (skills/exobrain-tests/behavior/run.sh): the record of what a run tested, which
-# persist.sh reads to decide whether a spec change is verified, and --scope wiring.
+# persist.sh reads to decide whether a spec change is verified, --scope wiring, and
+# a case's own env.sh and permission mode.
 #
 #   skills/exobrain-tests/unit/test-behavior-runner.sh            # run all
 #   skills/exobrain-tests/unit/test-behavior-runner.sh <pattern>  # filter by name
@@ -90,8 +91,19 @@ EOF
     git -C "$INST" -c user.email=t@t.test -c user.name=t commit -q -m "Seed"
 
     FAKE_BIN="$TEST_DIR/bin"; mkdir -p "$FAKE_BIN"
-    printf '#!/usr/bin/env bash\n[[ "${1:-}" == --version ]] && { echo fake; exit 0; }\ncat >/dev/null; echo ok\n' > "$FAKE_BIN/claude"
+    cat > "$FAKE_BIN/claude" <<EOF
+#!/usr/bin/env bash
+[[ "\${1:-}" == --version ]] && { echo fake; exit 0; }
+echo "\$* | CASE_MARK=\${CASE_MARK:-}" >> "$TEST_DIR/claude-calls"
+cat >/dev/null; echo ok
+EOF
     chmod +x "$FAKE_BIN/claude"
+}
+
+# set_meta <case dir> <jq filter> — rewrite a case's meta.json and commit it.
+set_meta() {
+    jq -c "$2" "$1/meta.json" > "$1/meta.json.new" && mv "$1/meta.json.new" "$1/meta.json"
+    git -C "$INST" -c user.email=t@t.test -c user.name=t commit -q -am "Edit $(basename "$1")"
 }
 
 # runner [args…] — the runner inside the fake instance, with the fake claude.
@@ -167,6 +179,50 @@ test_missing_case_is_recorded_as_a_harness_error() {
     assert_eq true "$(summary | jq -r .harness_error)"
 }
 
+test_case_env_reaches_the_engine() {
+    setup_instance
+    local d="$INST/skills/exobrain-tests/behavior/cases/global-case"
+    printf 'export CASE_MARK="$(basename "$CASE_DIR"):$(basename "$INSTANCE_DIR"):$(basename "$RUN_DIR")"\n' > "$d/env.sh"
+    git -C "$INST" add -A; git -C "$INST" -c user.email=t@t.test -c user.name=t commit -q -m "Add env.sh"
+    runner --cases global-case,shadowed >/dev/null 2>&1 || return 1
+    assert_contains "$(sed -n 1p "$TEST_DIR/claude-calls")" "CASE_MARK=global-case:instance:run-1" || return 1
+    [[ "$(sed -n 2p "$TEST_DIR/claude-calls")" == *"CASE_MARK=" ]] || { echo "env.sh leaked into the next case"; return 1; }
+}
+
+test_permission_mode_applies_under_a_security_profile() {
+    setup_instance
+    set_meta "$INST/skills/exobrain-tests/behavior/cases/global-case" \
+        '.permission_profile = "security" | .permission_mode = "bypassPermissions"'
+    set_meta "$INST/skills/exobrain-tests/behavior/cases/shadowed" '.permission_profile = "security"'
+    runner --cases global-case,shadowed >/dev/null 2>&1 || return 1
+    assert_contains "$(sed -n 1p "$TEST_DIR/claude-calls")" "--permission-mode bypassPermissions" || return 1
+    assert_contains "$(sed -n 2p "$TEST_DIR/claude-calls")" "--permission-mode acceptEdits" "the next case is back on the default"
+}
+
+test_permission_mode_outside_a_security_profile_is_a_harness_error() {
+    setup_instance
+    set_meta "$INST/skills/exobrain-tests/behavior/cases/global-case" '.permission_mode = "bypassPermissions"'
+    local out; out="$(runner --cases global-case 2>&1)"; local rc=$?
+    assert_eq 2 "$rc" "exit code" || return 1
+    assert_contains "$out" "permission_mode needs a security profile" || return 1
+    [[ ! -s "$TEST_DIR/claude-calls" ]] || { echo "the agent ran anyway"; return 1; }
+}
+
+test_codex_security_profile_pins_a_non_login_shell() {
+    setup_instance
+    cat > "$FAKE_BIN/codex" <<EOF
+#!/usr/bin/env bash
+[[ "\${1:-}" == --version ]] && { echo fake; exit 0; }
+echo "\$*" >> "$TEST_DIR/codex-calls"
+cat >/dev/null; echo ok
+EOF
+    chmod +x "$FAKE_BIN/codex"
+    set_meta "$INST/skills/exobrain-tests/behavior/cases/global-case" '.permission_profile = "security"'
+    PATH="$FAKE_BIN:$PATH" "$INST/skills/exobrain-tests/behavior/run.sh" --agents codex --cases global-case,shadowed >/dev/null 2>&1 || return 1
+    assert_contains "$(sed -n 1p "$TEST_DIR/codex-calls")" "allow_login_shell=false" "the stubs' PATH survives" || return 1
+    [[ "$(sed -n 2p "$TEST_DIR/codex-calls")" != *allow_login_shell* ]] || { echo "an action case lost its login shell"; return 1; }
+}
+
 # ---------------------------------------------------------------------------
 
 command -v jq >/dev/null || { echo "jq not on PATH" >&2; exit 2; }
@@ -177,6 +233,10 @@ run_test scope_wires_every_copy_and_records_the_leaf test_scope_wires_every_copy
 run_test scope_adds_its_chain_cases_innermost_wins  test_scope_adds_its_chain_cases_innermost_wins
 run_test unknown_scope_is_a_harness_error           test_unknown_scope_is_a_harness_error
 run_test missing_case_is_recorded_as_a_harness_error test_missing_case_is_recorded_as_a_harness_error
+run_test case_env_reaches_the_engine                 test_case_env_reaches_the_engine
+run_test permission_mode_applies_under_a_security_profile test_permission_mode_applies_under_a_security_profile
+run_test permission_mode_outside_a_security_profile_is_a_harness_error test_permission_mode_outside_a_security_profile_is_a_harness_error
+run_test codex_security_profile_pins_a_non_login_shell test_codex_security_profile_pins_a_non_login_shell
 
 echo ""
 if [[ $TESTS_FAILED -gt 0 ]]; then

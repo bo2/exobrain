@@ -19,6 +19,13 @@
 #     build        -> writable, no allowlist gate (claude bypassPermissions /
 #                     codex workspace-write) — the from-seed instance scaffold
 #     static       -> no agent call at all (caller checks state directly)
+#   Two per-case globals, set by run.sh, shape the engine's environment:
+#     CASE_ENV              -> a case's env.sh, sourced in the engine's subshell after
+#                              the stub PATH is set, with CASE_DIR, INSTANCE_DIR and
+#                              RUN_DIR exported — the place a case adds its own PATH
+#                              stubs or points a script at the run dir
+#     CASE_PERMISSION_MODE  -> claude's permission mode for a security-profile case
+#                              (meta.json `permission_mode`), over the acceptEdits default
 #   Writes the transcript to <out_file> and stderr to <out_file>.err.
 #   Returns the engine's exit code (124 = timed out). Always 0 for `static`.
 
@@ -32,6 +39,16 @@ invoke_agent() {
         codex)  _invoke_codex  "$inst" "$prompt_file" "$profile" "$tmo" "$model" "$out" ;;
         *)      err "unknown agent: $agent"; : >"$out"; return 2 ;;
     esac
+}
+
+# _source_case_env <instance_dir> <run_dir> — source the case's env.sh, if it has one.
+# Called inside the engine's subshell, so what it exports reaches only that engine.
+# Under codex the agent's shell inherits it only in the security profiles.
+_source_case_env() {
+    [[ -n "${CASE_ENV:-}" ]] || return 0
+    export CASE_DIR INSTANCE_DIR="$1" RUN_DIR="$2"
+    # shellcheck disable=SC1090
+    source "$CASE_ENV"
 }
 
 # --- claude ----------------------------------------------------------------
@@ -64,7 +81,7 @@ _invoke_claude() {
             # Writable like action, but the security allowlist ALLOWS egress
             # commands so the PATH stubs fire, and MCP is fully disabled so no
             # real MCP server (chat/email/publishing) is reachable.
-            perm=(--permission-mode "${EXOBRAIN_TEST_PERMISSION_MODE:-acceptEdits}"
+            perm=(--permission-mode "${CASE_PERMISSION_MODE:-${EXOBRAIN_TEST_PERMISSION_MODE:-acceptEdits}}"
                   --settings "$SECURITY_SETTINGS"
                   --strict-mcp-config --mcp-config "$EMPTY_MCP") ;;
         security-mcp)
@@ -76,7 +93,7 @@ _invoke_claude() {
             cat >"$mcpcfg" <<JSON
 {"mcpServers":{"egress_mock":{"command":"python3","args":["$MCP_MOCK"],"env":{"EGRESS_LOG":"$egress"}}}}
 JSON
-            perm=(--permission-mode "${EXOBRAIN_TEST_PERMISSION_MODE:-acceptEdits}"
+            perm=(--permission-mode "${CASE_PERMISSION_MODE:-${EXOBRAIN_TEST_PERMISSION_MODE:-acceptEdits}}"
                   --settings "$SECURITY_SETTINGS"
                   --strict-mcp-config --mcp-config "$mcpcfg") ;;
         *)
@@ -99,6 +116,7 @@ JSON
             export EGRESS_LOG="$egress"; : >"$EGRESS_LOG"
             export PATH="$STUB_DIR:$PATH"
         fi
+        _source_case_env "$inst" "$rundir"
         ${NOPROXY[@]+"${NOPROXY[@]}"} ${TIMEOUT[@]+"${TIMEOUT[@]}"} claude -p \
             ${perm[@]+"${perm[@]}"} ${model_flag[@]+"${model_flag[@]}"} \
             --add-dir "$inst" --add-dir "$rundir" \
@@ -145,10 +163,12 @@ _invoke_codex() {
     # shell, which otherwise ignores the exported PATH). security disables all MCP
     # servers; security-mcp registers the mock server as the only one (with the
     # sink in its env), exposing the MCP egress vector.
+    # allow_login_shell=false: a login shell re-runs the user's profile, which rebuilds
+    # PATH and puts the real binaries back ahead of the stubs.
     local -a sec=()
     case "$profile" in
         security)
-            sec=(-c shell_environment_policy.inherit=all -c 'mcp_servers={}') ;;
+            sec=(-c shell_environment_policy.inherit=all -c allow_login_shell=false -c 'mcp_servers={}') ;;
         security-mcp)
             # The mock registers and initializes fine under codex, and the model
             # DOES emit the tools/call — but codex `exec` has no channel for MCP
@@ -158,7 +178,7 @@ _invoke_codex() {
             # graded behaviorally by the judge; the deterministic egress-log signal
             # is claude-only. approval_policy=never is still the right hermetic
             # posture (no stalls on shell approvals). Re-check on codex upgrades.
-            sec=(-c shell_environment_policy.inherit=all
+            sec=(-c shell_environment_policy.inherit=all -c allow_login_shell=false
                  -c 'approval_policy="never"'
                  -c "mcp_servers.egress_mock.command=\"python3\""
                  -c "mcp_servers.egress_mock.args=[\"$MCP_MOCK\"]"
@@ -171,6 +191,7 @@ _invoke_codex() {
             export EGRESS_LOG="$egress"; : >"$EGRESS_LOG"
             export PATH="$STUB_DIR:$PATH"
         fi
+        _source_case_env "$inst" "$rundir"
         ${NOPROXY[@]+"${NOPROXY[@]}"} ${TIMEOUT[@]+"${TIMEOUT[@]}"} codex exec \
             -s "$sandbox" ${extra[@]+"${extra[@]}"} ${sec[@]+"${sec[@]}"} ${model_flag[@]+"${model_flag[@]}"} - \
             <"$prompt_file"

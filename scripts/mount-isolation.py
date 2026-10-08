@@ -9,12 +9,14 @@ what the instance's people chose to read by mounting it — and it is gated on e
 land into it, against the instance and against every other mount whose audience
 does not include all of its own. Equal audiences gate nothing. The gate scans what
 the land adds — the added lines of every changed
-file in the worktree (committed or not, _raw/ included), the branch's commit
-messages, and any extra text handed in (a PR body, a session handover) — and exits
-non-zero on a hit. Charters come from mounts.json (knowledge/exobrain/mounts.md § The
+file in the worktree (committed or not, _raw/ included), each changed file's name,
+the branch's name and commit messages, the PR title, and any extra text handed in (a
+PR body, a session handover) — and exits non-zero on a hit. A text file the gate
+cannot read (not UTF-8; UTF-16 and UTF-32 decode) is a finding, not a skip; a binary
+file passes on its name alone. Charters come from mounts.json (knowledge/exobrain/mounts.md § The
 charter) merged with the gitignored local/mounts.json overlay of the main checkout.
 
-  scripts/mount-isolation.py --worktree <dir> [--base <ref>] [--text <file>]... [--quiet]
+  scripts/mount-isolation.py --worktree <dir> [--base <ref>] [--title <PR title>] [--text <file>]... [--quiet]
   scripts/mount-isolation.py --worktree <dir> --lens      # the audience lens for the authoring review
   scripts/mount-isolation.py --worktree <dir> --plan      # which roots gate this land, and why
 
@@ -23,7 +25,8 @@ mount whose checkout it was made from; --target <mount-name|instance> names it
 instead. What a land into a mount may not carry:
 
   - a file under knowledge/<domain>/ where the charter does not hold <domain>, or a
-    framework file (a mount is a content-only repository);
+    framework file (a mount is a content-only repository) — added or edited; a land
+    that removes one passes;
   - a term or pattern from a gated source's never list, or a card number or IBAN
     (checksum-validated, so an arbitrary digit run is not a hit). National
     identifiers, emails, and phone numbers are not built in: a charter lists the
@@ -249,54 +252,103 @@ def gated_sources(target, roots):
 # What the land adds
 # ---------------------------------------------------------------------------
 
+CHANGED_PATHS = INSTANCE / "scripts" / "changed-paths.sh"
+
+
 def changed_paths(worktree, base):
-    paths = set()
-    if base:
-        paths.update(p for p in git(worktree, "diff", "--name-only", f"{base}...HEAD", check=False).split("\n") if p)
-    for line in git(worktree, "status", "--porcelain", "--untracked-files=all").split("\n"):
-        if not line:
-            continue
-        p = line[3:]
-        if " -> " in p:
-            p = p.split(" -> ", 1)[1]
-        paths.add(p)
-    return sorted(paths)
+    """Every path the land changes, committed or not — through the shared helper, so a
+    non-ASCII name arrives verbatim rather than quoted."""
+    if not CHANGED_PATHS.is_file():
+        die(f"missing {CHANGED_PATHS}")
+    cmd = ["bash", str(CHANGED_PATHS), str(worktree)] + ([base] if base else [])
+    r = subprocess.run(cmd, capture_output=True)
+    if r.returncode != 0:
+        die(r.stderr.decode("utf-8", "replace").strip() or "changed-paths.sh failed")
+    return sorted(p.decode("utf-8", "surrogateescape") for p in r.stdout.split(b"\0") if p)
 
 
-def is_text(data):
-    if b"\0" in data:
-        return False
-    try:
-        data.decode("utf-8")
-    except UnicodeDecodeError:
-        return False
-    return True
+class Unscannable(Exception):
+    """A file that is text, but not text the gate can read."""
+
+
+def decode_text(data):
+    """The text of a file, or None for a binary one. UTF-8 and BOM-marked or
+    NUL-patterned UTF-16/32 decode; a NUL-free file that is not UTF-8 is text in some
+    other encoding, which the gate cannot judge — Unscannable."""
+    for bom, enc in ((b"\xef\xbb\xbf", "utf-8"), (b"\xff\xfe\x00\x00", "utf-32-le"), (b"\x00\x00\xfe\xff", "utf-32-be"),
+                     (b"\xff\xfe", "utf-16-le"), (b"\xfe\xff", "utf-16-be")):
+        if data.startswith(bom):
+            try:
+                return data[len(bom):].decode(enc)
+            except UnicodeDecodeError as e:
+                raise Unscannable(f"a {enc} byte-order mark, but the content does not decode as {enc} ({e.reason})")
+    if b"\0" not in data:
+        try:
+            return data.decode("utf-8")
+        except UnicodeDecodeError as e:
+            raise Unscannable(f"not UTF-8 text (byte {e.start}: {e.reason})")
+    # UTF-16 without a mark: half the bytes NUL, on one parity.
+    if len(data) >= 4:
+        even = data[0::2].count(0)
+        odd = data[1::2].count(0)
+        for nul, enc in ((odd, "utf-16-le"), (even, "utf-16-be")):
+            if nul >= 0.4 * len(data[1::2]) and nul >= 2 * len(data) // 10:
+                try:
+                    return data.decode(enc)
+                except UnicodeDecodeError:
+                    pass
+    return None
 
 
 def added_lines(worktree, base, path):
-    """[(line number, text)] this land adds to <path>, against <base>'s version."""
+    """[(line number, text)] this land adds to <path>, against <base>'s version.
+    Raises Unscannable for a text file the gate cannot read."""
     full = Path(worktree) / path
     if not full.is_file() or full.is_symlink():
         return []
     data = full.read_bytes()
-    if not is_text(data):
+    text = decode_text(data)
+    if text is None:
         return []
+    lines = text.split("\n")
     tracked_at_base = False
     if base:
         r = subprocess.run(["git", "-C", str(worktree), "cat-file", "-e", f"{base}:{path}"],
                            capture_output=True)
         tracked_at_base = r.returncode == 0
     if not tracked_at_base:
-        return list(enumerate(data.decode("utf-8").split("\n"), 1))
+        return list(enumerate(lines, 1))
     diff = git(worktree, "diff", "-U0", "--no-color", base, "--", path, check=False)
-    out, lineno = [], 0
-    for line in diff.split("\n"):
-        if line.startswith("@@"):
-            m = re.search(r"\+(\d+)", line)
-            lineno = int(m.group(1)) if m else 0
-        elif line.startswith("+") and not line.startswith("+++"):
-            out.append((lineno, line[1:]))
-            lineno += 1
+    if not any(line.startswith("Binary files") for line in diff.split("\n")):
+        # Hunk state, not a "+++" prefix test, decides what is an added line: the
+        # header's "+++ b/<path>" comes before the first hunk, and an added line that
+        # itself begins with "++" comes inside one.
+        out, lineno, in_hunk = [], 0, False
+        for line in diff.split("\n"):
+            if line.startswith("@@"):
+                in_hunk = True
+                m = re.search(r"\+(\d+)", line)
+                lineno = int(m.group(1)) if m else 0
+            elif not in_hunk or line.startswith("\\"):
+                continue
+            elif line.startswith("+"):
+                out.append((lineno, line[1:]))
+                lineno += 1
+        return out
+    # Git calls a NUL-bearing file (UTF-16) binary and shows no lines: diff the decoded
+    # text here, against the base version when that decodes too.
+    import difflib
+    r = subprocess.run(["git", "-C", str(worktree), "show", f"{base}:{path}"], capture_output=True)
+    try:
+        base_text = decode_text(r.stdout) if r.returncode == 0 else None
+    except Unscannable:
+        base_text = None
+    if base_text is None:
+        return list(enumerate(lines, 1))
+    out = []
+    for tag, _i1, _i2, j1, j2 in difflib.SequenceMatcher(None, base_text.split("\n"), lines, autojunk=False).get_opcodes():
+        if tag in ("insert", "replace"):
+            out.extend((n + 1, lines[n]) for n in range(j1, j2))
     return out
 
 
@@ -404,25 +456,30 @@ class Gate:
 
     def check_lines(self, where_prefix, lines):
         for lineno, text in lines:
-            if not text.strip():
-                continue
-            where = f"{where_prefix}:{lineno}" if lineno else where_prefix
-            for s, term, rx in self.term_res:
-                if rx.search(text):
-                    self.add(where, "never term", repr(term), s)
-            for s, pat, rx in self.pattern_res:
-                if rx.search(text):
-                    self.add(where, "never pattern", repr(pat), s)
-            for kind, match in builtin_hits(text):
-                self.add(where, kind, match)
-            for s, kind, rx in self.ref_res:
-                if rx.search(text):
-                    self.add(where, kind, rx.search(text).group(0), s)
-            if self.any_cite_re and self.any_cite_re.search(text):
-                m = self.any_cite_re.search(text).group(0)
-                if not any(rx.search(text) for _, k, rx in self.ref_res if k.startswith("citation")):
-                    self.add(where, "citation form in a mount",
-                             f"{m}… — a mount has no mounts and never references what mounts it")
+            if text.strip():
+                self.check_text(f"{where_prefix}:{lineno}" if lineno else where_prefix, text)
+
+    def check_name(self, path):
+        """The path itself is text the land adds: a never term in a filename lands too."""
+        self.check_text(f"{path} (name)", path)
+
+    def check_text(self, where, text):
+        for s, term, rx in self.term_res:
+            if rx.search(text):
+                self.add(where, "never term", repr(term), s)
+        for s, pat, rx in self.pattern_res:
+            if rx.search(text):
+                self.add(where, "never pattern", repr(pat), s)
+        for kind, match in builtin_hits(text):
+            self.add(where, kind, match)
+        for s, kind, rx in self.ref_res:
+            if rx.search(text):
+                self.add(where, kind, rx.search(text).group(0), s)
+        if self.any_cite_re and self.any_cite_re.search(text):
+            m = self.any_cite_re.search(text).group(0)
+            if not any(rx.search(text) for _, k, rx in self.ref_res if k.startswith("citation")):
+                self.add(where, "citation form in a mount",
+                         f"{m}… — a mount has no mounts and never references what mounts it")
 
 
 # ---------------------------------------------------------------------------
@@ -460,6 +517,7 @@ def main():
     ap.add_argument("--target")
     ap.add_argument("--base")
     ap.add_argument("--text", action="append", default=[])
+    ap.add_argument("--title")
     ap.add_argument("--lens", action="store_true")
     ap.add_argument("--plan", action="store_true")
     ap.add_argument("--quiet", action="store_true")
@@ -507,13 +565,24 @@ def main():
     # apply to a mount.
     gate = Gate(target, roots, sources)
     for path in changed_paths(worktree, base):
+        if not os.path.lexists(worktree / path):
+            continue    # a path the land removes is not carried
         gate.check_path(path)
         if sources:
-            gate.check_lines(path, added_lines(worktree, base, path))
+            gate.check_name(path)
+            try:
+                gate.check_lines(path, added_lines(worktree, base, path))
+            except Unscannable as e:
+                gate.add(path, "unscannable", f"{e} — the gate cannot read it; recode the file as UTF-8")
     if sources:
         msgs = commit_messages(worktree, base)
         if msgs.strip():
             gate.check_lines("commit message", list(enumerate(msgs.split("\n"), 1)))
+        branch = git(worktree, "rev-parse", "--abbrev-ref", "HEAD", check=False).strip()
+        if branch and branch != "HEAD":
+            gate.check_text("branch name", branch)
+        if args.title:
+            gate.check_text("PR title", args.title)
         for tf in args.text:
             p = Path(tf)
             if p.is_file():
