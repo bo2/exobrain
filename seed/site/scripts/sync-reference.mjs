@@ -6,7 +6,7 @@ import { dirname, join, posix } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const site = join(dirname(fileURLToPath(import.meta.url)), '..');
-const repo = join(site, '..');
+const repo = join(site, '..', '..');
 const out = join(site, 'src/content/docs/reference');
 const REPO_URL = 'https://github.com/bo2/exobrain';
 
