@@ -14,7 +14,7 @@ export default defineConfig({
         { icon: 'github', label: 'GitHub', href: 'https://github.com/bo2/exobrain' },
       ],
       editLink: {
-        baseUrl: 'https://github.com/bo2/exobrain/edit/main/site/',
+        baseUrl: 'https://github.com/bo2/exobrain/edit/main/seed/site/',
       },
       sidebar: [
         { label: 'Why an exobrain', slug: 'why' },

@@ -5,7 +5,7 @@ on:
     branches: [main]
     # The site renders the feed and two knowledge domains at build time.
     paths:
-      - 'site/**'
+      - 'seed/site/**'
       - 'seed/feed/**'
       - 'knowledge/exobrain/**'
       - 'knowledge/harness-engineering/**'
@@ -26,19 +26,19 @@ jobs:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: site
+        working-directory: seed/site
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: npm
-          cache-dependency-path: site/package-lock.json
+          cache-dependency-path: seed/site/package-lock.json
       - run: npm ci
       - run: npm run build
       - uses: actions/upload-pages-artifact@v3
         with:
-          path: site/dist
+          path: seed/site/dist
 
   deploy:
     needs: build
