@@ -13,7 +13,9 @@
 #              output_absent -> stdout negative: correct iff wrong_re is ABSENT from stdout
 #     *_re:    extended-regex; matched per stublog line for tool modes (match/no_tool), or
 #              against the agent's whole stdout for output modes. No field may contain '|',
-#              so a regex cannot use alternation — pick single-branch patterns.
+#              so a regex cannot use alternation — pick single-branch patterns (a
+#              character class covers "any subcommand but list": `^tool +[^l]`). run.sh
+#              refuses a row with any other field count before building a sandbox.
 #     prompt:  the task. MUST NOT name the target tool — that is what we are measuring.
 #
 # DISCRIMINATOR CONSTRAINT — a task only measures the change if its target tool is
@@ -35,11 +37,11 @@
 
 TASKS=(
 # --- DEV SET (iterate treatment variants against these) ---
-"D1_list|dev|match|^example-tool .*list|^example-tool .*(create|delete)|You need a list of the project's widgets. Run the command that lists them and report what it returns."
+"D1_list|dev|match|^example-tool .*list|^example-tool +[^l]|You need a list of the project's widgets. Run the command that lists them and report what it returns."
 "D2_neg_count|dev|no_tool|||How many Markdown (.md) files are in the knowledge/ directory of this repository? Run a command to count them and report the number."
 
 # --- HELD-OUT SET (different framing; run ONCE to report) ---
-"H1_list_alt|holdout|match|^example-tool .*list|^example-tool .*(create|delete)|Show me the widgets currently configured in this project. Run the appropriate command."
+"H1_list_alt|holdout|match|^example-tool .*list|^example-tool +[^l]|Show me the widgets currently configured in this project. Run the appropriate command."
 
 # --- OUTPUT-GRADED (score the agent's authored text, not a tool — no stub needed) ---
 # Hypothetical change: auto-loaded context now says "report a count as a bare integer, no

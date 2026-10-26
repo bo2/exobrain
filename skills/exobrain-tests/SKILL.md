@@ -163,6 +163,11 @@ Exit: `0` all passed · `1` some failed · `2` harness error (including an unkno
   wired, the chain's own cases added, innermost wins), and a case's `env.sh` and
   `permission_mode` (each reaching its own case only, the mode refused outside a
   security profile, codex pinned to a non-login shell under a security profile).
+- **`test-exobrain-ab.sh`** — the `exobrain-ab` runner's own machinery against a fake
+  `claude`: `run_one.sh` grades a pattern that begins with `-` in every mode (stdout
+  and the stub log, positive and negative), and `run.sh` refuses a task row that is
+  not six fields — naming the row and its count — before building a sandbox, while
+  the shipped task template passes its own rule.
 
 ### Add a unit harness
 
