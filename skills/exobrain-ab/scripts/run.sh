@@ -62,6 +62,17 @@ case "$DIFF_ARG" in ""|-|/dev/null) ;; *) [ -s "$DIFF_ARG" ] && DIFF="$(cd "$(di
 # shellcheck disable=SC1090
 source "$TASKS_FILE"
 [ "${#TASKS[@]}" -gt 0 ] || { echo "tasks file defined no TASKS=()" >&2; exit 1; }
+# A row is exactly six '|'-delimited fields. One more — a '|' inside a regex, where
+# alternation is the natural thing to write — truncates the regex and prepends its tail
+# to the prompt, and a grader that then matches nothing reads as a clean null result.
+# Refuse the file before anything is spent, naming the row.
+bad=0
+for entry in ${TASKS[@]+"${TASKS[@]}"}; do
+  n="$(printf '%s\n' "$entry" | awk -F'|' '{print NF}')"
+  [ "$n" -eq 6 ] && continue
+  echo "tasks file: row '${entry%%|*}' has $n fields, not 6 — a '|' inside a field? (see tasks.example.sh)" >&2; bad=1
+done
+[ "$bad" = 0 ] || exit 1
 
 in_filter() { # <set> <id>
   case "$FILTER" in

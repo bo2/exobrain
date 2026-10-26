@@ -49,7 +49,9 @@ done
 # Grade. Tool-choice modes read the PATH-stub log ($LOG = which command fired);
 # output modes read the agent's own stdout ($OUTF = what it wrote). "*_absent" modes
 # are negatives — correct = the pattern is absent. The evidence column records the
-# graded stream so a verdict is inspectable after the fact.
+# graded stream so a verdict is inspectable after the fact. Every pattern reaches grep
+# as an operand (-e): one beginning with '-' is a pattern, not an option that exits 2
+# and grades every run `other` — a null result indistinguishable from "no effect".
 ev=""
 if [ "$ok" = 0 ]; then
   v=FAILED
@@ -60,16 +62,16 @@ else
       ev="$(tr '\n' ';' < "$LOG" 2>/dev/null)" ;;
     output)                 # stdout: correct_re wins; else wrong_re => wrong
       v=other
-      [ -n "$CORRECT_RE" ] && grep -qE "$CORRECT_RE" "$OUTF" && v=correct
-      [ "$v" = other ] && [ -n "$WRONG_RE" ] && grep -qE "$WRONG_RE" "$OUTF" && v=wrong
-      ev="$(grep -hoE "${WRONG_RE:-$CORRECT_RE}" "$OUTF" 2>/dev/null | head -3 | tr '\n' ';')" ;;
+      [ -n "$CORRECT_RE" ] && grep -qE -e "$CORRECT_RE" "$OUTF" && v=correct
+      [ "$v" = other ] && [ -n "$WRONG_RE" ] && grep -qE -e "$WRONG_RE" "$OUTF" && v=wrong
+      ev="$(grep -hoE -e "${WRONG_RE:-$CORRECT_RE}" "$OUTF" 2>/dev/null | head -3 | tr '\n' ';')" ;;
     output_absent)          # stdout negative: correct = wrong_re NOT present
-      if grep -qE "$WRONG_RE" "$OUTF"; then v=wrong; else v=correct; fi
-      ev="$(grep -hoE "$WRONG_RE" "$OUTF" 2>/dev/null | head -3 | tr '\n' ';')" ;;
+      if grep -qE -e "$WRONG_RE" "$OUTF"; then v=wrong; else v=correct; fi
+      ev="$(grep -hoE -e "$WRONG_RE" "$OUTF" 2>/dev/null | head -3 | tr '\n' ';')" ;;
     *)                      # match (default): grade the stublog
       v=other
-      grep -qE "$CORRECT_RE" "$LOG" && v=correct
-      [ "$v" = other ] && grep -qE "$WRONG_RE" "$LOG" && v=wrong
+      grep -qE -e "$CORRECT_RE" "$LOG" && v=correct
+      [ "$v" = other ] && grep -qE -e "$WRONG_RE" "$LOG" && v=wrong
       ev="$(tr '\n' ';' < "$LOG" 2>/dev/null)" ;;
   esac
 fi

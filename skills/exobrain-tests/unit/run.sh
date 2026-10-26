@@ -42,6 +42,7 @@ validator-checks|test-validator-checks.sh|the whole-tree checks in validate-exob
 skills-validate|test-skills-validate.sh|scripts/skills-validate.sh (every registry error, undeclared dirs as info, exit codes, the dirs it never walks)
 skills-status|test-skills-status.sh|scripts/skills-status.sh --all (columns under their headings whatever a declaration omits, and a walk that finds every scope wherever the checkout sits)
 behavior-runner|test-behavior-runner.sh|skills/exobrain-tests/behavior/run.sh (the record of what a run tested, which the persist gate reads, --scope wiring, per-case env.sh and permission mode, and the stub PATH under codex)
+exobrain-ab|test-exobrain-ab.sh|skills/exobrain-ab/scripts/run_one.sh grading against a fake claude (a pattern beginning with "-" is a pattern) and run.sh refusing a task row that is not six fields before building a sandbox
 persist|test-persist.sh|scripts/persist.sh (the one-command land from a worktree, its gates and resume paths, --detach, and --sweep)
 findings-pending|../../exobrain-repair-findings/tests/test-findings-pending.sh|skills/exobrain-repair-findings/scripts/findings-pending.sh (merged PRs carrying unrepaired authoring findings)'
 

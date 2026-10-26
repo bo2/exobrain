@@ -75,7 +75,9 @@ any stub. Codex is isolated by its own `CODEX_HOME` inside the sandbox.
 2. **Design tasks** per the rules above — discriminating positives + negatives, split
    dev/held-out — in a tasks file (`scripts/tasks.example.sh` is the template). Prompts
    must **not** name the target tool; graders are deterministic regexes on the stub log,
-   on the agent's stdout (`output` modes), or "no stub fired" for negatives.
+   on the agent's stdout (`output` modes), or "no stub fired" for negatives. A row is
+   six `|`-delimited fields, so no field may contain `|`; `run.sh` refuses a malformed
+   row before building anything.
 3. **Add stubs** for every tool a task measures: a one-line shadow in `scripts/stubs/`
    (copy `scripts/stubs/example-tool`) that appends its invocation to `$STUB_LOG`. The
    stub's name must be the bare command the agent would type. Every other CLI that is
